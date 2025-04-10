@@ -1,6 +1,8 @@
 use ark_ff_optimized::fp64::Fp;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 
+pub mod keccak;
+
 fn main() {
     let num_vars = 2;
     let poly = DenseMultilinearExtension::<Fp>::from_evaluations_slice(
