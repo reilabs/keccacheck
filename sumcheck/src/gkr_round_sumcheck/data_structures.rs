@@ -19,6 +19,7 @@ impl<F: Field> GKRProof<F> {
     }
 }
 
+#[derive(Debug)]
 /// Subclaim for GKR Round Function
 pub struct GKRRoundSumcheckSubClaim<F: Field> {
     /// u

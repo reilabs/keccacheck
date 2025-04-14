@@ -56,7 +56,7 @@ impl<F: Field> MLSumcheck<F> {
         let mut prover_state = IPForMLSumcheck::prover_init(polynomial);
         let mut verifier_msg = None;
         let mut prover_msgs = Vec::with_capacity(polynomial.num_variables);
-        for i in 0..polynomial.num_variables {
+        for _ in 0..polynomial.num_variables {
             let prover_msg = IPForMLSumcheck::prove_round(&mut prover_state, &verifier_msg);
             fs_rng.feed(&prover_msg)?;
             prover_msgs.push(prover_msg);

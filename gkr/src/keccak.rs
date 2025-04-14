@@ -13,11 +13,11 @@ pub fn eval_index(out_size: usize, out: usize, in_size: usize, in1: usize, in2: 
 
 // recreate gkr example from Thaler
 // all gates are multiplications
-//       36         6
+// w0:   36         6
 // f0:  /  \      /    \
-//     9     4   6      1
+// w1: 9     4   6      1
 // f1: ||    ||/  \     ||
-//     3     2     3     1
+// w2: 3     2     3     1
 pub fn gkr_basic() {
     // TODO: make it a formula for faster verification. V should be able to calc f_i in O(num_vars) time
     // TOOD: make it data-parallel
@@ -42,7 +42,6 @@ pub fn gkr_basic() {
 
     // TODO: use poseidon or skyscraper
     let mut fs_rng = Blake2b512Rng::setup();
-    fs_rng.feed(&42u64).unwrap();
 
     let r_0 = vec![Fr::rand(&mut fs_rng)];
     // W_0(r_0) = \sum_{a, b} f_0(r_0, a, b) * W_1(a) * W_1(b)
@@ -61,16 +60,13 @@ pub fn gkr_basic() {
     let proof = GKRRoundSumcheck::prove(&mut fs_rng, &f_0, &w_1, &w_1, &r_0);
 
     let mut fs_rng = Blake2b512Rng::setup();
-    fs_rng.feed(&42u64).unwrap();
     Fr::rand(&mut fs_rng);
-    GKRRoundSumcheck::verify(&mut fs_rng, 2, &proof, expected_sum).unwrap();
-    println!("proof {proof:?}");
+    let subclaim = GKRRoundSumcheck::verify(&mut fs_rng, 2, &proof, expected_sum).unwrap();
+    println!("proof {proof:?} subclaim {subclaim:?}");
 
-    // let sumcheck_proof = MLSumcheck::prove(&poly).unwrap();
-    // let verify = MLSumcheck::verify(&info, expected_sum, &sumcheck_proof).unwrap();
-    // println!("sumcheck result {verify:?}");
+    // verifier now wants to calculate w_1(r_1a)w_1(r_1b)f_
 
-    //let sumcheck = sumcheck_prove();
+    // TODO: prepare for the next round of GKR, 
 }
 
 #[test]
@@ -228,31 +224,4 @@ fn test_keccak_f() {
     println!("state {state:x?}");
     keccak_round(&mut state, ROUND_CONSTANTS[0]);
     println!("state {state:x?}");
-}
-
-trait AddVariables {
-    fn add_variables_front(&self, n: usize) -> Self;
-    fn add_variables_back(&self, n: usize) -> Self;
-}
-
-impl<F: Field> AddVariables for DenseMultilinearExtension<F> {
-    fn add_variables_front(&self, n: usize) -> Self {
-        let mut evaluations = Vec::with_capacity(self.evaluations.len() << n);
-        for _ in 0..(1 << n) {
-            for value in &self.evaluations {
-                evaluations.push(*value);
-            }
-        }
-        DenseMultilinearExtension::from_evaluations_vec(self.num_vars + n, evaluations)
-    }
-
-    fn add_variables_back(&self, n: usize) -> Self {
-        let mut evaluations = Vec::with_capacity(self.evaluations.len() << n);
-        for value in &self.evaluations {
-            for _ in 0..(1 << n) {
-                evaluations.push(*value);
-            }
-        }
-        DenseMultilinearExtension::from_evaluations_vec(self.num_vars + n, evaluations)
-    }
 }
