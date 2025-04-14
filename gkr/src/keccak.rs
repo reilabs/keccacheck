@@ -41,8 +41,6 @@ pub fn gkr_basic() {
     let inputs: Vec<Fp> = vec![3.into(), 2.into(), 3.into(), 1.into()];
     let w_2 = DenseMultilinearExtension::from_evaluations_slice(2, &inputs);
 
-
-
     let r_0 = vec![Fp::from(5)]; // TODO: use a real pseudo-random number
     // W_0(r_0) = \sum_{a, b} f_0(r_0, a, b) * W_1(a) * W_1(b)
 

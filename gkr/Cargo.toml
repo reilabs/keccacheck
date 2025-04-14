@@ -1,0 +1,9 @@
+[package]
+name = "keccacheck"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ark-ff = "0.4.0"
+ark-ff-optimized = "0.4.1"
+ark-poly = "0.4.0"
