@@ -1,11 +1,19 @@
-use ark_ff::{Field, UniformRand};
 use ark_bn254::Fr;
+use ark_ff::{Field, UniformRand};
 use ark_poly::{DenseMultilinearExtension, Polynomial, SparseMultilinearExtension};
-use ark_sumcheck::{gkr_round_sumcheck::GKRRoundSumcheck, rng::{Blake2b512Rng, FeedableRNG}};
-
+use ark_sumcheck::{
+    gkr_round_sumcheck::GKRRoundSumcheck,
+    rng::{Blake2b512Rng, FeedableRNG},
+};
 
 // low bits index the output layer (i.e. fixed first), high bits index inputs
-pub fn eval_index(out_size: usize, out: usize, in_size: usize, in1: usize, in2: usize) -> (usize, Fr) {
+pub fn eval_index(
+    out_size: usize,
+    out: usize,
+    in_size: usize,
+    in1: usize,
+    in2: usize,
+) -> (usize, Fr) {
     let in2 = in2 << (in_size + out_size);
     let in1 = in1 << out_size;
     (out + in1 + in2, Fr::ONE)
@@ -25,7 +33,7 @@ pub fn gkr_basic() {
     let w_0 = DenseMultilinearExtension::from_evaluations_slice(1, &outputs);
     let f_0 = SparseMultilinearExtension::<Fr>::from_evaluations(
         5,
-        vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)].iter()
+        vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)].iter(),
     );
     let f_1 = SparseMultilinearExtension::<Fr>::from_evaluations(
         6,
@@ -33,8 +41,9 @@ pub fn gkr_basic() {
             eval_index(2, 0, 2, 0, 0),
             eval_index(2, 1, 2, 1, 1),
             eval_index(2, 2, 2, 1, 2),
-            eval_index(2, 3, 2, 3, 3)
-        ].iter()
+            eval_index(2, 3, 2, 3, 3),
+        ]
+        .iter(),
     );
 
     let inputs: Vec<Fr> = vec![3.into(), 2.into(), 3.into(), 1.into()];
@@ -53,8 +62,8 @@ pub fn gkr_basic() {
     // the prover uses sumcheck to show that W_0(r_0) = expected_sum
     // to get W_1(a), W_1(b), the prover needs to evaluate the circuit first
     let w_1 = DenseMultilinearExtension::<Fr>::from_evaluations_slice(
-        2, 
-        &[9.into(), 4.into(), 6.into(), 1.into()]
+        2,
+        &[9.into(), 4.into(), 6.into(), 1.into()],
     );
 
     let proof = GKRRoundSumcheck::prove(&mut fs_rng, &f_0, &w_1, &w_1, &r_0);
@@ -66,7 +75,7 @@ pub fn gkr_basic() {
 
     // verifier now wants to calculate w_1(r_1a)w_1(r_1b)f_
 
-    // TODO: prepare for the next round of GKR, 
+    // TODO: prepare for the next round of GKR,
 }
 
 #[test]
@@ -99,8 +108,6 @@ fn test_gkr_basic() {
 //     // layer 1: copy inputs, array is xor of previous and next, shifted left (within each 64 bit element)
 //     let mut f_1_copy = (0..25 * 64).map(|x| (x, x)).collect::<Vec<_>>();
 //     let mut f_1_xorshl = Vec::with_capacity(5 * 64);
-
-
 
 //     // inputs: all state bits: 25 * 64 < 32 * 64 = (1 << 11)
 //     // layer 1-4: xor all columns (array), but also copy inputs. fits in (1 << 11)
@@ -177,7 +184,6 @@ pub fn keccak_f(a: &mut [u64; 25]) {
     }
 }
 
-
 const ROUND_CONSTANTS: [u64; 24] = [
     0x0000000000000001,
     0x0000000000008082,
@@ -206,11 +212,7 @@ const ROUND_CONSTANTS: [u64; 24] = [
 ];
 
 const RHO_OFFSETS: [u32; 24] = [
-    1, 62, 28, 27,
-    36, 44,  6, 55, 20,
-    3, 10, 43, 25, 39,
-    41, 45, 15, 21,  8,
-    18,  2, 61, 56, 14,
+    1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14,
 ];
 
 const PI: [usize; 24] = [
@@ -220,7 +222,9 @@ const PI: [usize; 24] = [
 #[test]
 fn test_keccak_f() {
     //gkr_theta();
-    let mut state = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
+    let mut state = [
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+    ];
     println!("state {state:x?}");
     keccak_round(&mut state, ROUND_CONSTANTS[0]);
     println!("state {state:x?}");

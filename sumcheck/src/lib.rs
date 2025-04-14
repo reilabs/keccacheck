@@ -32,15 +32,24 @@ mod tests {
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
     use ark_test_curves::bls12_381::Fr;
 
-    use crate::{ml_sumcheck::{protocol::ListOfProductsOfPolynomials, MLSumcheck}, rng::{Blake2b512Rng, FeedableRNG}};
+    use crate::{
+        ml_sumcheck::{protocol::ListOfProductsOfPolynomials, MLSumcheck},
+        rng::{Blake2b512Rng, FeedableRNG},
+    };
 
     #[test]
     fn test_zerocheck() {
         // zero-check on P(x, y) = xy * (1 - x - y - xy)
         let nv = 2;
         let mut poly = ListOfProductsOfPolynomials::<Fr>::new(nv);
-        let poly_1 = DenseMultilinearExtension::from_evaluations_slice(nv, &[Fr::ZERO, Fr::ZERO, Fr::ZERO, Fr::ONE]);
-        let poly_2 = DenseMultilinearExtension::from_evaluations_slice(nv, &[Fr::ONE, Fr::ZERO, Fr::ZERO, Fr::ZERO]);
+        let poly_1 = DenseMultilinearExtension::from_evaluations_slice(
+            nv,
+            &[Fr::ZERO, Fr::ZERO, Fr::ZERO, Fr::ONE],
+        );
+        let poly_2 = DenseMultilinearExtension::from_evaluations_slice(
+            nv,
+            &[Fr::ONE, Fr::ZERO, Fr::ZERO, Fr::ZERO],
+        );
 
         println!("poly_1: {poly_1:?}");
         println!("poly_2: {poly_2:?}");
@@ -53,7 +62,7 @@ mod tests {
         assert!(
             poly.evaluate(&subclaim.point) == subclaim.expected_evaluation,
             "wrong subclaim"
-        );    
+        );
     }
 
     fn eq<F: Field>(lft: DenseMultilinearExtension<F>) -> DenseMultilinearExtension<F> {
@@ -72,7 +81,10 @@ mod tests {
         let eq_r = eq(r);
 
         let mut poly = ListOfProductsOfPolynomials::<Fr>::new(nv);
-        let poly_1 = DenseMultilinearExtension::from_evaluations_slice(nv, &[Fr::ZERO, Fr::ONE, minus_one, Fr::ZERO]);
+        let poly_1 = DenseMultilinearExtension::from_evaluations_slice(
+            nv,
+            &[Fr::ZERO, Fr::ONE, minus_one, Fr::ZERO],
+        );
 
         println!("poly_1: {poly_1:?}");
 
@@ -84,7 +96,6 @@ mod tests {
         assert!(
             poly.evaluate(&subclaim.point) == subclaim.expected_evaluation,
             "wrong subclaim"
-        );    
+        );
     }
-
 }
