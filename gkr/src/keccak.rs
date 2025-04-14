@@ -1,13 +1,16 @@
+use std::rc::Rc;
+
 use ark_ff::Field;
-use ark_ff_optimized::fp64::Fp;
-use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
+use ark_bn254::Fr;
+use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension};
+use ark_sumcheck::ml_sumcheck::{protocol::ListOfProductsOfPolynomials, MLSumcheck};
 
 
 // low bits index the output layer (i.e. fixed first), high bits index inputs
-pub fn eval_index(out_size: usize, out: usize, in_size: usize, in1: usize, in2: usize) -> (usize, Fp) {
+pub fn eval_index(out_size: usize, out: usize, in_size: usize, in1: usize, in2: usize) -> (usize, Fr) {
     let in2 = in2 << (in_size + out_size);
     let in1 = in1 << out_size;
-    (out + in1 + in2, Fp::ONE)
+    (out + in1 + in2, Fr::ONE)
 }
 
 // recreate gkr example from Thaler
@@ -20,13 +23,13 @@ pub fn eval_index(out_size: usize, out: usize, in_size: usize, in1: usize, in2: 
 pub fn gkr_basic() {
     // TODO: make it a formula for faster verification. V should be able to calc f_i in O(num_vars) time
     // TOOD: make it data-parallel
-    let outputs: Vec<Fp> = vec![36.into(), 6.into()];
+    let outputs: Vec<Fr> = vec![36.into(), 6.into()];
     let w_0 = DenseMultilinearExtension::from_evaluations_slice(1, &outputs);
-    let f_0 = SparseMultilinearExtension::<Fp>::from_evaluations(
+    let f_0 = SparseMultilinearExtension::<Fr>::from_evaluations(
         5,
         vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)].iter()
     );
-    let f_1 = SparseMultilinearExtension::<Fp>::from_evaluations(
+    let f_1 = SparseMultilinearExtension::<Fr>::from_evaluations(
         6,
         vec![
             eval_index(2, 0, 2, 0, 0),
@@ -36,29 +39,38 @@ pub fn gkr_basic() {
         ].iter()
     );
 
-    println!("sparse {f_0:?}");
-
-    let inputs: Vec<Fp> = vec![3.into(), 2.into(), 3.into(), 1.into()];
+    let inputs: Vec<Fr> = vec![3.into(), 2.into(), 3.into(), 1.into()];
     let w_2 = DenseMultilinearExtension::from_evaluations_slice(2, &inputs);
 
-    let r_0 = vec![Fp::from(5)]; // TODO: use a real pseudo-random number
+    let r_0 = vec![Fr::from(5)]; // TODO: use a real pseudo-random number
     // W_0(r_0) = \sum_{a, b} f_0(r_0, a, b) * W_1(a) * W_1(b)
 
     // verifier is able to calculate W_0(r_0)
-    let expected_sum = w_0.evaluate(&r_0).unwrap();
+    let expected_sum = w_0.evaluate(&r_0);
     println!("sum to prove: {expected_sum:?}");
 
     // the prover uses sumcheck to show that W_0(r_0) = expected_sum
-    // but first, wtf is W_1(a), W_1(b)?
-    // I guess the prover needs to evaluate the circuit first
-    let w_1 = DenseMultilinearExtension::<Fp>::from_evaluations_slice(
+    // to get W_1(a), W_1(b), the prover needs to evaluate the circuit first
+    let w_1 = DenseMultilinearExtension::<Fr>::from_evaluations_slice(
         2, 
         &[9.into(), 4.into(), 6.into(), 1.into()]
     );
-    let fr_0 = f_0.fix_variables(&r_0);
-    println!("sparse fr_0 {fr_0:?}");
+
+    // TODO: this is unnecessarily slow and runs in quadratic time. Libra knows how to do it linearly
+    let w_1a = Rc::new(w_1.add_variables_front(2));
+    let w_1b = Rc::new(w_1.add_variables_back(2));
+    let fr_0 = Rc::new(f_0.fix_variables(&r_0).to_dense_multilinear_extension());
 
     // sumcheck on P(a, b) = fr_0(a, b) * w_1(a) * w_1(b)
+    let mut poly = ListOfProductsOfPolynomials::new(4);
+    poly.add_product([fr_0, w_1a, w_1b].into_iter(), Fr::ONE);
+    let info = poly.info();
+    println!("info {info:?}");
+
+    let sumcheck_proof = MLSumcheck::prove(&poly).unwrap();
+    let verify = MLSumcheck::verify(&info, expected_sum, &sumcheck_proof).unwrap();
+    println!("sumcheck result {verify:?}");
+
     //let sumcheck = sumcheck_prove();
 }
 
@@ -86,7 +98,7 @@ fn test_gkr_basic() {
 //         }
 //     }
 //     let mut f_0 = SparseMultilinearExtension::from_evaluations(33, f_0.iter().enumerate().map(|(out, (in1, in2))| {
-//         &(out << 22 + in1 << 11 + in2, Fp::ONE)
+//         &(out << 22 + in1 << 11 + in2, Fr::ONE)
 //     }));
 
 //     // layer 1: copy inputs, array is xor of previous and next, shifted left (within each 64 bit element)
@@ -217,4 +229,31 @@ fn test_keccak_f() {
     println!("state {state:x?}");
     keccak_round(&mut state, ROUND_CONSTANTS[0]);
     println!("state {state:x?}");
+}
+
+trait AddVariables {
+    fn add_variables_front(&self, n: usize) -> Self;
+    fn add_variables_back(&self, n: usize) -> Self;
+}
+
+impl<F: Field> AddVariables for DenseMultilinearExtension<F> {
+    fn add_variables_front(&self, n: usize) -> Self {
+        let mut evaluations = Vec::with_capacity(self.evaluations.len() << n);
+        for _ in 0..(1 << n) {
+            for value in &self.evaluations {
+                evaluations.push(*value);
+            }
+        }
+        DenseMultilinearExtension::from_evaluations_vec(self.num_vars + n, evaluations)
+    }
+
+    fn add_variables_back(&self, n: usize) -> Self {
+        let mut evaluations = Vec::with_capacity(self.evaluations.len() << n);
+        for value in &self.evaluations {
+            for _ in 0..(1 << n) {
+                evaluations.push(*value);
+            }
+        }
+        DenseMultilinearExtension::from_evaluations_vec(self.num_vars + n, evaluations)
+    }
 }
