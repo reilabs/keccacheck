@@ -28,6 +28,7 @@ pub fn eval_index(
 // w2: 3     2     3     1
 pub fn gkr_basic() {
     // TODO: make it a formula for faster verification. V should be able to calc f_i in O(num_vars) time
+    // TODO: support multiple gate types per layer
     // TOOD: make it data-parallel
     let outputs: Vec<Fr> = vec![36.into(), 6.into()];
     let w_0 = DenseMultilinearExtension::from_evaluations_slice(1, &outputs);
@@ -71,7 +72,9 @@ pub fn gkr_basic() {
     let mut fs_rng = Blake2b512Rng::setup();
     Fr::rand(&mut fs_rng);
     let subclaim = GKRRoundSumcheck::verify(&mut fs_rng, 2, &proof, expected_sum).unwrap();
-    println!("proof {proof:?} subclaim {subclaim:?}");
+    println!("proof {proof:?}");
+
+    subclaim.verify_subclaim(&f_0, &w_1, &w_1, &r_0);
 
     // verifier now wants to calculate w_1(r_1a)w_1(r_1b)f_
 

@@ -41,10 +41,9 @@ impl<F: Field> GKRRoundSumcheckSubClaim<F> {
     ) -> bool {
         let dim = self.u.len();
         assert_eq!(self.v.len(), dim);
-        assert_eq!(f1.num_vars, 3 * dim);
+        assert_eq!(f1.num_vars - g.len(), 2 * dim);
         assert_eq!(f2.num_vars, dim);
         assert_eq!(f3.num_vars, dim);
-        assert_eq!(g.len(), dim);
 
         let guv: Vec<_> = g
             .iter()
