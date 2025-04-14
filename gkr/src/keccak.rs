@@ -1,9 +1,7 @@
-use std::rc::Rc;
-
-use ark_ff::Field;
+use ark_ff::{Field, UniformRand};
 use ark_bn254::Fr;
-use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension};
-use ark_sumcheck::ml_sumcheck::{protocol::ListOfProductsOfPolynomials, MLSumcheck};
+use ark_poly::{DenseMultilinearExtension, Polynomial, SparseMultilinearExtension};
+use ark_sumcheck::{gkr_round_sumcheck::GKRRoundSumcheck, rng::{Blake2b512Rng, FeedableRNG}};
 
 
 // low bits index the output layer (i.e. fixed first), high bits index inputs
@@ -42,7 +40,11 @@ pub fn gkr_basic() {
     let inputs: Vec<Fr> = vec![3.into(), 2.into(), 3.into(), 1.into()];
     let w_2 = DenseMultilinearExtension::from_evaluations_slice(2, &inputs);
 
-    let r_0 = vec![Fr::from(5)]; // TODO: use a real pseudo-random number
+    // TODO: use poseidon or skyscraper
+    let mut fs_rng = Blake2b512Rng::setup();
+    fs_rng.feed(&42u64).unwrap();
+
+    let r_0 = vec![Fr::rand(&mut fs_rng)];
     // W_0(r_0) = \sum_{a, b} f_0(r_0, a, b) * W_1(a) * W_1(b)
 
     // verifier is able to calculate W_0(r_0)
@@ -56,20 +58,17 @@ pub fn gkr_basic() {
         &[9.into(), 4.into(), 6.into(), 1.into()]
     );
 
-    // TODO: this is unnecessarily slow and runs in quadratic time. Libra knows how to do it linearly
-    let w_1a = Rc::new(w_1.add_variables_front(2));
-    let w_1b = Rc::new(w_1.add_variables_back(2));
-    let fr_0 = Rc::new(f_0.fix_variables(&r_0).to_dense_multilinear_extension());
+    let proof = GKRRoundSumcheck::prove(&mut fs_rng, &f_0, &w_1, &w_1, &r_0);
 
-    // sumcheck on P(a, b) = fr_0(a, b) * w_1(a) * w_1(b)
-    let mut poly = ListOfProductsOfPolynomials::new(4);
-    poly.add_product([fr_0, w_1a, w_1b].into_iter(), Fr::ONE);
-    let info = poly.info();
-    println!("info {info:?}");
+    let mut fs_rng = Blake2b512Rng::setup();
+    fs_rng.feed(&42u64).unwrap();
+    Fr::rand(&mut fs_rng);
+    GKRRoundSumcheck::verify(&mut fs_rng, 2, &proof, expected_sum).unwrap();
+    println!("proof {proof:?}");
 
-    let sumcheck_proof = MLSumcheck::prove(&poly).unwrap();
-    let verify = MLSumcheck::verify(&info, expected_sum, &sumcheck_proof).unwrap();
-    println!("sumcheck result {verify:?}");
+    // let sumcheck_proof = MLSumcheck::prove(&poly).unwrap();
+    // let verify = MLSumcheck::verify(&info, expected_sum, &sumcheck_proof).unwrap();
+    // println!("sumcheck result {verify:?}");
 
     //let sumcheck = sumcheck_prove();
 }
