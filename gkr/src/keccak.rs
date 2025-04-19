@@ -22,9 +22,9 @@ pub fn eval_index(
 // recreate gkr example from Thaler
 // all gates are multiplications
 // w0:   36         6
-// f0:  /  \      /    \
+// f1:  /  \      /    \
 // w1: 9     4   6      1
-// f1: ||    ||/  \     ||
+// f2: ||    ||/  \     ||
 // w2: 3     2     3     1
 pub fn gkr_basic() {
     // TODO: make it a formula for faster verification. V should be able to calc f_i in O(num_vars) time
@@ -32,11 +32,11 @@ pub fn gkr_basic() {
     // TOOD: make it data-parallel
     let outputs: Vec<Fr> = vec![36.into(), 6.into()];
     let w_0 = DenseMultilinearExtension::from_evaluations_slice(1, &outputs);
-    let f_0 = SparseMultilinearExtension::<Fr>::from_evaluations(
+    let f_1 = SparseMultilinearExtension::<Fr>::from_evaluations(
         5,
         vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)].iter(),
     );
-    let f_1 = SparseMultilinearExtension::<Fr>::from_evaluations(
+    let f_2 = SparseMultilinearExtension::<Fr>::from_evaluations(
         6,
         vec![
             eval_index(2, 0, 2, 0, 0),
@@ -53,11 +53,11 @@ pub fn gkr_basic() {
     // TODO: use poseidon or skyscraper
     let mut fs_rng = Blake2b512Rng::setup();
 
-    let r_0 = vec![Fr::rand(&mut fs_rng)];
+    let r_1 = vec![Fr::rand(&mut fs_rng)];
     // W_0(r_0) = \sum_{a, b} f_0(r_0, a, b) * W_1(a) * W_1(b)
 
     // verifier is able to calculate W_0(r_0)
-    let expected_sum = w_0.evaluate(&r_0);
+    let expected_sum = w_0.evaluate(&r_1);
     println!("sum to prove: {expected_sum:?}");
 
     // the prover uses sumcheck to show that W_0(r_0) = expected_sum
@@ -67,18 +67,30 @@ pub fn gkr_basic() {
         &[9.into(), 4.into(), 6.into(), 1.into()],
     );
 
-    let proof = GKRRoundSumcheck::prove(&mut fs_rng, &f_0, &w_1, &w_1, &r_0);
+    let proof = GKRRoundSumcheck::prove(&mut fs_rng, &f_1, &w_1, &w_1, &r_1);
 
     let mut fs_rng = Blake2b512Rng::setup();
     Fr::rand(&mut fs_rng);
     let subclaim = GKRRoundSumcheck::verify(&mut fs_rng, 2, &proof, expected_sum).unwrap();
     println!("proof {proof:?}");
+    println!("u {:?}", subclaim.u);
+    println!("v {:?}", subclaim.v);
 
-    subclaim.verify_subclaim(&f_0, &w_1, &w_1, &r_0);
+    // verify that W_1(u) * W_1(v) * f_1(r_1, u, v) = expected_sum
+    assert!(subclaim.verify_subclaim(&f_1, &w_1, &w_1, &r_1));
 
-    // verifier now wants to calculate w_1(r_1a)w_1(r_1b)f_
+    // TODO: combine u and v claims into a single recursive GKR call
+    let l = GKRRoundSumcheck::restrict(&mut fs_rng, &f_2, &w_2, &w_2, &subclaim.u, &subclaim.v);
+    let q = Fr::rand(&mut fs_rng);
+    let expected_sum = l.evaluate(&q);
 
-    // TODO: prepare for the next round of GKR,
+    let r_2 = subclaim
+        .u
+        .iter()
+        .zip(&subclaim.v)
+        .map(|(u, v)| q * (v - u) + u)
+        .collect::<Vec<_>>();
+    let proof = GKRRoundSumcheck::prove(&mut fs_rng, &f_2, &w_2, &w_2, &r_2);
 }
 
 #[test]

@@ -11,6 +11,7 @@ use crate::ml_sumcheck::protocol::prover::ProverState;
 use crate::ml_sumcheck::protocol::{IPForMLSumcheck, ListOfProductsOfPolynomials, PolynomialInfo};
 use crate::rng::FeedableRNG;
 use ark_ff::{Field, Zero};
+use ark_poly::univariate::DensePolynomial;
 use ark_poly::{
     DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
 };
@@ -87,6 +88,20 @@ pub struct GKRRoundSumcheck<F: Field> {
 }
 
 impl<F: Field> GKRRoundSumcheck<F> {
+    /// Restricts GKR round function to a line.
+    ///
+    pub fn restrict<R: FeedableRNG>(
+        rng: &mut R,
+        f1: &SparseMultilinearExtension<F>,
+        f2: &DenseMultilinearExtension<F>,
+        f3: &DenseMultilinearExtension<F>,
+        u: &[F],
+        v: &[F],
+    ) -> DensePolynomial<F> {
+        // degree = u.len()
+        todo!()
+    }
+
     /// Takes a GKR Round Function and input, prove the sum.
     /// * `f1`,`f2`,`f3`: represents the GKR round function
     /// * `g`: represents the fixed input.
@@ -97,8 +112,8 @@ impl<F: Field> GKRRoundSumcheck<F> {
         f3: &DenseMultilinearExtension<F>,
         g: &[F],
     ) -> GKRProof<F> {
-        // assert_eq!(f1.num_vars, 3 * f2.num_vars);
-        // assert_eq!(f1.num_vars, 3 * f3.num_vars);
+        assert_eq!(f1.num_vars - g.len(), 2 * f2.num_vars);
+        assert_eq!(f2.num_vars, f3.num_vars);
 
         let dim = f2.num_vars;
         let g = g.to_vec();
