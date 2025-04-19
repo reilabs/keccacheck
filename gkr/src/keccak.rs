@@ -179,8 +179,12 @@ pub fn gkr_add() {
 
 
 #[test]
-fn test_gkr_basic() {
+fn test_gkr_basic_mul() {
     gkr_mul();
+}
+
+#[test]
+fn test_gkr_basic_add() {
     gkr_add();
 }
 
