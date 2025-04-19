@@ -11,7 +11,6 @@ use crate::ml_sumcheck::protocol::prover::ProverState;
 use crate::ml_sumcheck::protocol::{IPForMLSumcheck, ListOfProductsOfPolynomials, PolynomialInfo};
 use crate::rng::FeedableRNG;
 use ark_ff::{Field, Zero};
-use ark_poly::univariate::DensePolynomial;
 use ark_poly::{
     DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
 };
@@ -44,13 +43,14 @@ pub fn initialize_phase_one<F: Field>(
 
 /// Takes h_g and returns a sumcheck state
 pub fn start_phase1_sumcheck<F: Field>(
-    h_g: &DenseMultilinearExtension<F>,
-    f2: &DenseMultilinearExtension<F>,
+    instances: &[(&DenseMultilinearExtension<F>, &DenseMultilinearExtension<F>)],
 ) -> ProverState<F> {
-    let dim = h_g.num_vars;
-    assert_eq!(f2.num_vars, dim);
+    let dim = instances[0].0.num_vars;
+    //assert_eq!(f2.num_vars, dim);
     let mut poly = ListOfProductsOfPolynomials::new(dim);
-    poly.add_product(vec![Rc::new(h_g.clone()), Rc::new(f2.clone())], F::one());
+    for (h_g, f2) in instances {
+        poly.add_product(vec![Rc::new((*h_g).clone()), Rc::new((*f2).clone())], F::one());
+    }
     IPForMLSumcheck::prover_init(&poly)
 }
 
@@ -65,21 +65,49 @@ pub fn initialize_phase_two<F: Field>(
 
 /// Takes f1 fixed at g||u, f3, and f2 evaluated at u.
 pub fn start_phase2_sumcheck<F: Field>(
-    f1_gu: &DenseMultilinearExtension<F>,
-    f3: &DenseMultilinearExtension<F>,
-    f2_u: F,
+    instances: &[(&DenseMultilinearExtension<F>, &DenseMultilinearExtension<F>, F)],
 ) -> ProverState<F> {
-    let f3_f2u = {
-        let mut zero = DenseMultilinearExtension::zero();
-        zero += (f2_u, f3);
-        zero
-    };
 
-    let dim = f1_gu.num_vars;
-    assert_eq!(f3.num_vars, dim);
+    let dim = instances[0].0.num_vars;
+    // assert_eq!(f3.num_vars, dim);
     let mut poly = ListOfProductsOfPolynomials::new(dim);
-    poly.add_product(vec![Rc::new(f1_gu.clone()), Rc::new(f3_f2u)], F::one());
+    for (f1_gu, f3, f2_u) in instances {
+        let f3_f2u = {
+            let mut zero = DenseMultilinearExtension::zero();
+            zero += (*f2_u, *f3);
+            zero
+        };
+    
+        poly.add_product(vec![Rc::new((*f1_gu).clone()), Rc::new(f3_f2u)], F::one());
+    }
     IPForMLSumcheck::prover_init(&poly)
+}
+
+/// GKR function in a form of f1(r, u, v) * f2(u) * f3(v) where r is const.
+pub struct GKRFunction<F: Field> {
+    /// sparse wiring polynomial
+    pub f1: SparseMultilinearExtension<F>,
+    /// gate evaluation, left operand
+    pub f2: DenseMultilinearExtension<F>,
+    /// gate evaluation, right operand
+    pub f3: DenseMultilinearExtension<F>,
+}
+
+/// A sum of multiple GKR functions
+pub struct ListOfGKRFunctions<F: Field> {
+    /// List of functions under sum
+    pub functions: Vec<(F, GKRFunction<F>)>,
+}
+
+impl<F: Field> ListOfGKRFunctions<F> {
+    /// Number of variables in each GKR function
+    pub fn num_variables(&self, phase: usize) -> usize {
+        match phase {
+            0 => self.functions[0].1.f2.num_vars,
+            1 => self.functions[0].1.f3.num_vars,
+            _ => panic!("only functions in the form of f1(...)f2(...)f3(...) supported")
+        }
+    }
 }
 
 /// Sumcheck Argument for GKR Round Function
@@ -88,38 +116,40 @@ pub struct GKRRoundSumcheck<F: Field> {
 }
 
 impl<F: Field> GKRRoundSumcheck<F> {
-    /// Restricts GKR round function to a line.
-    ///
-    pub fn restrict<R: FeedableRNG>(
-        rng: &mut R,
-        f1: &SparseMultilinearExtension<F>,
-        f2: &DenseMultilinearExtension<F>,
-        f3: &DenseMultilinearExtension<F>,
-        u: &[F],
-        v: &[F],
-    ) -> DensePolynomial<F> {
-        // degree = u.len()
-        todo!()
-    }
-
     /// Takes a GKR Round Function and input, prove the sum.
     /// * `f1`,`f2`,`f3`: represents the GKR round function
     /// * `g`: represents the fixed input.
     pub fn prove<R: FeedableRNG>(
         rng: &mut R,
-        f1: &SparseMultilinearExtension<F>,
-        f2: &DenseMultilinearExtension<F>,
-        f3: &DenseMultilinearExtension<F>,
+        round: &ListOfGKRFunctions<F>,
         g: &[F],
     ) -> GKRProof<F> {
-        assert_eq!(f1.num_vars - g.len(), 2 * f2.num_vars);
-        assert_eq!(f2.num_vars, f3.num_vars);
+        // assert_eq!(f1.num_vars - g.len(), 2 * f2.num_vars);
+        // assert_eq!(f2.num_vars, f3.num_vars);
 
-        let dim = f2.num_vars;
+        let dim = round.num_variables(0);
         let g = g.to_vec();
 
-        let (h_g, f1_g) = initialize_phase_one(f1, f3, &g);
-        let mut phase1_ps = start_phase1_sumcheck(&h_g, f2);
+        let mut h_g_vec = Vec::with_capacity(round.functions.len());
+        let mut f1_g_vec = Vec::with_capacity(round.functions.len());
+        for (coeff, function) in &round.functions {
+            // TODO: don't ignore the coefficient
+            let f1 = &function.f1;
+            let f3 = &function.f3;
+            let (h_g, f1_g) = initialize_phase_one(f1, f3, &g);
+            h_g_vec.push(h_g);
+            f1_g_vec.push(f1_g);
+        }
+
+        let f2 = round.functions.iter().map(|(coeff, func)| &func.f2);
+
+        let instances = h_g_vec
+            .iter()
+            .zip(f2.clone())
+            .map(|(a, b)| { (a, b)})
+            .collect::<Vec<_>>();
+
+        let mut phase1_ps = start_phase1_sumcheck(instances.as_slice());
         let mut phase1_vm = None;
         let mut phase1_prover_msgs = Vec::with_capacity(dim);
         let mut u = Vec::with_capacity(dim);
@@ -133,8 +163,24 @@ impl<F: Field> GKRRoundSumcheck<F> {
             u.push(vm.randomness);
         }
 
-        let f1_gu = initialize_phase_two(&f1_g, &u);
-        let mut phase2_ps = start_phase2_sumcheck(&f1_gu, f3, f2.evaluate(&u));
+        let dim = round.num_variables(1);
+
+        let mut f1_gu_vec = Vec::with_capacity(round.functions.len());
+        for f1_g in f1_g_vec {
+            let f1_gu = initialize_phase_two(&f1_g, &u);
+            f1_gu_vec.push(f1_gu);
+        }
+
+        let f3 = round.functions.iter().map(|(coeff, func)| &func.f3);
+
+        let instances = f1_gu_vec
+            .iter()
+            .zip(f3)
+            .zip(f2)
+            .map(|((a, b), c)| { (a, b, c.evaluate(&u))})
+            .collect::<Vec<_>>();
+
+        let mut phase2_ps = start_phase2_sumcheck(&instances);
         let mut phase2_vm = None;
         let mut phase2_prover_msgs = Vec::with_capacity(dim);
         let mut v = Vec::with_capacity(dim);

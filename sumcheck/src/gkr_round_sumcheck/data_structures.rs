@@ -2,8 +2,10 @@
 
 use crate::ml_sumcheck::protocol::prover::ProverMsg;
 use ark_ff::Field;
-use ark_poly::{DenseMultilinearExtension, Polynomial, SparseMultilinearExtension};
+use ark_poly::Polynomial;
 use ark_std::vec::Vec;
+
+use super::ListOfGKRFunctions;
 
 #[derive(Debug)]
 /// Proof for GKR Round Function
@@ -34,24 +36,30 @@ impl<F: Field> GKRRoundSumcheckSubClaim<F> {
     /// Verify that the subclaim is true by evaluating the GKR Round function.
     pub fn verify_subclaim(
         &self,
-        f1: &SparseMultilinearExtension<F>,
-        f2: &DenseMultilinearExtension<F>,
-        f3: &DenseMultilinearExtension<F>,
+        round: &ListOfGKRFunctions<F>,
         g: &[F],
     ) -> bool {
-        let dim = self.u.len();
-        assert_eq!(self.v.len(), dim);
-        assert_eq!(f1.num_vars - g.len(), 2 * dim);
-        assert_eq!(f2.num_vars, dim);
-        assert_eq!(f3.num_vars, dim);
+        let mut actual_evaluation = F::zero();
 
-        let guv: Vec<_> = g
-            .iter()
-            .chain(self.u.iter())
-            .chain(self.v.iter())
-            .copied()
-            .collect();
-        let actual_evaluation = f1.evaluate(&guv) * f2.evaluate(&self.u) * f3.evaluate(&self.v);
+        for (coeff, function) in &round.functions {
+            let f1 = &function.f1;
+            let f2 = &function.f2;
+            let f3 = &function.f3;
+
+            let dim = self.u.len();
+            assert_eq!(self.v.len(), dim);
+            assert_eq!(f1.num_vars - g.len(), 2 * dim);
+            assert_eq!(f2.num_vars, dim);
+            assert_eq!(f3.num_vars, dim);
+    
+            let guv: Vec<_> = g
+                .iter()
+                .chain(self.u.iter())
+                .chain(self.v.iter())
+                .copied()
+                .collect();
+            actual_evaluation += f1.evaluate(&guv) * f2.evaluate(&self.u) * f3.evaluate(&self.v);    
+        }
 
         actual_evaluation == self.expected_evaluation
     }
