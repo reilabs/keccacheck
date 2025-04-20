@@ -30,7 +30,6 @@ pub fn eval_index(
 // w2: 3     2     3     1
 pub fn gkr_mul() {
     // TODO: make wirings a formula for faster verification. V should be able to calc f_i in O(num_vars) time
-    // TODO: support multiple gate types per layer
     // TOOD: make it data-parallel
     let circuit = Circuit::<Fr> {
         inputs: vec![3.into(), 2.into(), 3.into(), 1.into()],
@@ -70,29 +69,37 @@ pub fn gkr_mul() {
     GKR::verify(&mut fs_rng, &circuit, &gkr_proof);
 }
 
-// w0:         24         20
-// f1 (mul):  /  \      /    \
-// w1:        6     4   5      4
-// f2 (add): ||    ||/  \     ||
-// w2:       3     2     3     2
+// w0:           24          9
+// f1(mul,add)  / * \      / + \
+// w1:         6     4   5      4
+// f2 (add):  ||    ||/  \     ||
+// w2:         3     2     3     2
 // f3 (add): 
 // w3:           1        2
 pub fn gkr_add_mul() {
     // TODO: make it a formula for faster verification. V should be able to calc f_i in O(num_vars) time
-    // TODO: support multiple gate types per layer
     // TOOD: make it data-parallel
     let circuit = Circuit::<Fr> {
         inputs: vec![1.into(), 2.into()],
-        outputs: vec![24.into(), 20.into()],
+        outputs: vec![24.into(), 9.into()],
         layers: vec![
             Layer {
-                gates: vec![LayerGate {
-                    wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
-                        5,
-                        vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)].iter(),
-                    ),
-                    gate: Gate::Mul,
-                }],
+                gates: vec![
+                    LayerGate {
+                        wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                            5,
+                            vec![eval_index(1, 0, 2, 0, 1)].iter(),
+                        ),
+                        gate: Gate::Mul,
+                    },
+                    LayerGate {
+                        wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                            5,
+                            vec![eval_index(1, 1, 2, 2, 3)].iter(),
+                        ),
+                        gate: Gate::Add,
+                    }
+                ],
             },
             Layer {
                 gates: vec![LayerGate {

@@ -257,14 +257,17 @@ impl<F: Field> GKR<F> {
                 let subclaim = GKRRoundSumcheck::verify(rng, num_vars[i+1], proof, expected_sum).unwrap();
                 (w_u, w_v) = (subclaim.w_u, subclaim.w_v);
 
-                // TODO: support for mixed gates
-                let wiring_res = layer.gates[0]
-                    .wiring
-                    .fix_variables(&r_1)
-                    .fix_variables(&subclaim.u)
-                    .evaluate(&subclaim.v);
+                let mut wiring_res = F::ZERO;
+                for gate_type in &layer.gates {
+                    let wiring =  gate_type
+                        .wiring
+                        .fix_variables(&r_1)
+                        .fix_variables(&subclaim.u)
+                        .evaluate(&subclaim.v);
+                    wiring_res += wiring * gate_type.gate.evaluate(w_u, w_v)
+                }
                 assert_eq!(
-                    wiring_res * layer.gates[0].gate.evaluate(w_u, w_v),
+                    wiring_res,
                     proof.check_sum(subclaim.v.last().unwrap())
                 );
                 (u, v) = (subclaim.u, subclaim.v);
@@ -291,19 +294,21 @@ impl<F: Field> GKR<F> {
                 let subclaim = GKRRoundSumcheck::verify(rng, num_vars[i+1], proof, expected_sum).unwrap();
                 (w_u, w_v) = (subclaim.w_u, subclaim.w_v);
 
-                // TODO: support for mixed gates
-                let wiring = &layer.gates[0].wiring;
-                let wiring_u = wiring
-                    .fix_variables(&u)
-                    .fix_variables(&subclaim.u)
-                    .evaluate(&subclaim.v);
-                let wiring_v = wiring
-                    .fix_variables(&v)
-                    .fix_variables(&subclaim.u)
-                    .evaluate(&subclaim.v);
-                let wiring_res = alpha * wiring_u + beta * wiring_v;
+                let mut wiring_res = F::ZERO;
+                for gate_type in &layer.gates {
+                    let wiring = &gate_type.wiring;
+                    let wiring_u = wiring
+                        .fix_variables(&u)
+                        .fix_variables(&subclaim.u)
+                        .evaluate(&subclaim.v);
+                    let wiring_v = wiring
+                        .fix_variables(&v)
+                        .fix_variables(&subclaim.u)
+                        .evaluate(&subclaim.v);
+                    wiring_res += (alpha * wiring_u + beta * wiring_v) * gate_type.gate.evaluate(w_u, w_v);
+                }
                 assert_eq!(
-                    wiring_res * layer.gates[0].gate.evaluate(w_u, w_v),
+                    wiring_res,
                     proof.check_sum(subclaim.v.last().unwrap())
                 );
                 (u, v) = (subclaim.u, subclaim.v);

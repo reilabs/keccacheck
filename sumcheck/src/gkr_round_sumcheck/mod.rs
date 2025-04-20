@@ -138,7 +138,6 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let mut h_g_vec = Vec::with_capacity(round.functions.len());
         let mut f1_g_vec = Vec::with_capacity(round.functions.len());
         for function in &round.functions {
-            // TODO: don't ignore the coefficient
             let f1_g = &function.f1_g;
             let f3 = &function.f3;
             let h_g = initialize_phase_one(f1_g, f3);
