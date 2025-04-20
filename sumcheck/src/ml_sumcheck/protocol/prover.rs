@@ -13,7 +13,7 @@ use rayon::prelude::*;
 #[derive(Clone, CanonicalSerialize, CanonicalDeserialize, Debug)]
 pub struct ProverMsg<F: Field> {
     /// evaluations on P(0), P(1), P(2), ...
-    pub(crate) evaluations: Vec<F>,
+    pub evaluations: Vec<F>,
 }
 /// Prover State
 pub struct ProverState<F: Field> {

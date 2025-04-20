@@ -1,6 +1,6 @@
 use ark_bn254::Fr;
 use ark_ff::{AdditiveGroup, Field, UniformRand};
-use ark_poly::{DenseMultilinearExtension, Polynomial, SparseMultilinearExtension};
+use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension};
 use ark_sumcheck::{
     gkr_round_sumcheck::{GKRFunction, GKRRoundSumcheck, ListOfGKRFunctions},
     rng::{Blake2b512Rng, FeedableRNG},
@@ -68,10 +68,11 @@ pub fn gkr_mul() {
 
     let round = ListOfGKRFunctions {
         functions: vec![
-            (Fr::ONE, GKRFunction { f1: f_1.clone(), f2: w_1.clone(), f3: w_1.clone() })
-        ]
+            (Fr::ONE, GKRFunction { f1: f_1.clone(), f2: w_1.clone(), f3: w_1.clone() }, r_1.clone())
+        ],
+        layer: w_1.clone(),
     };
-    let proof = GKRRoundSumcheck::prove(&mut fs_rng, &round, &r_1);
+    let proof = GKRRoundSumcheck::prove(&mut fs_rng, &round);
 
     let mut fs_rng = Blake2b512Rng::setup();
     Fr::rand(&mut fs_rng);
@@ -80,21 +81,39 @@ pub fn gkr_mul() {
     println!("u {:?}", subclaim.u);
     println!("v {:?}", subclaim.v);
 
-    // verify that W_1(u) * W_1(v) * f_1(r_1, u, v) = expected_sum
-    assert!(subclaim.verify_subclaim(&round, &r_1));
+    // TODO: why is this needed, exactly?
+    let wiring_res = f_1.fix_variables(&r_1).fix_variables(&subclaim.u).evaluate(&subclaim.v);
+    assert_eq!(wiring_res * subclaim.w_u * subclaim.w_v, proof.check_sum(subclaim.v.last().unwrap()));
 
-    // TODO: combine u and v claims into a single recursive GKR call
-    // let l = GKRRoundSumcheck::restrict(&mut fs_rng, &f_2, &w_2, &w_2, &subclaim.u, &subclaim.v);
-    // let q = Fr::rand(&mut fs_rng);
-    // let expected_sum = l.evaluate(&q);
+    // verify next layer
+    let mut fs_rng = Blake2b512Rng::setup();
+    let alpha = Fr::rand(&mut fs_rng);
+    let beta = Fr::rand(&mut fs_rng);
 
-    // let r_2 = subclaim
-    //     .u
-    //     .iter()
-    //     .zip(&subclaim.v)
-    //     .map(|(u, v)| q * (v - u) + u)
-    //     .collect::<Vec<_>>();
-    // let proof = GKRRoundSumcheck::prove(&mut fs_rng, &f_2, &w_2, &w_2, &r_2);
+    let expected_sum = alpha * subclaim.w_u + beta * subclaim.w_v;
+    let round = ListOfGKRFunctions {
+        functions: vec![
+            (Fr::ONE, GKRFunction { f1: scale_sparse_mle(&f_2, alpha), f2: w_2.clone(), f3: w_2.clone() }, subclaim.u.clone()),
+            (Fr::ONE, GKRFunction { f1: scale_sparse_mle(&f_2, beta), f2: w_2.clone(), f3: w_2.clone() }, subclaim.v.clone()),
+        ],
+        layer: w_2.clone()
+    };
+    let proof = GKRRoundSumcheck::prove(&mut fs_rng, &round);
+
+    let mut fs_rng = Blake2b512Rng::setup();
+    let _alpha = Fr::rand(&mut fs_rng);
+    let _beta = Fr::rand(&mut fs_rng);
+    let subclaim = GKRRoundSumcheck::verify(&mut fs_rng, 2, &proof, expected_sum).unwrap();
+    println!("proof {proof:?}");
+    println!("u {:?}", subclaim.u);
+    println!("v {:?}", subclaim.v);
+
+    // verify last round matches actual outputs
+    assert_eq!(w_2.evaluate(&subclaim.u), subclaim.w_u);
+    assert_eq!(w_2.evaluate(&subclaim.v), subclaim.w_v);
+
+    // let expected_sum = alpha * w_2.evaluate(&subclaim.u) + beta * w_2.evaluate(&subclaim.v);
+    // assert_eq!(expected_sum, proof.check_sum(subclaim.v.last().unwrap()));
 }
 
 // all gates are addition
@@ -147,11 +166,12 @@ pub fn gkr_add() {
     let const_one = DenseMultilinearExtension::from_evaluations_slice(2, &[Fr::ONE, Fr::ONE, Fr::ONE, Fr::ONE]);
     let round = ListOfGKRFunctions {
         functions: vec![
-            (Fr::ONE, GKRFunction { f1: f_1.clone(), f2: const_one.clone(), f3: w_1.clone() }),
-            (Fr::ONE, GKRFunction { f1: f_1.clone(), f2: w_1.clone(), f3: const_one.clone() })
-        ]
+            (Fr::ONE, GKRFunction { f1: f_1.clone(), f2: const_one.clone(), f3: w_1.clone() }, r_1.clone()),
+            (Fr::ONE, GKRFunction { f1: f_1.clone(), f2: w_1.clone(), f3: const_one.clone() }, r_1.clone()),
+        ],
+        layer: w_1.clone(),
     };
-    let proof = GKRRoundSumcheck::prove(&mut fs_rng, &round, &r_1);
+    let proof = GKRRoundSumcheck::prove(&mut fs_rng, &round);
 
     let mut fs_rng = Blake2b512Rng::setup();
     Fr::rand(&mut fs_rng);
@@ -160,8 +180,10 @@ pub fn gkr_add() {
     println!("u {:?}", subclaim.u);
     println!("v {:?}", subclaim.v);
 
+    let wiring_res = f_1.fix_variables(&r_1).fix_variables(&subclaim.u).evaluate(&subclaim.v);
+
     // verify that W_1(u) * W_1(v) * f_1(r_1, u, v) = expected_sum
-    assert!(subclaim.verify_subclaim(&round, &r_1));
+    assert!(subclaim.verify_subclaim(&round));
 
     // TODO: combine u and v claims into a single recursive GKR call
     // let l = GKRRoundSumcheck::restrict(&mut fs_rng, &f_2, &w_2, &w_2, &subclaim.u, &subclaim.v);
@@ -177,6 +199,14 @@ pub fn gkr_add() {
     // let proof = GKRRoundSumcheck::prove(&mut fs_rng, &f_2, &w_2, &w_2, &r_2);
 }
 
+fn scale_sparse_mle<F: Field>(mle: &SparseMultilinearExtension<F>, scalar: F) -> SparseMultilinearExtension<F>
+{
+    let evaluations = mle.evaluations.iter().map(|(i, v)| (*i, *v * scalar)).collect::<Vec<_>>();
+    SparseMultilinearExtension::from_evaluations(
+        mle.num_vars, &evaluations
+        
+    )
+}
 
 #[test]
 fn test_gkr_basic_mul() {

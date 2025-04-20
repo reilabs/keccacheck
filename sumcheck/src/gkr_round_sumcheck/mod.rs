@@ -96,7 +96,10 @@ pub struct GKRFunction<F: Field> {
 /// A sum of multiple GKR functions
 pub struct ListOfGKRFunctions<F: Field> {
     /// List of functions under sum
-    pub functions: Vec<(F, GKRFunction<F>)>,
+    pub functions: Vec<(F, GKRFunction<F>, Vec<F>)>,
+    /// Layer evaluations
+    /// TODO: this is probably not needed
+    pub layer: DenseMultilinearExtension<F>,
 }
 
 impl<F: Field> ListOfGKRFunctions<F> {
@@ -122,26 +125,24 @@ impl<F: Field> GKRRoundSumcheck<F> {
     pub fn prove<R: FeedableRNG>(
         rng: &mut R,
         round: &ListOfGKRFunctions<F>,
-        g: &[F],
     ) -> GKRProof<F> {
         // assert_eq!(f1.num_vars - g.len(), 2 * f2.num_vars);
         // assert_eq!(f2.num_vars, f3.num_vars);
 
         let dim = round.num_variables(0);
-        let g = g.to_vec();
 
         let mut h_g_vec = Vec::with_capacity(round.functions.len());
         let mut f1_g_vec = Vec::with_capacity(round.functions.len());
-        for (coeff, function) in &round.functions {
+        for (coeff, function, g) in &round.functions {
             // TODO: don't ignore the coefficient
             let f1 = &function.f1;
             let f3 = &function.f3;
-            let (h_g, f1_g) = initialize_phase_one(f1, f3, &g);
+            let (h_g, f1_g) = initialize_phase_one(f1, f3, g);
             h_g_vec.push(h_g);
             f1_g_vec.push(f1_g);
         }
 
-        let f2 = round.functions.iter().map(|(coeff, func)| &func.f2);
+        let f2 = round.functions.iter().map(|(coeff, func, g)| &func.f2);
 
         let instances = h_g_vec
             .iter()
@@ -171,7 +172,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
             f1_gu_vec.push(f1_gu);
         }
 
-        let f3 = round.functions.iter().map(|(coeff, func)| &func.f3);
+        let f3 = round.functions.iter().map(|(coeff, func, g)| &func.f3);
 
         let instances = f1_gu_vec
             .iter()
@@ -196,6 +197,9 @@ impl<F: Field> GKRRoundSumcheck<F> {
         GKRProof {
             phase1_sumcheck_msgs: phase1_prover_msgs,
             phase2_sumcheck_msgs: phase2_prover_msgs,
+            // TODO: potentially these values already exist somewhere in sumcheck and we don't need this evaluation
+            w_u: round.layer.evaluate(&u),
+            w_v: round.layer.evaluate(&v),
         }
     }
 
@@ -247,7 +251,9 @@ impl<F: Field> GKRRoundSumcheck<F> {
 
         Ok(GKRRoundSumcheckSubClaim {
             u,
+            w_u: proof.w_u,
             v,
+            w_v: proof.w_v,
             expected_evaluation,
         })
     }
