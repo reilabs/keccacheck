@@ -20,14 +20,12 @@ use ark_std::vec::Vec;
 
 /// Takes multilinear f1, f3, and input g = g1,...,gl. Returns h_g, and f1 fixed at g.
 pub fn initialize_phase_one<F: Field>(
-    f1: &SparseMultilinearExtension<F>,
+    f1_at_g: &SparseMultilinearExtension<F>,
     f3: &DenseMultilinearExtension<F>,
-    g: &[F],
-) -> (DenseMultilinearExtension<F>, SparseMultilinearExtension<F>) {
+) -> DenseMultilinearExtension<F> {
     let dim = f3.num_vars; // 'l` in paper
-    assert_eq!(f1.num_vars - g.len(), 2 * dim);
+    assert_eq!(f1_at_g.num_vars, 2 * dim);
     let mut a_hg: Vec<_> = (0..(1 << dim)).map(|_| F::zero()).collect();
-    let f1_at_g = f1.fix_variables(g);
 
     for (xy, v) in f1_at_g.evaluations.iter() {
         if v != &F::zero() {
@@ -38,7 +36,7 @@ pub fn initialize_phase_one<F: Field>(
     }
 
     let hg = DenseMultilinearExtension::from_evaluations_vec(dim, a_hg);
-    (hg, f1_at_g)
+    hg
 }
 
 /// Takes h_g and returns a sumcheck state
@@ -85,8 +83,8 @@ pub fn start_phase2_sumcheck<F: Field>(
 
 /// GKR function in a form of f1(r, u, v) * f2(u) * f3(v) where r is const.
 pub struct GKRFunction<F: Field> {
-    /// sparse wiring polynomial
-    pub f1: SparseMultilinearExtension<F>,
+    /// sparse wiring polynomial evaluated at random output r
+    pub f1_g: SparseMultilinearExtension<F>,
     /// gate evaluation, left operand
     pub f2: DenseMultilinearExtension<F>,
     /// gate evaluation, right operand
@@ -96,7 +94,7 @@ pub struct GKRFunction<F: Field> {
 /// A sum of multiple GKR functions
 pub struct ListOfGKRFunctions<F: Field> {
     /// List of functions under sum
-    pub functions: Vec<(F, GKRFunction<F>, Vec<F>)>,
+    pub functions: Vec<GKRFunction<F>>,
     /// Layer evaluations
     /// TODO: this is probably not needed
     pub layer: DenseMultilinearExtension<F>,
@@ -106,8 +104,8 @@ impl<F: Field> ListOfGKRFunctions<F> {
     /// Number of variables in each GKR function
     pub fn num_variables(&self, phase: usize) -> usize {
         match phase {
-            0 => self.functions[0].1.f2.num_vars,
-            1 => self.functions[0].1.f3.num_vars,
+            0 => self.functions[0].f2.num_vars,
+            1 => self.functions[0].f3.num_vars,
             _ => panic!("only functions in the form of f1(...)f2(...)f3(...) supported")
         }
     }
@@ -133,16 +131,16 @@ impl<F: Field> GKRRoundSumcheck<F> {
 
         let mut h_g_vec = Vec::with_capacity(round.functions.len());
         let mut f1_g_vec = Vec::with_capacity(round.functions.len());
-        for (coeff, function, g) in &round.functions {
+        for function in &round.functions {
             // TODO: don't ignore the coefficient
-            let f1 = &function.f1;
+            let f1_g = &function.f1_g;
             let f3 = &function.f3;
-            let (h_g, f1_g) = initialize_phase_one(f1, f3, g);
+            let h_g = initialize_phase_one(f1_g, f3);
             h_g_vec.push(h_g);
             f1_g_vec.push(f1_g);
         }
 
-        let f2 = round.functions.iter().map(|(coeff, func, g)| &func.f2);
+        let f2 = round.functions.iter().map(|func| &func.f2);
 
         let instances = h_g_vec
             .iter()
@@ -172,7 +170,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
             f1_gu_vec.push(f1_gu);
         }
 
-        let f3 = round.functions.iter().map(|(coeff, func, g)| &func.f3);
+        let f3 = round.functions.iter().map(|func| &func.f3);
 
         let instances = f1_gu_vec
             .iter()

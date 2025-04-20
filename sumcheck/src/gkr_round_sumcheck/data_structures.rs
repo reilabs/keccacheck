@@ -51,24 +51,23 @@ impl<F: Field> GKRRoundSumcheckSubClaim<F> {
     ) -> bool {
         let mut actual_evaluation = F::zero();
 
-        for (coeff, function, g) in &round.functions {
-            let f1 = &function.f1;
+        for function in &round.functions {
+            let f1_g = &function.f1_g;
             let f2 = &function.f2;
             let f3 = &function.f3;
 
             let dim = self.u.len();
             assert_eq!(self.v.len(), dim);
-            assert_eq!(f1.num_vars - g.len(), 2 * dim);
+            assert_eq!(f1_g.num_vars, 2 * dim);
             assert_eq!(f2.num_vars, dim);
             assert_eq!(f3.num_vars, dim);
     
-            let guv: Vec<_> = g
+            let uv: Vec<_> = self.u
                 .iter()
-                .chain(self.u.iter())
                 .chain(self.v.iter())
                 .copied()
                 .collect();
-            actual_evaluation += f1.evaluate(&guv) * f2.evaluate(&self.u) * f3.evaluate(&self.v);    
+            actual_evaluation += f1_g.evaluate(&uv) * f2.evaluate(&self.u) * f3.evaluate(&self.v);    
         }
 
         actual_evaluation == self.expected_evaluation
