@@ -8,7 +8,8 @@ use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
 
 use crate::{
-    gkr_round_sumcheck::{data_structures::GKRRoundProof, GKRFunction, GKRRound, GKRRoundSumcheck}, rng::FeedableRNG
+    gkr_round_sumcheck::{data_structures::GKRRoundProof, GKRFunction, GKRRound, GKRRoundSumcheck},
+    rng::FeedableRNG,
 };
 
 /// GKR circuit definition
@@ -45,6 +46,101 @@ impl Gate {
             Gate::Add => left + right,
             Gate::Mul => left * right,
             Gate::Xor => left + right - left * right * F::from(2),
+        }
+    }
+
+    /// Gate definitions on the first layer
+    pub fn to_gkr_functions<F: Field>(
+        &self,
+        wiring: &SparseMultilinearExtension<F>,
+        values: &DenseMultilinearExtension<F>,
+        g: &[F],
+    ) -> Vec<GKRFunction<F>> {
+        match self {
+            Gate::Add => {
+                let const_one = DenseMultilinearExtension::from_evaluations_vec(
+                    2,
+                    vec![F::ONE; 1 << values.num_vars],
+                );
+                vec![
+                    GKRFunction {
+                        f1_g: wiring.fix_variables(g),
+                        f2: const_one.clone(),
+                        f3: values.clone(),
+                    },
+                    GKRFunction {
+                        f1_g: wiring.fix_variables(g),
+                        f2: values.clone(),
+                        f3: const_one.clone(),
+                    },
+                ]
+            }
+            Gate::Mul => {
+                vec![GKRFunction {
+                    f1_g: wiring.fix_variables(g),
+                    f2: values.clone(),
+                    f3: values.clone(),
+                }]
+            }
+            Gate::Xor => todo!(),
+        }
+    }
+
+    /// Gate definitions on lower layers
+    pub fn to_gkr_combination<F: Field>(
+        &self,
+        wiring: &SparseMultilinearExtension<F>,
+        values: &DenseMultilinearExtension<F>,
+        alpha: &F,
+        beta: &F,
+        u: &[F],
+        v: &[F],
+    ) -> Vec<GKRFunction<F>> {
+        match self {
+            Gate::Add => {
+                let const_one = DenseMultilinearExtension::from_evaluations_vec(
+                    2,
+                    vec![F::ONE; 1 << values.num_vars],
+                );
+
+                vec![
+                    GKRFunction {
+                        f1_g: scale_and_fix(&wiring, *alpha, &u),
+                        f2: const_one.clone(),
+                        f3: values.clone(),
+                    },
+                    GKRFunction {
+                        f1_g: scale_and_fix(&wiring, *beta, &v),
+                        f2: const_one.clone(),
+                        f3: values.clone(),
+                    },
+                    GKRFunction {
+                        f1_g: scale_and_fix(&wiring, *alpha, &u),
+                        f2: values.clone(),
+                        f3: const_one.clone(),
+                    },
+                    GKRFunction {
+                        f1_g: scale_and_fix(&wiring, *beta, &v),
+                        f2: values.clone(),
+                        f3: const_one.clone(),
+                    },
+                ]
+            }
+            Gate::Mul => {
+                vec![
+                    GKRFunction {
+                        f1_g: scale_and_fix(wiring, *alpha, &u),
+                        f2: values.clone(),
+                        f3: values.clone(),
+                    },
+                    GKRFunction {
+                        f1_g: scale_and_fix(wiring, *beta, &v),
+                        f2: values.clone(),
+                        f3: values.clone(),
+                    },
+                ]
+            }
+            Gate::Xor => todo!(),
         }
     }
 }
@@ -92,15 +188,10 @@ impl<F: Field> GKR<F> {
                 let functions = layer
                     .gates
                     .iter()
-                    .map(|gate_type| {
-                        // TODO: add support for other gate types
-                        assert!(matches!(gate_type.gate, Gate::Mul));
-
-                        GKRFunction {
-                            f1_g: gate_type.wiring.fix_variables(&r_1),
-                            f2: w_i.clone(),
-                            f3: w_i.clone(),
-                        }
+                    .flat_map(|gate_type| {
+                        gate_type
+                            .gate
+                            .to_gkr_functions(&gate_type.wiring, &w_i, &r_1)
                     })
                     .collect();
 
@@ -120,27 +211,19 @@ impl<F: Field> GKR<F> {
                 );
 
                 let functions = layer
-                .gates
-                .iter()
-                .flat_map(|gate_type| {
-                    // TODO: add support for other gate types
-                    assert!(matches!(gate_type.gate, Gate::Mul));
-
-                    vec![
-                        GKRFunction {
-                            f1_g: scale_and_fix(&gate_type.wiring, alpha, &u),
-                            f2: w_i.clone(),
-                            f3: w_i.clone(),
-                        },
-                        GKRFunction {
-                            f1_g: scale_and_fix(&gate_type.wiring, beta, &v),
-                            f2: w_i.clone(),
-                            f3: w_i.clone(),
-                        },
-                    ]
-                })
-                .collect();
-
+                    .gates
+                    .iter()
+                    .flat_map(|gate_type| {
+                        gate_type.gate.to_gkr_combination(
+                            &gate_type.wiring,
+                            &w_i,
+                            &alpha,
+                            &beta,
+                            &u,
+                            &v,
+                        )
+                    })
+                    .collect();
 
                 let round = GKRRound {
                     functions,
@@ -148,11 +231,16 @@ impl<F: Field> GKR<F> {
                 };
                 let (proof, rand) = GKRRoundSumcheck::prove(rng, &round);
                 (u, v) = rand;
-                gkr_proof.rounds.push(proof);            
+                gkr_proof.rounds.push(proof);
             }
         }
 
         gkr_proof
+    }
+
+    /// Verifies a proof of a GKR circuit execution.
+    pub fn verify<R: FeedableRNG>(rng: &mut R, circuit: &Circuit<F>, proof: &GKRProof<F>) {
+
     }
 
     /// Takes a GKR circuit definition and returns value assignments
@@ -168,7 +256,6 @@ impl<F: Field> GKR<F> {
         }
         result
     }
-
 
     /// Takes a GKR circuit definition and returns value assignments
     /// in all intermediate layers
