@@ -6,7 +6,7 @@ pub mod data_structures;
 #[cfg(test)]
 mod test;
 
-use crate::gkr_round_sumcheck::data_structures::{GKRProof, GKRRoundSumcheckSubClaim};
+use crate::gkr_round_sumcheck::data_structures::{GKRRoundProof, GKRRoundSumcheckSubClaim};
 use crate::ml_sumcheck::protocol::prover::ProverState;
 use crate::ml_sumcheck::protocol::{IPForMLSumcheck, ListOfProductsOfPolynomials, PolynomialInfo};
 use crate::rng::FeedableRNG;
@@ -92,7 +92,7 @@ pub struct GKRFunction<F: Field> {
 }
 
 /// A sum of multiple GKR functions
-pub struct ListOfGKRFunctions<F: Field> {
+pub struct GKRRound<F: Field> {
     /// List of functions under sum
     pub functions: Vec<GKRFunction<F>>,
     /// Layer evaluations
@@ -100,7 +100,7 @@ pub struct ListOfGKRFunctions<F: Field> {
     pub layer: DenseMultilinearExtension<F>,
 }
 
-impl<F: Field> ListOfGKRFunctions<F> {
+impl<F: Field> GKRRound<F> {
     /// Number of variables in each GKR function
     pub fn num_variables(&self, phase: usize) -> usize {
         match phase {
@@ -122,8 +122,8 @@ impl<F: Field> GKRRoundSumcheck<F> {
     /// * `g`: represents the fixed input.
     pub fn prove<R: FeedableRNG>(
         rng: &mut R,
-        round: &ListOfGKRFunctions<F>,
-    ) -> GKRProof<F> {
+        round: &GKRRound<F>,
+    ) -> (GKRRoundProof<F>, (Vec<F>, Vec<F>)) {
         // assert_eq!(f1.num_vars - g.len(), 2 * f2.num_vars);
         // assert_eq!(f2.num_vars, f3.num_vars);
 
@@ -192,13 +192,16 @@ impl<F: Field> GKRRoundSumcheck<F> {
             v.push(vm.randomness);
         }
 
-        GKRProof {
-            phase1_sumcheck_msgs: phase1_prover_msgs,
-            phase2_sumcheck_msgs: phase2_prover_msgs,
-            // TODO: potentially these values already exist somewhere in sumcheck and we don't need this evaluation
-            w_u: round.layer.evaluate(&u),
-            w_v: round.layer.evaluate(&v),
-        }
+        (
+            GKRRoundProof {
+                phase1_sumcheck_msgs: phase1_prover_msgs,
+                phase2_sumcheck_msgs: phase2_prover_msgs,
+                // TODO: potentially these values already exist somewhere in sumcheck and we don't need this evaluation
+                w_u: round.layer.evaluate(&u),
+                w_v: round.layer.evaluate(&v),
+            },
+            (u, v)
+        )
     }
 
     /// Takes a GKR Round Function, input, and proof, and returns a subclaim.
@@ -210,7 +213,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
     pub fn verify<R: FeedableRNG>(
         rng: &mut R,
         f2_num_vars: usize,
-        proof: &GKRProof<F>,
+        proof: &GKRRoundProof<F>,
         claimed_sum: F,
     ) -> Result<GKRRoundSumcheckSubClaim<F>, crate::Error> {
         // verify first sumcheck

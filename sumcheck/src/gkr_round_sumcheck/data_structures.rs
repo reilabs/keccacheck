@@ -5,18 +5,20 @@ use ark_ff::Field;
 use ark_poly::Polynomial;
 use ark_std::vec::Vec;
 
-use super::ListOfGKRFunctions;
+use super::GKRRound;
 
 #[derive(Debug)]
 /// Proof for GKR Round Function
-pub struct GKRProof<F: Field> {
+pub struct GKRRoundProof<F: Field> {
     pub(crate) phase1_sumcheck_msgs: Vec<ProverMsg<F>>,
     pub(crate) phase2_sumcheck_msgs: Vec<ProverMsg<F>>,
-    pub(crate) w_u: F,
-    pub(crate) w_v: F,
+    /// w(u)
+    pub w_u: F,
+    /// w(v)
+    pub w_v: F,
 }
 
-impl<F: Field> GKRProof<F> {
+impl<F: Field> GKRRoundProof<F> {
     /// Extract the witness (i.e. the sum of GKR)
     pub fn extract_sum(&self) -> F {
         self.phase1_sumcheck_msgs[0].evaluations[0] + self.phase1_sumcheck_msgs[0].evaluations[1]
@@ -47,7 +49,7 @@ impl<F: Field> GKRRoundSumcheckSubClaim<F> {
     /// Verify that the subclaim is true by evaluating the GKR Round function.
     pub fn verify_subclaim(
         &self,
-        round: &ListOfGKRFunctions<F>,
+        round: &GKRRound<F>,
     ) -> bool {
         let mut actual_evaluation = F::zero();
 
