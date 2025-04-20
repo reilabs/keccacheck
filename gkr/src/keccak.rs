@@ -29,10 +29,6 @@ pub fn eval_index(
 // f2: ||    ||/  \     ||
 // w2: 3     2     3     1
 pub fn gkr_mul() {
-    // =============
-    // CIRCUIT SETUP
-    // =============
-
     // TODO: make wirings a formula for faster verification. V should be able to calc f_i in O(num_vars) time
     // TODO: support multiple gate types per layer
     // TOOD: make it data-parallel
@@ -70,47 +66,8 @@ pub fn gkr_mul() {
     let mut fs_rng = Blake2b512Rng::setup();
     let gkr_proof = GKR::prove(&mut fs_rng, &circuit);
 
-    // ========
-    // VERIFIER
-    // ========
-
     let mut fs_rng = Blake2b512Rng::setup();
-    let r_1 = vec![Fr::rand(&mut fs_rng)];
-
-    // ROUND 1
-    let w_0 = DenseMultilinearExtension::from_evaluations_slice(
-        circuit.outputs.len().ilog2() as usize,
-        &circuit.outputs,
-    );
-    let expected_sum = w_0.evaluate(&r_1);
-    let proof = &gkr_proof.rounds[0];
-    let subclaim = GKRRoundSumcheck::verify(&mut fs_rng, 2, proof, expected_sum).unwrap();
-
-    // TODO: why is this needed, exactly?
-    let wiring_res = circuit.layers[0].gates[0]
-        .wiring
-        .fix_variables(&r_1)
-        .fix_variables(&subclaim.u)
-        .evaluate(&subclaim.v);
-    assert_eq!(
-        wiring_res * subclaim.w_u * subclaim.w_v,
-        proof.check_sum(subclaim.v.last().unwrap())
-    );
-
-    // ROUND 2
-    let alpha = Fr::rand(&mut fs_rng);
-    let beta = Fr::rand(&mut fs_rng);
-    let expected_sum = alpha * subclaim.w_u + beta * subclaim.w_v;
-    let proof = &gkr_proof.rounds[1];
-    let subclaim = GKRRoundSumcheck::verify(&mut fs_rng, 2, &proof, expected_sum).unwrap();
-
-    // verify last round matches actual outputs
-    let w_n = DenseMultilinearExtension::from_evaluations_slice(
-        circuit.inputs.len().ilog2() as usize,
-        &circuit.inputs,
-    );
-    assert_eq!(w_n.evaluate(&subclaim.u), subclaim.w_u);
-    assert_eq!(w_n.evaluate(&subclaim.v), subclaim.w_v);
+    GKR::verify(&mut fs_rng, &circuit, &gkr_proof);
 }
 
 // all gates are addition
@@ -120,10 +77,6 @@ pub fn gkr_mul() {
 // f2: ||    ||/  \     ||
 // w2: 3     2     3     1
 pub fn gkr_add() {
-    // =============
-    // CIRCUIT SETUP
-    // =============
-
     // TODO: make it a formula for faster verification. V should be able to calc f_i in O(num_vars) time
     // TODO: support multiple gate types per layer
     // TOOD: make it data-parallel
@@ -161,50 +114,8 @@ pub fn gkr_add() {
     let mut fs_rng = Blake2b512Rng::setup();
     let gkr_proof = GKR::prove(&mut fs_rng, &circuit);
 
-    // ========
-    // VERIFIER
-    // ========
     let mut fs_rng = Blake2b512Rng::setup();
     GKR::verify(&mut fs_rng, &circuit, &gkr_proof);
-
-
-    let mut fs_rng = Blake2b512Rng::setup();
-    let r_1 = vec![Fr::rand(&mut fs_rng)];
-
-    // ROUND 1
-    let w_0 = DenseMultilinearExtension::from_evaluations_slice(
-        circuit.outputs.len().ilog2() as usize,
-        &circuit.outputs,
-    );
-    let expected_sum = w_0.evaluate(&r_1);
-    let proof = &gkr_proof.rounds[0];
-    let subclaim = GKRRoundSumcheck::verify(&mut fs_rng, 2, proof, expected_sum).unwrap();
-
-    // TODO: why is this needed, exactly?
-    let wiring_res = circuit.layers[0].gates[0]
-        .wiring
-        .fix_variables(&r_1)
-        .fix_variables(&subclaim.u)
-        .evaluate(&subclaim.v);
-    assert_eq!(
-        wiring_res * (subclaim.w_u + subclaim.w_v),
-        proof.check_sum(subclaim.v.last().unwrap())
-    );
-
-    // ROUND 2
-    let alpha = Fr::rand(&mut fs_rng);
-    let beta = Fr::rand(&mut fs_rng);
-    let expected_sum = alpha * subclaim.w_u + beta * subclaim.w_v;
-    let proof = &gkr_proof.rounds[1];
-    let subclaim = GKRRoundSumcheck::verify(&mut fs_rng, 2, &proof, expected_sum).unwrap();
-
-    // verify last round matches actual outputs
-    let w_n = DenseMultilinearExtension::from_evaluations_slice(
-        circuit.inputs.len().ilog2() as usize,
-        &circuit.inputs,
-    );
-    assert_eq!(w_n.evaluate(&subclaim.u), subclaim.w_u);
-    assert_eq!(w_n.evaluate(&subclaim.v), subclaim.w_v);
 }
 
 #[test]

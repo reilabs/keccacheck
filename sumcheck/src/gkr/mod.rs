@@ -5,7 +5,7 @@
 use core::marker::PhantomData;
 
 use ark_ff::Field;
-use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
+use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension};
 
 use crate::{
     gkr_round_sumcheck::{data_structures::GKRRoundProof, GKRFunction, GKRRound, GKRRoundSumcheck},
@@ -239,8 +239,76 @@ impl<F: Field> GKR<F> {
     }
 
     /// Verifies a proof of a GKR circuit execution.
-    pub fn verify<R: FeedableRNG>(rng: &mut R, circuit: &Circuit<F>, proof: &GKRProof<F>) {
+    pub fn verify<R: FeedableRNG>(rng: &mut R, circuit: &Circuit<F>, gkr_proof: &GKRProof<F>) {
+        let num_vars = Self::layer_sizes(circuit);
 
+        let (mut u, mut v) = Default::default();
+        let (mut w_u, mut w_v) = Default::default();
+
+        for (i, layer) in circuit.layers.iter().enumerate() {
+            if i == 0 {
+                let r_1 = vec![F::rand(rng)];
+                let w_0 = DenseMultilinearExtension::from_evaluations_slice(
+                    circuit.outputs.len().ilog2() as usize,
+                    &circuit.outputs,
+                );
+                let expected_sum = w_0.evaluate(&r_1);
+                let proof = &gkr_proof.rounds[i];
+                let subclaim = GKRRoundSumcheck::verify(rng, num_vars[i+1], proof, expected_sum).unwrap();
+                (w_u, w_v) = (subclaim.w_u, subclaim.w_v);
+
+                // TODO: support for mixed gates
+                let wiring_res = layer.gates[0]
+                    .wiring
+                    .fix_variables(&r_1)
+                    .fix_variables(&subclaim.u)
+                    .evaluate(&subclaim.v);
+                assert_eq!(
+                    wiring_res * layer.gates[0].gate.evaluate(w_u, w_v),
+                    proof.check_sum(subclaim.v.last().unwrap())
+                );
+                (u, v) = (subclaim.u, subclaim.v);
+            } else if i == circuit.layers.len() - 1 {
+                let alpha = F::rand(rng);
+                let beta = F::rand(rng);
+                let expected_sum = alpha * w_u + beta * w_v;
+                let proof = &gkr_proof.rounds[i];
+                let subclaim = GKRRoundSumcheck::verify(rng, num_vars[i+1], proof, expected_sum).unwrap();
+
+                // verify last round matches actual inputs
+                let w_n = DenseMultilinearExtension::from_evaluations_slice(
+                    circuit.inputs.len().ilog2() as usize,
+                    &circuit.inputs,
+                );
+                assert_eq!(w_n.evaluate(&subclaim.u), subclaim.w_u);
+                assert_eq!(w_n.evaluate(&subclaim.v), subclaim.w_v);
+
+            } else {
+                let alpha = F::rand(rng);
+                let beta = F::rand(rng);
+                let expected_sum = alpha * w_u + beta * w_v;
+                let proof = &gkr_proof.rounds[i];
+                let subclaim = GKRRoundSumcheck::verify(rng, num_vars[i+1], proof, expected_sum).unwrap();
+                (w_u, w_v) = (subclaim.w_u, subclaim.w_v);
+
+                // TODO: support for mixed gates
+                let wiring = &layer.gates[0].wiring;
+                let wiring_u = wiring
+                    .fix_variables(&u)
+                    .fix_variables(&subclaim.u)
+                    .evaluate(&subclaim.v);
+                let wiring_v = wiring
+                    .fix_variables(&v)
+                    .fix_variables(&subclaim.u)
+                    .evaluate(&subclaim.v);
+                let wiring_res = alpha * wiring_u + beta * wiring_v;
+                assert_eq!(
+                    wiring_res * layer.gates[0].gate.evaluate(w_u, w_v),
+                    proof.check_sum(subclaim.v.last().unwrap())
+                );
+                (u, v) = (subclaim.u, subclaim.v);
+            }
+        }
     }
 
     /// Takes a GKR circuit definition and returns value assignments
