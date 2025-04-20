@@ -1,11 +1,8 @@
 use ark_bn254::Fr;
-use ark_ff::{Field, UniformRand};
-use ark_poly::{
-    DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
-};
+use ark_ff::Field;
+use ark_poly::SparseMultilinearExtension;
 use ark_sumcheck::{
     gkr::{Circuit, GKR, Gate, Layer, LayerGate},
-    gkr_round_sumcheck::GKRRoundSumcheck,
     rng::{Blake2b512Rng, FeedableRNG},
 };
 
@@ -74,7 +71,7 @@ pub fn gkr_mul() {
 // w1:         6     4   5      4
 // f2 (add):  ||    ||/  \     ||
 // w2:         3     2     3     2
-// f3 (add): 
+// f3 (add):
 // w3:           1        2
 pub fn gkr_add_mul() {
     // TODO: make it a formula for faster verification. V should be able to calc f_i in O(num_vars) time
@@ -98,7 +95,7 @@ pub fn gkr_add_mul() {
                             vec![eval_index(1, 1, 2, 2, 3)].iter(),
                         ),
                         gate: Gate::Add,
-                    }
+                    },
                 ],
             },
             Layer {
