@@ -59,7 +59,7 @@ impl Gate {
         match self {
             Gate::Add => {
                 let const_one = DenseMultilinearExtension::from_evaluations_vec(
-                    2,
+                    values.num_vars,
                     vec![F::ONE; 1 << values.num_vars],
                 );
                 vec![
@@ -99,7 +99,7 @@ impl Gate {
         match self {
             Gate::Add => {
                 let const_one = DenseMultilinearExtension::from_evaluations_vec(
-                    2,
+                    values.num_vars,
                     vec![F::ONE; 1 << values.num_vars],
                 );
 
