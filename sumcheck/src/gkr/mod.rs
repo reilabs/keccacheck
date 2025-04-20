@@ -24,10 +24,13 @@ pub struct Circuit<F: Field> {
 
 /// Single GKR layer (round)
 pub struct Layer<F: Field> {
+    /// number of variables in a layer
+    pub num_vars: usize,
     /// all gate types in a layer
     pub gates: Vec<LayerGate<F>>,
 }
 
+#[derive(Debug)]
 /// Supported gate types
 pub enum Gate {
     /// Add gate
@@ -36,6 +39,17 @@ pub enum Gate {
     Mul,
     /// Xor gate
     Xor,
+}
+
+impl Gate {
+    /// Evaluate gate value
+    pub fn evaluate<F: Field>(&self, left: F, right: F) -> F {
+        match self {
+            Gate::Add => left + right,
+            Gate::Mul => left * right,
+            Gate::Xor => left + right - left * right * F::from(2),
+        }
+    }
 }
 
 /// wiring for a single gate type in a layer
@@ -63,5 +77,33 @@ impl<F: Field> GKR<F> {
     /// * `g`: represents the fixed input.
     pub fn prove<R: FeedableRNG>(rng: &mut R, round: &GKRRound<F>) -> GKRProof<F> {
         todo!()
+    }
+
+    /// Takes a GKR circuit definition and returns value assignments
+    /// in all intermediate layers
+    pub fn evaluate(circuit: &Circuit<F>) -> Vec<Vec<F>> {
+        let mut result = Vec::with_capacity(circuit.layers.len());
+        let mut previous_layer = &circuit.inputs;
+        for layer in circuit.layers.iter().rev() {
+            let mut evaluations = vec![F::ZERO; 1 << layer.num_vars];
+            for gate in &layer.gates {
+                let wiring = &gate.wiring;
+                let input_vars = previous_layer.len().ilog2() as usize;
+                let output_vars = wiring.num_vars - 2 * input_vars;
+                assert_eq!(layer.num_vars, output_vars);
+                for (k, _v) in &wiring.evaluations {
+                    let output_gate = k % (1 << output_vars);
+                    let k = k >> output_vars;
+                    let input_left = previous_layer[k % (1 << input_vars)];
+                    let k = k >> input_vars;
+                    let input_right = previous_layer[k];
+                    evaluations[output_gate] += gate.gate.evaluate(input_left, input_right);
+                }
+            }
+            result.push(evaluations);
+            previous_layer = result.last().unwrap();
+        }
+        result.reverse();
+        result
     }
 }

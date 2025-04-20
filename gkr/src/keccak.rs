@@ -4,7 +4,7 @@ use ark_poly::{
     DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
 };
 use ark_sumcheck::{
-    gkr::{Circuit, GKRProof, Gate, Layer, LayerGate},
+    gkr::{Circuit, GKRProof, Gate, Layer, LayerGate, GKR},
     gkr_round_sumcheck::{GKRFunction, GKRRound, GKRRoundSumcheck},
     rng::{Blake2b512Rng, FeedableRNG},
 };
@@ -32,16 +32,38 @@ pub fn gkr_mul() {
     let circuit = Circuit::<Fr> {
         inputs: vec![3.into(), 2.into(), 3.into(), 1.into()],
         outputs: vec![36.into(), 6.into()],
-        layers: vec![Layer {
-            gates: vec![LayerGate {
-                wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
-                    5,
-                    vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)].iter(),
-                ),
-                gate: Gate::Mul,
-            }],
-        }],
+        layers: vec![
+            Layer {
+                num_vars: 1,
+                gates: vec![LayerGate {
+                    wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                        5,
+                        vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)].iter(),
+                    ),
+                    gate: Gate::Mul,
+                }],
+            },
+            Layer {
+                num_vars: 2,
+                gates: vec![LayerGate {
+                    wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                        6,
+                        vec![
+                            eval_index(2, 0, 2, 0, 0),
+                            eval_index(2, 1, 2, 1, 1),
+                            eval_index(2, 2, 2, 1, 2),
+                            eval_index(2, 3, 2, 3, 3),
+                        ]
+                        .iter(),
+                    ),
+                    gate: Gate::Mul,
+                }],
+            },
+        ],
     };
+
+    let evaluations = GKR::evaluate(&circuit);
+    println!("evaluations {evaluations:?}");
 
     // =============
     // CIRCUIT SETUP
