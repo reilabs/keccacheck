@@ -187,26 +187,28 @@ pub fn gkr_add() {
     let beta = Fr::rand(&mut fs_rng);
 
     let expected_sum = alpha * subclaim.w_u + beta * subclaim.w_v;
-    // let round = ListOfGKRFunctions {
-    //     functions: vec![
-    //         (Fr::ONE, GKRFunction { f1: scale_sparse_mle(&f_2, alpha), f2: w_2.clone(), f3: w_2.clone() }, subclaim.u.clone()),
-    //         (Fr::ONE, GKRFunction { f1: scale_sparse_mle(&f_2, beta), f2: w_2.clone(), f3: w_2.clone() }, subclaim.v.clone()),
-    //     ],
-    //     layer: w_2.clone()
-    // };
-    // let proof = GKRRoundSumcheck::prove(&mut fs_rng, &round);
+    let round = ListOfGKRFunctions {
+        functions: vec![
+            GKRFunction { f1_g: scale_and_fix(&f_2, alpha, &subclaim.u), f2: const_one.clone(), f3: w_2.clone() },
+            GKRFunction { f1_g: scale_and_fix(&f_2, beta, &subclaim.v), f2: const_one.clone(), f3: w_2.clone() },
+            GKRFunction { f1_g: scale_and_fix(&f_2, alpha, &subclaim.u), f2: w_2.clone(), f3: const_one.clone() },
+            GKRFunction { f1_g: scale_and_fix(&f_2, beta, &subclaim.v), f2: w_2.clone(), f3: const_one.clone() },
+        ],
+        layer: w_2.clone()
+    };
+    let proof = GKRRoundSumcheck::prove(&mut fs_rng, &round);
 
-    // let mut fs_rng = Blake2b512Rng::setup();
-    // let _alpha = Fr::rand(&mut fs_rng);
-    // let _beta = Fr::rand(&mut fs_rng);
-    // let subclaim = GKRRoundSumcheck::verify(&mut fs_rng, 2, &proof, expected_sum).unwrap();
-    // println!("proof {proof:?}");
-    // println!("u {:?}", subclaim.u);
-    // println!("v {:?}", subclaim.v);
+    let mut fs_rng = Blake2b512Rng::setup();
+    let _alpha = Fr::rand(&mut fs_rng);
+    let _beta = Fr::rand(&mut fs_rng);
+    let subclaim = GKRRoundSumcheck::verify(&mut fs_rng, 2, &proof, expected_sum).unwrap();
+    println!("proof {proof:?}");
+    println!("u {:?}", subclaim.u);
+    println!("v {:?}", subclaim.v);
 
     // // verify last round matches actual outputs
-    // assert_eq!(w_2.evaluate(&subclaim.u), subclaim.w_u);
-    // assert_eq!(w_2.evaluate(&subclaim.v), subclaim.w_v);
+    assert_eq!(w_2.evaluate(&subclaim.u), subclaim.w_u);
+    assert_eq!(w_2.evaluate(&subclaim.v), subclaim.w_v);
 }
 
 fn scale_and_fix<F: Field>(mle: &SparseMultilinearExtension<F>, scalar: F, g: &[F]) -> SparseMultilinearExtension<F>
