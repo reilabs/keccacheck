@@ -1,8 +1,12 @@
 use ark_bn254::Fr;
 use ark_ff::{Field, UniformRand};
-use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension};
+use ark_poly::{
+    DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
+};
 use ark_sumcheck::{
-    gkr::GKRProof, gkr_round_sumcheck::{GKRFunction, GKRRound, GKRRoundSumcheck}, rng::{Blake2b512Rng, FeedableRNG}
+    gkr::{Circuit, GKRProof, Gate, Layer, LayerGate},
+    gkr_round_sumcheck::{GKRFunction, GKRRound, GKRRoundSumcheck},
+    rng::{Blake2b512Rng, FeedableRNG},
 };
 
 // low bits index the output layer (i.e. fixed first), high bits index inputs
@@ -25,6 +29,20 @@ pub fn eval_index(
 // f2: ||    ||/  \     ||
 // w2: 3     2     3     1
 pub fn gkr_mul() {
+    let circuit = Circuit::<Fr> {
+        inputs: vec![3.into(), 2.into(), 3.into(), 1.into()],
+        outputs: vec![36.into(), 6.into()],
+        layers: vec![Layer {
+            gates: vec![LayerGate {
+                wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                    5,
+                    vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)].iter(),
+                ),
+                gate: Gate::Mul,
+            }],
+        }],
+    };
+
     // =============
     // CIRCUIT SETUP
     // =============
@@ -53,7 +71,8 @@ pub fn gkr_mul() {
         .iter(),
     );
     let w_2 = DenseMultilinearExtension::from_evaluations_slice(
-        2, &[3.into(), 2.into(), 3.into(), 1.into()]
+        2,
+        &[3.into(), 2.into(), 3.into(), 1.into()],
     );
 
     // ======
@@ -62,14 +81,18 @@ pub fn gkr_mul() {
 
     // TODO: use poseidon or skyscraper
     let mut fs_rng = Blake2b512Rng::setup();
-    let mut gkr_proof = GKRProof { rounds: Vec::with_capacity(2) };
+    let mut gkr_proof = GKRProof {
+        rounds: Vec::with_capacity(2),
+    };
 
     // ROUND 1
     let r_1 = vec![Fr::rand(&mut fs_rng)];
     let round = GKRRound {
-        functions: vec![
-            GKRFunction { f1_g: f_1.fix_variables(&r_1), f2: w_1.clone(), f3: w_1.clone() }
-        ],
+        functions: vec![GKRFunction {
+            f1_g: f_1.fix_variables(&r_1),
+            f2: w_1.clone(),
+            f3: w_1.clone(),
+        }],
         layer: w_1.clone(),
     };
     let (proof, (u, v)) = GKRRoundSumcheck::prove(&mut fs_rng, &round);
@@ -81,10 +104,18 @@ pub fn gkr_mul() {
 
     let round = GKRRound {
         functions: vec![
-            GKRFunction { f1_g: scale_and_fix(&f_2, alpha, &u), f2: w_2.clone(), f3: w_2.clone() },
-            GKRFunction { f1_g: scale_and_fix(&f_2, beta, &v), f2: w_2.clone(), f3: w_2.clone() },
+            GKRFunction {
+                f1_g: scale_and_fix(&f_2, alpha, &u),
+                f2: w_2.clone(),
+                f3: w_2.clone(),
+            },
+            GKRFunction {
+                f1_g: scale_and_fix(&f_2, beta, &v),
+                f2: w_2.clone(),
+                f3: w_2.clone(),
+            },
         ],
-        layer: w_2.clone()
+        layer: w_2.clone(),
     };
     let (proof, _) = GKRRoundSumcheck::prove(&mut fs_rng, &round);
     gkr_proof.rounds.push(proof);
@@ -102,8 +133,14 @@ pub fn gkr_mul() {
     let subclaim = GKRRoundSumcheck::verify(&mut fs_rng, 2, proof, expected_sum).unwrap();
 
     // TODO: why is this needed, exactly?
-    let wiring_res = f_1.fix_variables(&r_1).fix_variables(&subclaim.u).evaluate(&subclaim.v);
-    assert_eq!(wiring_res * subclaim.w_u * subclaim.w_v, proof.check_sum(subclaim.v.last().unwrap()));
+    let wiring_res = f_1
+        .fix_variables(&r_1)
+        .fix_variables(&subclaim.u)
+        .evaluate(&subclaim.v);
+    assert_eq!(
+        wiring_res * subclaim.w_u * subclaim.w_v,
+        proof.check_sum(subclaim.v.last().unwrap())
+    );
 
     // ROUND 2
     let alpha = Fr::rand(&mut fs_rng);
@@ -151,8 +188,10 @@ pub fn gkr_add() {
         ]
         .iter(),
     );
-    let w_2 = DenseMultilinearExtension::from_evaluations_slice(2, &[3.into(), 2.into(), 3.into(), 1.into()]);
-
+    let w_2 = DenseMultilinearExtension::from_evaluations_slice(
+        2,
+        &[3.into(), 2.into(), 3.into(), 1.into()],
+    );
 
     // ======
     // PROVER
@@ -160,15 +199,26 @@ pub fn gkr_add() {
 
     // TODO: use poseidon or skyscraper
     let mut fs_rng = Blake2b512Rng::setup();
-    let const_one = DenseMultilinearExtension::from_evaluations_slice(2, &[Fr::ONE, Fr::ONE, Fr::ONE, Fr::ONE]);
-    let mut gkr_proof = GKRProof { rounds: Vec::with_capacity(2) };
+    let const_one =
+        DenseMultilinearExtension::from_evaluations_slice(2, &[Fr::ONE, Fr::ONE, Fr::ONE, Fr::ONE]);
+    let mut gkr_proof = GKRProof {
+        rounds: Vec::with_capacity(2),
+    };
 
     // ROUND 1
     let r_1 = vec![Fr::rand(&mut fs_rng)];
     let round = GKRRound {
         functions: vec![
-            GKRFunction { f1_g: f_1.fix_variables(&r_1), f2: const_one.clone(), f3: w_1.clone() },
-            GKRFunction { f1_g: f_1.fix_variables(&r_1), f2: w_1.clone(), f3: const_one.clone() },
+            GKRFunction {
+                f1_g: f_1.fix_variables(&r_1),
+                f2: const_one.clone(),
+                f3: w_1.clone(),
+            },
+            GKRFunction {
+                f1_g: f_1.fix_variables(&r_1),
+                f2: w_1.clone(),
+                f3: const_one.clone(),
+            },
         ],
         layer: w_1.clone(),
     };
@@ -181,12 +231,28 @@ pub fn gkr_add() {
 
     let round = GKRRound {
         functions: vec![
-            GKRFunction { f1_g: scale_and_fix(&f_2, alpha, &u), f2: const_one.clone(), f3: w_2.clone() },
-            GKRFunction { f1_g: scale_and_fix(&f_2, beta, &v), f2: const_one.clone(), f3: w_2.clone() },
-            GKRFunction { f1_g: scale_and_fix(&f_2, alpha, &u), f2: w_2.clone(), f3: const_one.clone() },
-            GKRFunction { f1_g: scale_and_fix(&f_2, beta, &v), f2: w_2.clone(), f3: const_one.clone() },
+            GKRFunction {
+                f1_g: scale_and_fix(&f_2, alpha, &u),
+                f2: const_one.clone(),
+                f3: w_2.clone(),
+            },
+            GKRFunction {
+                f1_g: scale_and_fix(&f_2, beta, &v),
+                f2: const_one.clone(),
+                f3: w_2.clone(),
+            },
+            GKRFunction {
+                f1_g: scale_and_fix(&f_2, alpha, &u),
+                f2: w_2.clone(),
+                f3: const_one.clone(),
+            },
+            GKRFunction {
+                f1_g: scale_and_fix(&f_2, beta, &v),
+                f2: w_2.clone(),
+                f3: const_one.clone(),
+            },
         ],
-        layer: w_2.clone()
+        layer: w_2.clone(),
     };
     let (proof, _) = GKRRoundSumcheck::prove(&mut fs_rng, &round);
     gkr_proof.rounds.push(proof);
@@ -203,8 +269,14 @@ pub fn gkr_add() {
     let subclaim = GKRRoundSumcheck::verify(&mut fs_rng, 2, proof, expected_sum).unwrap();
 
     // TODO: why is this needed, exactly?
-    let wiring_res = f_1.fix_variables(&r_1).fix_variables(&subclaim.u).evaluate(&subclaim.v);
-    assert_eq!(wiring_res * (subclaim.w_u + subclaim.w_v), proof.check_sum(subclaim.v.last().unwrap()));
+    let wiring_res = f_1
+        .fix_variables(&r_1)
+        .fix_variables(&subclaim.u)
+        .evaluate(&subclaim.v);
+    assert_eq!(
+        wiring_res * (subclaim.w_u + subclaim.w_v),
+        proof.check_sum(subclaim.v.last().unwrap())
+    );
 
     // ROUND 2
     let alpha = Fr::rand(&mut fs_rng);
@@ -218,12 +290,17 @@ pub fn gkr_add() {
     assert_eq!(w_2.evaluate(&subclaim.v), subclaim.w_v);
 }
 
-fn scale_and_fix<F: Field>(mle: &SparseMultilinearExtension<F>, scalar: F, g: &[F]) -> SparseMultilinearExtension<F>
-{
-    let evaluations = mle.evaluations.iter().map(|(i, v)| (*i, *v * scalar)).collect::<Vec<_>>();
-    SparseMultilinearExtension::from_evaluations(
-        mle.num_vars, &evaluations
-    ).fix_variables(g)
+fn scale_and_fix<F: Field>(
+    mle: &SparseMultilinearExtension<F>,
+    scalar: F,
+    g: &[F],
+) -> SparseMultilinearExtension<F> {
+    let evaluations = mle
+        .evaluations
+        .iter()
+        .map(|(i, v)| (*i, *v * scalar))
+        .collect::<Vec<_>>();
+    SparseMultilinearExtension::from_evaluations(mle.num_vars, &evaluations).fix_variables(g)
 }
 
 #[test]

@@ -47,10 +47,7 @@ pub struct GKRRoundSumcheckSubClaim<F: Field> {
 
 impl<F: Field> GKRRoundSumcheckSubClaim<F> {
     /// Verify that the subclaim is true by evaluating the GKR Round function.
-    pub fn verify_subclaim(
-        &self,
-        round: &GKRRound<F>,
-    ) -> bool {
+    pub fn verify_subclaim(&self, round: &GKRRound<F>) -> bool {
         let mut actual_evaluation = F::zero();
 
         for function in &round.functions {
@@ -63,13 +60,9 @@ impl<F: Field> GKRRoundSumcheckSubClaim<F> {
             assert_eq!(f1_g.num_vars, 2 * dim);
             assert_eq!(f2.num_vars, dim);
             assert_eq!(f3.num_vars, dim);
-    
-            let uv: Vec<_> = self.u
-                .iter()
-                .chain(self.v.iter())
-                .copied()
-                .collect();
-            actual_evaluation += f1_g.evaluate(&uv) * f2.evaluate(&self.u) * f3.evaluate(&self.v);    
+
+            let uv: Vec<_> = self.u.iter().chain(self.v.iter()).copied().collect();
+            actual_evaluation += f1_g.evaluate(&uv) * f2.evaluate(&self.u) * f3.evaluate(&self.v);
         }
 
         actual_evaluation == self.expected_evaluation

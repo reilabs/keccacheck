@@ -47,7 +47,10 @@ pub fn start_phase1_sumcheck<F: Field>(
     //assert_eq!(f2.num_vars, dim);
     let mut poly = ListOfProductsOfPolynomials::new(dim);
     for (h_g, f2) in instances {
-        poly.add_product(vec![Rc::new((*h_g).clone()), Rc::new((*f2).clone())], F::one());
+        poly.add_product(
+            vec![Rc::new((*h_g).clone()), Rc::new((*f2).clone())],
+            F::one(),
+        );
     }
     IPForMLSumcheck::prover_init(&poly)
 }
@@ -63,9 +66,12 @@ pub fn initialize_phase_two<F: Field>(
 
 /// Takes f1 fixed at g||u, f3, and f2 evaluated at u.
 pub fn start_phase2_sumcheck<F: Field>(
-    instances: &[(&DenseMultilinearExtension<F>, &DenseMultilinearExtension<F>, F)],
+    instances: &[(
+        &DenseMultilinearExtension<F>,
+        &DenseMultilinearExtension<F>,
+        F,
+    )],
 ) -> ProverState<F> {
-
     let dim = instances[0].0.num_vars;
     // assert_eq!(f3.num_vars, dim);
     let mut poly = ListOfProductsOfPolynomials::new(dim);
@@ -75,7 +81,7 @@ pub fn start_phase2_sumcheck<F: Field>(
             zero += (*f2_u, *f3);
             zero
         };
-    
+
         poly.add_product(vec![Rc::new((*f1_gu).clone()), Rc::new(f3_f2u)], F::one());
     }
     IPForMLSumcheck::prover_init(&poly)
@@ -106,7 +112,7 @@ impl<F: Field> GKRRound<F> {
         match phase {
             0 => self.functions[0].f2.num_vars,
             1 => self.functions[0].f3.num_vars,
-            _ => panic!("only functions in the form of f1(...)f2(...)f3(...) supported")
+            _ => panic!("only functions in the form of f1(...)f2(...)f3(...) supported"),
         }
     }
 }
@@ -145,7 +151,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let instances = h_g_vec
             .iter()
             .zip(f2.clone())
-            .map(|(a, b)| { (a, b)})
+            .map(|(a, b)| (a, b))
             .collect::<Vec<_>>();
 
         let mut phase1_ps = start_phase1_sumcheck(instances.as_slice());
@@ -176,7 +182,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .iter()
             .zip(f3)
             .zip(f2)
-            .map(|((a, b), c)| { (a, b, c.evaluate(&u))})
+            .map(|((a, b), c)| (a, b, c.evaluate(&u)))
             .collect::<Vec<_>>();
 
         let mut phase2_ps = start_phase2_sumcheck(&instances);
@@ -200,7 +206,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
                 w_u: round.layer.evaluate(&u),
                 w_v: round.layer.evaluate(&v),
             },
-            (u, v)
+            (u, v),
         )
     }
 
