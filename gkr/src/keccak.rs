@@ -1,23 +1,9 @@
 use ark_bn254::Fr;
-use ark_ff::Field;
 use ark_poly::SparseMultilinearExtension;
 use ark_sumcheck::{
-    gkr::{Circuit, GKR, Gate, Layer, LayerGate},
+    gkr::{Circuit, GKR, Gate, Layer, LayerGate, eval_index},
     rng::{Blake2b512Rng, FeedableRNG},
 };
-
-// low bits index the output layer (i.e. fixed first), high bits index inputs
-pub fn eval_index(
-    out_size: usize,
-    out: usize,
-    in_size: usize,
-    in1: usize,
-    in2: usize,
-) -> (usize, Fr) {
-    let in2 = in2 << (in_size + out_size);
-    let in1 = in1 << out_size;
-    (out + in1 + in2, Fr::ONE)
-}
 
 // all gates are multiplications
 // w0:   36         6
@@ -32,15 +18,7 @@ pub fn gkr_mul() {
         inputs: vec![3.into(), 2.into(), 3.into(), 1.into()],
         outputs: vec![36.into(), 6.into()],
         layers: vec![
-            Layer {
-                gates: vec![LayerGate {
-                    wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
-                        5,
-                        vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)].iter(),
-                    ),
-                    gate: Gate::Mul,
-                }],
-            },
+            Layer::with_builder(1, 2, |out| (Gate::Mul, 2 * out, 2 * out + 1)),
             Layer {
                 gates: vec![LayerGate {
                     wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
@@ -138,7 +116,6 @@ pub fn gkr_add_mul() {
     GKR::verify(&mut fs_rng, &circuit, &gkr_proof);
 }
 
-
 // w0:           1          0
 // f1(xor)      /  \      /   \
 // w1:         1     0   0     0
@@ -152,15 +129,13 @@ pub fn gkr_id_xor() {
         outputs: vec![1.into(), 0.into()],
         layers: vec![
             Layer {
-                gates: vec![
-                    LayerGate {
-                        wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
-                            5,
-                            vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)].iter(),
-                        ),
-                        gate: Gate::Xor,
-                    },
-                ],
+                gates: vec![LayerGate {
+                    wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                        5,
+                        vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)].iter(),
+                    ),
+                    gate: Gate::Xor,
+                }],
             },
             Layer {
                 gates: vec![LayerGate {
@@ -187,8 +162,6 @@ pub fn gkr_id_xor() {
     GKR::verify(&mut fs_rng, &circuit, &gkr_proof);
 }
 
-
-
 #[test]
 fn test_gkr_basic_mul() {
     gkr_mul();
@@ -203,7 +176,6 @@ fn test_gkr_basic_add() {
 fn test_gkr_basic_id_xor() {
     gkr_id_xor();
 }
-
 
 // pub fn gkr_theta() {
 //     let input = vec![0; 1 << 11];

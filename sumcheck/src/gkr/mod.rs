@@ -3,6 +3,7 @@
 //! GKR will use `gkr_round_sumcheck` as a subroutine.
 
 use core::marker::PhantomData;
+use std::collections::HashMap;
 
 use ark_ff::Field;
 use ark_poly::{
@@ -30,7 +31,40 @@ pub struct Layer<F: Field> {
     pub gates: Vec<LayerGate<F>>,
 }
 
-#[derive(Debug)]
+impl<F: Field> Layer<F> {
+    /// Create a layer
+    pub fn with_builder<B>(output_vars: usize, input_vars: usize, builder: B) -> Self
+    where
+        B: Fn(usize) -> (Gate, usize, usize),
+    {
+        let mut result = HashMap::<Gate, Vec<(usize, F)>>::new();
+
+        for i in 0..(1 << output_vars) {
+            let (gate, left, right) = builder(i);
+            let evaluation = eval_index(output_vars, i, input_vars, left, right);
+            if let Some(entry) = result.get_mut(&gate) {
+                entry.push(evaluation);
+            } else {
+                result.insert(gate, vec![evaluation]);
+            }
+        }
+
+        let gates = result
+            .into_iter()
+            .map(|(k, v)| LayerGate {
+                wiring: SparseMultilinearExtension::from_evaluations(
+                    output_vars + 2 * input_vars,
+                    &v,
+                ),
+                gate: k,
+            })
+            .collect::<Vec<_>>();
+
+        Self { gates }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
 /// Supported gate types
 pub enum Gate {
     /// Add gate
@@ -107,22 +141,19 @@ impl Gate {
                         f1_g: scale_and_fix(wiring, Into::<F>::into(-2), g),
                         f2: values.clone(),
                         f3: values.clone(),
-                    }
+                    },
                 ]
-
-            },
+            }
             Gate::Left => {
                 let const_one = DenseMultilinearExtension::from_evaluations_vec(
                     values.num_vars,
                     vec![F::ONE; 1 << values.num_vars],
                 );
-                vec![
-                    GKRFunction {
-                        f1_g: wiring.fix_variables(g),
-                        f2: values.clone(),
-                        f3: const_one,
-                    },
-                ]
+                vec![GKRFunction {
+                    f1_g: wiring.fix_variables(g),
+                    f2: values.clone(),
+                    f3: const_one,
+                }]
             }
         }
     }
@@ -219,7 +250,6 @@ impl Gate {
                         f3: values.clone(),
                     },
                 ]
-
             }
             Gate::Left => {
                 let const_one = DenseMultilinearExtension::from_evaluations_vec(
@@ -477,4 +507,17 @@ pub fn scale_and_fix<F: Field>(
         .map(|(i, v)| (*i, *v * scalar))
         .collect::<Vec<_>>();
     SparseMultilinearExtension::from_evaluations(mle.num_vars, &evaluations).fix_variables(g)
+}
+
+/// low bits index the output layer (i.e. fixed first), high bits index inputs
+pub fn eval_index<F: Field>(
+    out_size: usize,
+    out: usize,
+    in_size: usize,
+    in1: usize,
+    in2: usize,
+) -> (usize, F) {
+    let in2 = in2 << (in_size + out_size);
+    let in1 = in1 << out_size;
+    (out + in1 + in2, F::ONE)
 }
