@@ -138,6 +138,57 @@ pub fn gkr_add_mul() {
     GKR::verify(&mut fs_rng, &circuit, &gkr_proof);
 }
 
+
+// w0:           1          0
+// f1(xor)      /  \      /   \
+// w1:         1     0   0     0
+// f2 (id) :  ||    ||/  \     ||    // copy left child
+// w2:         1     0     1     0
+pub fn gkr_id_xor() {
+    // TODO: make it a formula for faster verification. V should be able to calc f_i in O(num_vars) time
+    // TOOD: make it data-parallel
+    let circuit = Circuit::<Fr> {
+        inputs: vec![1.into(), 0.into(), 1.into(), 0.into()],
+        outputs: vec![1.into(), 0.into()],
+        layers: vec![
+            Layer {
+                gates: vec![
+                    LayerGate {
+                        wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                            5,
+                            vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)].iter(),
+                        ),
+                        gate: Gate::Xor,
+                    },
+                ],
+            },
+            Layer {
+                gates: vec![LayerGate {
+                    wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                        6,
+                        vec![
+                            eval_index(2, 0, 2, 0, 0),
+                            eval_index(2, 1, 2, 1, 1),
+                            eval_index(2, 2, 2, 1, 2),
+                            eval_index(2, 3, 2, 3, 3),
+                        ]
+                        .iter(),
+                    ),
+                    gate: Gate::Left,
+                }],
+            },
+        ],
+    };
+
+    let mut fs_rng = Blake2b512Rng::setup();
+    let gkr_proof = GKR::prove(&mut fs_rng, &circuit);
+
+    let mut fs_rng = Blake2b512Rng::setup();
+    GKR::verify(&mut fs_rng, &circuit, &gkr_proof);
+}
+
+
+
 #[test]
 fn test_gkr_basic_mul() {
     gkr_mul();
@@ -147,6 +198,12 @@ fn test_gkr_basic_mul() {
 fn test_gkr_basic_add() {
     gkr_add_mul();
 }
+
+#[test]
+fn test_gkr_basic_id_xor() {
+    gkr_id_xor();
+}
+
 
 // pub fn gkr_theta() {
 //     let input = vec![0; 1 << 11];

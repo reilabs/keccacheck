@@ -39,6 +39,8 @@ pub enum Gate {
     Mul,
     /// Xor gate
     Xor,
+    /// left child gate
+    Left,
 }
 
 impl Gate {
@@ -48,6 +50,7 @@ impl Gate {
             Gate::Add => left + right,
             Gate::Mul => left * right,
             Gate::Xor => left + right - left * right * F::from(2),
+            Gate::Left => left,
         }
     }
 
@@ -84,7 +87,43 @@ impl Gate {
                     f3: values.clone(),
                 }]
             }
-            Gate::Xor => todo!(),
+            Gate::Xor => {
+                let const_one = DenseMultilinearExtension::from_evaluations_vec(
+                    values.num_vars,
+                    vec![F::ONE; 1 << values.num_vars],
+                );
+                vec![
+                    GKRFunction {
+                        f1_g: wiring.fix_variables(g),
+                        f2: const_one.clone(),
+                        f3: values.clone(),
+                    },
+                    GKRFunction {
+                        f1_g: wiring.fix_variables(g),
+                        f2: values.clone(),
+                        f3: const_one.clone(),
+                    },
+                    GKRFunction {
+                        f1_g: scale_and_fix(wiring, Into::<F>::into(-2), g),
+                        f2: values.clone(),
+                        f3: values.clone(),
+                    }
+                ]
+
+            },
+            Gate::Left => {
+                let const_one = DenseMultilinearExtension::from_evaluations_vec(
+                    values.num_vars,
+                    vec![F::ONE; 1 << values.num_vars],
+                );
+                vec![
+                    GKRFunction {
+                        f1_g: wiring.fix_variables(g),
+                        f2: values.clone(),
+                        f3: const_one,
+                    },
+                ]
+            }
         }
     }
 
@@ -142,7 +181,65 @@ impl Gate {
                     },
                 ]
             }
-            Gate::Xor => todo!(),
+            Gate::Xor => {
+                let const_one = DenseMultilinearExtension::from_evaluations_vec(
+                    values.num_vars,
+                    vec![F::ONE; 1 << values.num_vars],
+                );
+
+                vec![
+                    GKRFunction {
+                        f1_g: scale_and_fix(&wiring, *alpha, &u),
+                        f2: const_one.clone(),
+                        f3: values.clone(),
+                    },
+                    GKRFunction {
+                        f1_g: scale_and_fix(&wiring, *beta, &v),
+                        f2: const_one.clone(),
+                        f3: values.clone(),
+                    },
+                    GKRFunction {
+                        f1_g: scale_and_fix(&wiring, *alpha, &u),
+                        f2: values.clone(),
+                        f3: const_one.clone(),
+                    },
+                    GKRFunction {
+                        f1_g: scale_and_fix(&wiring, *beta, &v),
+                        f2: values.clone(),
+                        f3: const_one.clone(),
+                    },
+                    GKRFunction {
+                        f1_g: scale_and_fix(wiring, *alpha * Into::<F>::into(-2), &u),
+                        f2: values.clone(),
+                        f3: values.clone(),
+                    },
+                    GKRFunction {
+                        f1_g: scale_and_fix(wiring, *beta * Into::<F>::into(-2), &v),
+                        f2: values.clone(),
+                        f3: values.clone(),
+                    },
+                ]
+
+            }
+            Gate::Left => {
+                let const_one = DenseMultilinearExtension::from_evaluations_vec(
+                    values.num_vars,
+                    vec![F::ONE; 1 << values.num_vars],
+                );
+
+                vec![
+                    GKRFunction {
+                        f1_g: scale_and_fix(&wiring, *alpha, &u),
+                        f2: values.clone(),
+                        f3: const_one.clone(),
+                    },
+                    GKRFunction {
+                        f1_g: scale_and_fix(&wiring, *beta, &v),
+                        f2: values.clone(),
+                        f3: const_one.clone(),
+                    },
+                ]
+            }
         }
     }
 }
