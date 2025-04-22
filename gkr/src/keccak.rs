@@ -1,4 +1,5 @@
 use ark_bn254::Fr;
+use ark_ff::Field;
 use ark_poly::SparseMultilinearExtension;
 use ark_sumcheck::{
     gkr::{Circuit, GKR, Gate, Layer, LayerGate, eval_index},
@@ -177,6 +178,167 @@ fn test_gkr_basic_id_xor() {
     gkr_id_xor();
 }
 
+fn ilog2_ceil(n: u64) -> u32 {
+    if n <= 1 {
+        return 0;
+    }
+    64 - (n - 1).leading_zeros()
+}
+
+fn u64_to_bits<F: Field>(vec: &[u64]) -> Vec<F> {
+    let size = 1 << ilog2_ceil((vec.len() * 64) as u64);
+    println!("input len is {}, allocating {}", vec.len() * 64, size);
+
+    let mut result = Vec::<F>::with_capacity(size);
+    for element in vec {
+        let mut element = *element;
+        for _ in 0..64 {
+            result.push((element % 2).into());
+            element >>= 1;
+        }
+    }
+
+    while result.len() < size {
+        result.push(0.into());
+    }
+
+    result
+}
+
+fn bits_to_u64<F: Field>(vec: &[F]) -> Vec<u64> {
+    let size = vec.len() / 64;
+    let mut result = Vec::<u64>::with_capacity(size);
+
+    let mut buffer: u64 = 0;
+    let mut bit_pos: usize = 0;
+
+    for element in vec {
+        let value: u64 = if *element == F::ZERO {
+            0
+        } else if *element == F::ONE {
+            1
+        } else {
+            panic!("bit not a bit, found {}", element);
+        };
+        buffer += value << bit_pos;
+        bit_pos += 1;
+
+        if bit_pos == 64 {
+            result.push(buffer);
+            buffer = 0;
+            bit_pos = 0;
+        }
+    }
+
+    result
+}
+
+
+pub fn gkr_theta(input: &[u64], output: &[u64]) {
+    // inputs: all state bits: 25 * 64 < 32 * 64 = (1 << 11)
+    // layer 1-3: xor all columns (array), but also copy inputs. fits in (1 << 11)
+    // layer 4: array is now xor of previous and (next rotated one left), also copy inputs. fits in (1 << 11)
+    // output: xor all columns with corresponding array elements
+    let state_length = 25 * 64;
+    let row_length = 5 * 64;
+    let circuit = Circuit::<Fr> {
+        inputs: u64_to_bits(&input),
+        outputs: u64_to_bits(&output),
+        layers: vec![
+            Layer::with_builder(11, 11, |out| {
+                if out < 25*64 {
+                    // xor with corresponsing array element
+                    let ary_offset = out % row_length;
+                    (Gate::Xor, out, state_length + ary_offset) 
+                } else {
+                    // fill with zeros
+                    (Gate::Null, 0, 0) 
+                }
+            }),
+            Layer::with_builder(11, 11, |out| {
+                if out < 25*64 {
+                    // copy input bits
+                    (Gate::Left, out, out) 
+                } else if out < 30*64 {
+                    let ary_offset = out - state_length;
+
+                    // + 63 (to rotate, unless first bit, then 63 + 64)
+                    let right = if out % 64 == 0 {
+                        (ary_offset + 63 + 64) % row_length
+                    } else {
+                        (ary_offset + 63) % row_length
+                    };
+                    let left = (ary_offset + 4 * 64) % row_length;
+                    (Gate::Xor, left + state_length, right + state_length)
+                } else {
+                    // fill with zeros
+                    (Gate::Null, 0, 0) 
+                }
+            }),
+            Layer::with_builder(11, 11, |out| {
+                if out < 25*64 {
+                    // copy input bits
+                    (Gate::Left, out, out) 
+                } else if out < 30*64 {
+                    // xor row 0, 1, 2, 3, 4
+                    let row_4 = (out % row_length) + 4 * row_length;
+                    (Gate::Xor, out, row_4)
+                } else {
+                    // fill with zeros
+                    (Gate::Null, 0, 0) 
+                }
+            }),
+            Layer::with_builder(11, 12, |out| {
+                if out < 25*64 {
+                    // copy input bits
+                    (Gate::Left, out, out) 
+                } else if out < 30*64 {
+                    // xor row 0, 1, 2, 3
+                    (Gate::Xor, out, out + row_length)
+                } else {
+                    // fill with zeros
+                    (Gate::Null, 0, 0) 
+                }
+            }),
+            Layer::with_builder(12, 11, |out| {
+                if out < 25*64 {
+                    // copy input bits
+                    (Gate::Left, out, out) 
+                } else if out < 30*64 {
+                    // xor row 0 and 1
+                    let row_0 = out % row_length;
+                    let row_1 = row_0 + row_length;
+                    (Gate::Xor, row_0, row_1)
+                } else if out < 35*64 {
+                    // xor row 2 and 3
+                    let row_2 = (out % row_length) + 2 * row_length;
+                    let row_3 = row_2 + row_length;
+                    (Gate::Xor, row_2, row_3)
+                } else {
+                    // fill with zeros
+                    (Gate::Null, 0, 0) 
+                }
+            }),
+        ],
+    };
+    let evaluations = GKR::evaluate(&circuit);
+    for (i, layer) in evaluations.iter().enumerate() {
+        println!("layer {i}");
+        let layer = bits_to_u64(&layer);
+        println!("{layer:x?}");
+    }
+
+    println!("proving...");
+    let mut fs_rng = Blake2b512Rng::setup();
+    let gkr_proof = GKR::prove(&mut fs_rng, &circuit);
+
+    println!("verifying...");
+    let mut fs_rng = Blake2b512Rng::setup();
+    GKR::verify(&mut fs_rng, &circuit, &gkr_proof);
+
+    println!("done.");
+}
+
 // pub fn gkr_theta() {
 //     let input = vec![0; 1 << 11];
 //     let output = vec![0; 1 << 11];
@@ -235,10 +397,9 @@ pub fn keccak_round(a: &mut [u64; 25], rc: u64) {
             array[x] ^= a[x + y];
         }
     }
-
     for x in 0..5 {
         // for each column:
-        //   d = xor previous and next (wrapped) array element, then rotate bits (wrapping)
+        //   d = xor previous and (next with bits rotated) (wrapping)
         //   for each state element: element xor d
         let d = array[(x + 4) % 5] ^ array[(x + 1) % 5].rotate_left(1);
         for y_count in 0..5 {
@@ -316,10 +477,15 @@ const PI: [usize; 24] = [
 #[test]
 fn test_keccak_f() {
     //gkr_theta();
-    let mut state = [
+    let input = [
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
     ];
-    println!("state {state:x?}");
-    keccak_round(&mut state, ROUND_CONSTANTS[0]);
-    println!("state {state:x?}");
+    let mut output = input.clone();
+    keccak_round(&mut output, ROUND_CONSTANTS[0]);
+
+    println!("input  {input:x?}");
+    println!("output {output:x?}");
+
+    gkr_theta(&input, &output);
+
 }

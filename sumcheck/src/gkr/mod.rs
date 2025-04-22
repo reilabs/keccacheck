@@ -75,6 +75,8 @@ pub enum Gate {
     Xor,
     /// left child gate
     Left,
+    /// empty value
+    Null,
 }
 
 impl Gate {
@@ -85,6 +87,7 @@ impl Gate {
             Gate::Mul => left * right,
             Gate::Xor => left + right - left * right * F::from(2),
             Gate::Left => left,
+            Gate::Null => F::zero(),
         }
     }
 
@@ -155,6 +158,7 @@ impl Gate {
                     f3: const_one,
                 }]
             }
+            Gate::Null => { vec![] }
         }
     }
 
@@ -270,6 +274,7 @@ impl Gate {
                     },
                 ]
             }
+            Gate::Null => { vec![] }
         }
     }
 }
