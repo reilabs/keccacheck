@@ -2,7 +2,7 @@ use ark_bn254::Fr;
 use ark_ff::Field;
 use ark_poly::SparseMultilinearExtension;
 use ark_sumcheck::{
-    gkr::{Circuit, GKR, Gate, Layer, LayerGate, eval_index},
+    gkr::{self, eval_index, Circuit, Gate, Layer, LayerGate, GKR},
     rng::{Blake2b512Rng, FeedableRNG},
 };
 
@@ -187,8 +187,6 @@ fn ilog2_ceil(n: u64) -> u32 {
 
 fn u64_to_bits<F: Field>(vec: &[u64]) -> Vec<F> {
     let size = 1 << ilog2_ceil((vec.len() * 64) as u64);
-    println!("input len is {}, allocating {}", vec.len() * 64, size);
-
     let mut result = Vec::<F>::with_capacity(size);
     for element in vec {
         let mut element = *element;
@@ -331,6 +329,20 @@ pub fn gkr_theta(input: &[u64], output: &[u64]) {
     println!("proving...");
     let mut fs_rng = Blake2b512Rng::setup();
     let gkr_proof = GKR::prove(&mut fs_rng, &circuit);
+
+    // verify proof size
+    let rounds = gkr_proof.rounds.iter().map(|round| {
+        for msg in &round.phase1_sumcheck_msgs {
+            assert_eq!(msg.evaluations.len(), 3);
+        }
+        for msg in &round.phase2_sumcheck_msgs {
+            assert_eq!(msg.evaluations.len(), 3);
+        }
+        round.phase1_sumcheck_msgs.len() + round.phase1_sumcheck_msgs.len()
+    }).collect::<Vec<_>>();
+
+    // 5 layers, 22 inputs each (except for the layer with 2 xors)
+    assert_eq!(rounds, vec![22, 22, 22, 24, 22]);
 
     println!("verifying...");
     let mut fs_rng = Blake2b512Rng::setup();

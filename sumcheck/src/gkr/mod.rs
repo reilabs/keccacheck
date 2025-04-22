@@ -292,6 +292,7 @@ pub struct GKR<F: Field> {
     _marker: PhantomData<F>,
 }
 
+#[derive(Debug)]
 /// Proof for GKR Circuit
 pub struct GKRProof<F: Field> {
     /// Proofs for each GKR round

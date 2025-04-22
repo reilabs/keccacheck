@@ -10,8 +10,10 @@ use super::GKRRound;
 #[derive(Debug)]
 /// Proof for GKR Round Function
 pub struct GKRRoundProof<F: Field> {
-    pub(crate) phase1_sumcheck_msgs: Vec<ProverMsg<F>>,
-    pub(crate) phase2_sumcheck_msgs: Vec<ProverMsg<F>>,
+    /// first half of sumcheck messages
+    pub phase1_sumcheck_msgs: Vec<ProverMsg<F>>,
+    /// second half of sumcheck messages
+    pub phase2_sumcheck_msgs: Vec<ProverMsg<F>>,
     /// w(u)
     pub w_u: F,
     /// w(v)
