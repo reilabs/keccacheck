@@ -314,7 +314,7 @@ impl<F: Field> GKR<F> {
 
         for (i, layer) in circuit.layers.iter().enumerate() {
             if i == 0 {
-                let r_1 = vec![F::rand(rng)];
+                let r_1 = (0..num_vars[0]).map(|_| F::rand(rng)).collect::<Vec<_>>();
                 let w_i = DenseMultilinearExtension::from_evaluations_slice(
                     num_vars[i + 1],
                     &evaluations[i + 1],
@@ -381,7 +381,7 @@ impl<F: Field> GKR<F> {
 
         for (i, layer) in circuit.layers.iter().enumerate() {
             if i == 0 {
-                let r_1 = vec![F::rand(rng)];
+                let r_1 = (0..num_vars[0]).map(|_| F::rand(rng)).collect::<Vec<_>>();
                 let w_0 = DenseMultilinearExtension::from_evaluations_slice(
                     circuit.outputs.len().ilog2() as usize,
                     &circuit.outputs,
