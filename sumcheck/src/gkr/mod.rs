@@ -158,7 +158,9 @@ impl Gate {
                     f3: const_one,
                 }]
             }
-            Gate::Null => { vec![] }
+            Gate::Null => {
+                vec![]
+            }
         }
     }
 
@@ -274,7 +276,9 @@ impl Gate {
                     },
                 ]
             }
-            Gate::Null => { vec![] }
+            Gate::Null => {
+                vec![]
+            }
         }
     }
 }
