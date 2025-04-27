@@ -259,14 +259,12 @@ pub fn gkr_theta(input: &[u64], output: &[u64]) {
                 } else if out < 30 * 64 {
                     let ary_offset = out - state_length;
 
-                    // TODO: enable rotation again
-                    let right = (ary_offset + 64) % row_length;
                     // + 63 (to rotate, unless first bit, then 63 + 64)
-                    // let right = if out % 64 == 0 {
-                    //     (ary_offset + 63 + 64) % row_length
-                    // } else {
-                    //     (ary_offset + 63) % row_length
-                    // };
+                    let right = if out % 64 == 0 {
+                        (ary_offset + 63 + 64) % row_length
+                    } else {
+                        (ary_offset + 63) % row_length
+                    };
                     let left = (ary_offset + 4 * 64) % row_length;
                     (Gate::Xor, left + state_length, right + state_length)
                 } else {
@@ -418,8 +416,7 @@ pub fn keccak_round(a: &mut [u64; 25], rc: u64) {
         // for each column:
         //   d = xor previous and (next with bits rotated) (wrapping)
         //   for each state element: element xor d
-        // TODO: enable rotation again
-        let d = array[(x + 4) % 5] ^ array[(x + 1) % 5]; //.rotate_left(1);
+        let d = array[(x + 4) % 5] ^ array[(x + 1) % 5].rotate_left(1);
         for y_count in 0..5 {
             let y = y_count * 5;
             a[y + x] ^= d;
