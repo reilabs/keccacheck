@@ -1,8 +1,13 @@
+use std::marker::PhantomData;
+
 use ark_bn254::Fr;
 use ark_ff::Field;
 use ark_poly::SparseMultilinearExtension;
 use ark_sumcheck::{
-    gkr::{Circuit, GKR, Gate, Layer, LayerGate, eval_index},
+    gkr::{
+        Circuit, GKR, Gate, Layer, LayerGate, eval_index,
+        predicate::{EqPredicate, Predicate, PredicateSum, PredicateType, VariableMask},
+    },
     rng::{Blake2b512Rng, FeedableRNG},
 };
 
@@ -489,6 +494,45 @@ const PI: [usize; 24] = [
     10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1,
 ];
 
+pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
+    // inputs: all state bits: 25 * 64 < 32 * 64 = (1 << 11)
+    // layer 1-3: xor all columns (array), but also copy inputs. fits in (1 << 11)
+    // layer 4: array is now xor of previous and (next rotated one left), also copy inputs. fits in (1 << 11)
+    // output: xor all columns with corresponding array elements
+    let state_length = 5 * 8 * 64;
+    let row_length = 8 * 64;
+    let circuit = Circuit::<Fr> {
+        inputs: u64_to_bits(&input),
+        outputs: u64_to_bits(&output),
+        layers: vec![Layer {
+            gates: vec![LayerGate {
+                wiring: PredicateSum {
+                    predicates: vec![Predicate {
+                        predicates: vec![PredicateType::Eq(EqPredicate {
+                            var_masks: vec![
+                                VariableMask(((1 << 12) - 1) << 24),
+                                VariableMask(((1 << 12) - 1) << 12),
+                                VariableMask((1 << 12) - 1),
+                            ],
+                            consts: None,
+                        })],
+                    }],
+                    num_vars: 36,
+                },
+                gate: Gate::Left,
+            }],
+        }],
+    };
+
+    println!("proving...");
+    let mut fs_rng = Blake2b512Rng::setup();
+    let gkr_proof = GKR::prove(&mut fs_rng, &circuit);
+
+    println!("verifying...");
+    let mut fs_rng = Blake2b512Rng::setup();
+    GKR::verify(&mut fs_rng, &circuit, &gkr_proof);
+}
+
 #[test]
 fn test_keccak_f() {
     //gkr_theta();
@@ -501,6 +545,8 @@ fn test_keccak_f() {
     println!("input  {input:x?}");
     println!("output {output:x?}");
 
+    gkr_theta(&input, &output);
+
     let mut gkr_input = vec![0; 8 * 8];
     let mut gkr_output = vec![0; 8 * 8];
 
@@ -508,7 +554,7 @@ fn test_keccak_f() {
         for col in 0..8 {
             if row < 5 && col < 5 {
                 gkr_input[row * 8 + col] = input[row * 5 + col];
-                gkr_output[row * 8 + col] = output[row * 5 + col];
+                gkr_output[row * 8 + col] = input[row * 5 + col];
             } else {
                 gkr_input[row * 8 + col] = 0;
                 gkr_output[row * 8 + col] = 0;
@@ -518,5 +564,5 @@ fn test_keccak_f() {
     println!("gkr_input  {gkr_input:x?}");
     println!("gkr_output {gkr_output:x?}");
 
-    gkr_theta(&input, &output);
+    gkr_pred_theta(&gkr_input, &gkr_output);
 }

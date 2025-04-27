@@ -66,10 +66,8 @@ impl<F: Field> Layer<F> {
                                 ),
                             },
                         )],
-                        _phantom: PhantomData,
                     }],
                     num_vars: output_vars + 2 * input_vars,
-                    _phantom: PhantomData,
                 },
                 gate: k,
             })
@@ -241,10 +239,8 @@ impl<F: Field> LayerGate<F> {
                         var_mask: VariableMask(usize::MAX),
                         mle: wiring,
                     })],
-                    _phantom: PhantomData,
                 }],
                 num_vars,
-                _phantom: PhantomData,
             },
             gate,
         }

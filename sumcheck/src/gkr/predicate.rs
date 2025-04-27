@@ -1,10 +1,9 @@
-use core::marker::PhantomData;
 use std::collections::BTreeMap;
 
 use ark_ff::Field;
 use ark_poly::{MultilinearExtension, SparseMultilinearExtension};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct VariableMask(pub usize);
 
 #[derive(Clone)]
@@ -14,10 +13,54 @@ pub struct SparseEvaluationPredicate<F: Field> {
     pub mle: SparseMultilinearExtension<F>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EqPredicate<F: Field> {
     pub var_masks: Vec<VariableMask>,
-    pub consts: Vec<F>,
+    pub consts: Option<Vec<F>>,
+}
+
+impl<F: Field> EqPredicate<F> {
+    // TODO: this is crazy inefficient
+    pub fn fix_variables(&self, partial_point: &[F]) -> SparseMultilinearExtension<F> {
+        if let Some(_consts) = &self.consts {
+            todo!();
+        }
+        let mut mask: usize = 0;
+        let popcount = self.var_masks[0].0.count_ones() as usize;
+
+        if partial_point.len() == self.var_masks.len() * popcount {
+            // TODO: this is a closed form evaluation in the verifier, return early
+        }
+
+        for vars in &self.var_masks {
+            assert_eq!(mask & vars.0, 0);
+            assert_eq!(popcount, vars.0.count_ones() as usize);
+            mask |= vars.0;
+        }
+
+        let mut evaluations = Vec::with_capacity(1 << popcount);
+        for i in 0..(1 << popcount) {
+            let mut index = 0;
+            let mut masks = self.var_masks.iter().map(|x| x.0).collect::<Vec<_>>();
+            for bit in 0..popcount {
+                let is_on = i & (1 << bit);
+                for var in masks.iter_mut() {
+                    index += is_on * (1 << var.trailing_zeros());
+                }
+            }
+            evaluations.push((index, F::ONE));
+        }
+
+        println!(
+            "EqPredicate popcount {} partial count {} evaluations len {}",
+            popcount,
+            partial_point.len(),
+            evaluations.len()
+        );
+
+        SparseMultilinearExtension::from_evaluations(mask.count_ones() as usize, &evaluations)
+            .fix_variables(partial_point)
+    }
 }
 
 #[derive(Clone)]
@@ -32,18 +75,20 @@ pub enum PredicateType<F: Field> {
 // a product of predicates
 pub struct Predicate<F: Field> {
     pub predicates: Vec<PredicateType<F>>,
-    pub _phantom: PhantomData<F>,
 }
 
 impl<F: Field> Predicate<F> {
     pub fn fix_variables(&self, partial_point: &[F]) -> SparseMultilinearExtension<F> {
         assert_eq!(self.predicates.len(), 1);
+
         for predicate in &self.predicates {
             match predicate {
                 PredicateType::SparseEvaluation(sparse_evaluation_predicate) => {
                     return sparse_evaluation_predicate.mle.fix_variables(partial_point)
                 }
-                PredicateType::Eq(eq_predicate) => todo!(),
+                PredicateType::Eq(eq_predicate) => {
+                    return eq_predicate.fix_variables(partial_point)
+                }
             }
         }
         todo!()
@@ -54,7 +99,6 @@ impl<F: Field> Predicate<F> {
 pub struct PredicateSum<F: Field> {
     pub predicates: Vec<Predicate<F>>,
     pub num_vars: usize,
-    pub _phantom: PhantomData<F>,
 }
 
 impl<F: Field> PredicateSum<F> {
