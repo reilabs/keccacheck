@@ -2,18 +2,21 @@
 //!
 //! GKR will use `gkr_round_sumcheck` as a subroutine.
 
-use core::marker::PhantomData;
+use core::{marker::PhantomData, usize};
 use std::collections::HashMap;
 
 use ark_ff::Field;
 use ark_poly::{
     DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
 };
+use predicate::{Predicate, PredicateSum, PredicateType, SparseEvaluationPredicate, VariableMask};
 
 use crate::{
     gkr_round_sumcheck::{data_structures::GKRRoundProof, GKRFunction, GKRRound, GKRRoundSumcheck},
     rng::FeedableRNG,
 };
+
+pub mod predicate;
 
 /// GKR circuit definition
 pub struct Circuit<F: Field> {
@@ -52,10 +55,22 @@ impl<F: Field> Layer<F> {
         let gates = result
             .into_iter()
             .map(|(k, v)| LayerGate {
-                wiring: SparseMultilinearExtension::from_evaluations(
-                    output_vars + 2 * input_vars,
-                    &v,
-                ),
+                wiring: PredicateSum {
+                    predicates: vec![Predicate {
+                        predicates: vec![PredicateType::SparseEvaluation(
+                            SparseEvaluationPredicate {
+                                var_mask: VariableMask(usize::MAX),
+                                mle: SparseMultilinearExtension::from_evaluations(
+                                    output_vars + 2 * input_vars,
+                                    &v,
+                                ),
+                            },
+                        )],
+                        _phantom: PhantomData,
+                    }],
+                    num_vars: output_vars + 2 * input_vars,
+                    _phantom: PhantomData,
+                },
                 gate: k,
             })
             .collect::<Vec<_>>();
@@ -91,88 +106,12 @@ impl Gate {
         }
     }
 
-    /// Gate definitions on the first layer
-    pub fn to_gkr_functions<F: Field>(
-        &self,
-        wiring: &SparseMultilinearExtension<F>,
-        values: &DenseMultilinearExtension<F>,
-        g: &[F],
-    ) -> Vec<GKRFunction<F>> {
-        match self {
-            Gate::Add => {
-                let const_one = DenseMultilinearExtension::from_evaluations_vec(
-                    values.num_vars,
-                    vec![F::ONE; 1 << values.num_vars],
-                );
-                vec![
-                    GKRFunction {
-                        f1_g: wiring.fix_variables(g),
-                        f2: const_one.clone(),
-                        f3: values.clone(),
-                    },
-                    GKRFunction {
-                        f1_g: wiring.fix_variables(g),
-                        f2: values.clone(),
-                        f3: const_one.clone(),
-                    },
-                ]
-            }
-            Gate::Mul => {
-                vec![GKRFunction {
-                    f1_g: wiring.fix_variables(g),
-                    f2: values.clone(),
-                    f3: values.clone(),
-                }]
-            }
-            Gate::Xor => {
-                let const_one = DenseMultilinearExtension::from_evaluations_vec(
-                    values.num_vars,
-                    vec![F::ONE; 1 << values.num_vars],
-                );
-                vec![
-                    GKRFunction {
-                        f1_g: wiring.fix_variables(g),
-                        f2: const_one.clone(),
-                        f3: values.clone(),
-                    },
-                    GKRFunction {
-                        f1_g: wiring.fix_variables(g),
-                        f2: values.clone(),
-                        f3: const_one.clone(),
-                    },
-                    GKRFunction {
-                        f1_g: scale_and_fix(wiring, Into::<F>::into(-2), g),
-                        f2: values.clone(),
-                        f3: values.clone(),
-                    },
-                ]
-            }
-            Gate::Left => {
-                let const_one = DenseMultilinearExtension::from_evaluations_vec(
-                    values.num_vars,
-                    vec![F::ONE; 1 << values.num_vars],
-                );
-                vec![GKRFunction {
-                    f1_g: wiring.fix_variables(g),
-                    f2: values.clone(),
-                    f3: const_one,
-                }]
-            }
-            Gate::Null => {
-                vec![]
-            }
-        }
-    }
-
     /// Gate definitions on lower layers
     pub fn to_gkr_combination<F: Field>(
         &self,
-        wiring: &SparseMultilinearExtension<F>,
+        wiring: &PredicateSum<F>,
         values: &DenseMultilinearExtension<F>,
-        alpha: &F,
-        beta: &F,
-        u: &[F],
-        v: &[F],
+        combination: &[(F, &[F])],
     ) -> Vec<GKRFunction<F>> {
         match self {
             Gate::Add => {
@@ -181,100 +120,101 @@ impl Gate {
                     vec![F::ONE; 1 << values.num_vars],
                 );
 
-                vec![
-                    GKRFunction {
-                        f1_g: scale_and_fix(&wiring, *alpha, &u),
-                        f2: const_one.clone(),
-                        f3: values.clone(),
-                    },
-                    GKRFunction {
-                        f1_g: scale_and_fix(&wiring, *beta, &v),
-                        f2: const_one.clone(),
-                        f3: values.clone(),
-                    },
-                    GKRFunction {
-                        f1_g: scale_and_fix(&wiring, *alpha, &u),
-                        f2: values.clone(),
-                        f3: const_one.clone(),
-                    },
-                    GKRFunction {
-                        f1_g: scale_and_fix(&wiring, *beta, &v),
-                        f2: values.clone(),
-                        f3: const_one.clone(),
-                    },
-                ]
+                combination
+                    .into_iter()
+                    .flat_map(|(coeff, partial_point)| {
+                        wiring
+                            .fix_variables(partial_point)
+                            .into_iter()
+                            .flat_map(|predicate| {
+                                vec![
+                                    GKRFunction {
+                                        f1_g: scale(&predicate, coeff),
+                                        f2: const_one.clone(),
+                                        f3: values.clone(),
+                                    },
+                                    GKRFunction {
+                                        f1_g: scale(&predicate, coeff),
+                                        f2: values.clone(),
+                                        f3: const_one.clone(),
+                                    },
+                                ]
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect()
             }
-            Gate::Mul => {
-                vec![
-                    GKRFunction {
-                        f1_g: scale_and_fix(wiring, *alpha, &u),
-                        f2: values.clone(),
-                        f3: values.clone(),
-                    },
-                    GKRFunction {
-                        f1_g: scale_and_fix(wiring, *beta, &v),
-                        f2: values.clone(),
-                        f3: values.clone(),
-                    },
-                ]
-            }
+            Gate::Mul => combination
+                .into_iter()
+                .flat_map(|(coeff, partial_point)| {
+                    wiring
+                        .fix_variables(partial_point)
+                        .into_iter()
+                        .flat_map(|predicate| {
+                            vec![GKRFunction {
+                                f1_g: scale(&predicate, coeff),
+                                f2: values.clone(),
+                                f3: values.clone(),
+                            }]
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect(),
             Gate::Xor => {
                 let const_one = DenseMultilinearExtension::from_evaluations_vec(
                     values.num_vars,
                     vec![F::ONE; 1 << values.num_vars],
                 );
-
-                vec![
-                    GKRFunction {
-                        f1_g: scale_and_fix(&wiring, *alpha, &u),
-                        f2: const_one.clone(),
-                        f3: values.clone(),
-                    },
-                    GKRFunction {
-                        f1_g: scale_and_fix(&wiring, *beta, &v),
-                        f2: const_one.clone(),
-                        f3: values.clone(),
-                    },
-                    GKRFunction {
-                        f1_g: scale_and_fix(&wiring, *alpha, &u),
-                        f2: values.clone(),
-                        f3: const_one.clone(),
-                    },
-                    GKRFunction {
-                        f1_g: scale_and_fix(&wiring, *beta, &v),
-                        f2: values.clone(),
-                        f3: const_one.clone(),
-                    },
-                    GKRFunction {
-                        f1_g: scale_and_fix(wiring, *alpha * Into::<F>::into(-2), &u),
-                        f2: values.clone(),
-                        f3: values.clone(),
-                    },
-                    GKRFunction {
-                        f1_g: scale_and_fix(wiring, *beta * Into::<F>::into(-2), &v),
-                        f2: values.clone(),
-                        f3: values.clone(),
-                    },
-                ]
+                combination
+                    .into_iter()
+                    .flat_map(|(coeff, partial_point)| {
+                        wiring
+                            .fix_variables(partial_point)
+                            .into_iter()
+                            .flat_map(|predicate| {
+                                vec![
+                                    GKRFunction {
+                                        f1_g: scale(&predicate, coeff),
+                                        f2: const_one.clone(),
+                                        f3: values.clone(),
+                                    },
+                                    GKRFunction {
+                                        f1_g: scale(&predicate, coeff),
+                                        f2: values.clone(),
+                                        f3: const_one.clone(),
+                                    },
+                                    GKRFunction {
+                                        f1_g: scale(&predicate, &(*coeff * Into::<F>::into(-2))),
+                                        f2: values.clone(),
+                                        f3: values.clone(),
+                                    },
+                                ]
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect()
             }
             Gate::Left => {
                 let const_one = DenseMultilinearExtension::from_evaluations_vec(
                     values.num_vars,
                     vec![F::ONE; 1 << values.num_vars],
                 );
-
-                vec![
-                    GKRFunction {
-                        f1_g: scale_and_fix(&wiring, *alpha, &u),
-                        f2: values.clone(),
-                        f3: const_one.clone(),
-                    },
-                    GKRFunction {
-                        f1_g: scale_and_fix(&wiring, *beta, &v),
-                        f2: values.clone(),
-                        f3: const_one.clone(),
-                    },
-                ]
+                combination
+                    .into_iter()
+                    .flat_map(|(coeff, partial_point)| {
+                        wiring
+                            .fix_variables(partial_point)
+                            .into_iter()
+                            .flat_map(|predicate| {
+                                vec![GKRFunction {
+                                    f1_g: scale(&predicate, coeff),
+                                    f2: values.clone(),
+                                    f3: const_one.clone(),
+                                }]
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect()
             }
             Gate::Null => {
                 vec![]
@@ -286,9 +226,29 @@ impl Gate {
 /// wiring for a single gate type in a layer
 pub struct LayerGate<F: Field> {
     /// GKR predicate
-    pub wiring: SparseMultilinearExtension<F>,
+    pub wiring: PredicateSum<F>,
     /// Gate type
     pub gate: Gate,
+}
+
+impl<F: Field> LayerGate<F> {
+    pub fn new(gate: Gate, wiring: SparseMultilinearExtension<F>) -> Self {
+        let num_vars = wiring.num_vars;
+        Self {
+            wiring: PredicateSum {
+                predicates: vec![Predicate {
+                    predicates: vec![PredicateType::SparseEvaluation(SparseEvaluationPredicate {
+                        var_mask: VariableMask(usize::MAX),
+                        mle: wiring,
+                    })],
+                    _phantom: PhantomData,
+                }],
+                num_vars,
+                _phantom: PhantomData,
+            },
+            gate,
+        }
+    }
 }
 
 /// GKR algorithm
@@ -328,9 +288,11 @@ impl<F: Field> GKR<F> {
                     .gates
                     .iter()
                     .flat_map(|gate_type| {
-                        gate_type
-                            .gate
-                            .to_gkr_functions(&gate_type.wiring, &w_i, &r_1)
+                        gate_type.gate.to_gkr_combination(
+                            &gate_type.wiring,
+                            &w_i,
+                            &[(F::ONE, &r_1)],
+                        )
                     })
                     .collect();
 
@@ -356,10 +318,7 @@ impl<F: Field> GKR<F> {
                         gate_type.gate.to_gkr_combination(
                             &gate_type.wiring,
                             &w_i,
-                            &alpha,
-                            &beta,
-                            &u,
-                            &v,
+                            &[(alpha, &u), (beta, &v)],
                         )
                     })
                     .collect();
@@ -399,11 +358,14 @@ impl<F: Field> GKR<F> {
 
                 let mut wiring_res = F::ZERO;
                 for gate_type in &layer.gates {
-                    let wiring = gate_type
-                        .wiring
-                        .fix_variables(&r_1)
-                        .fix_variables(&subclaim.u)
-                        .evaluate(&subclaim.v);
+                    let ruv: Vec<_> = r_1
+                        .iter()
+                        .chain(subclaim.u.iter())
+                        .chain(subclaim.v.iter())
+                        .copied()
+                        .collect();
+
+                    let wiring = gate_type.wiring.evaluate(&ruv);
                     wiring_res += wiring * gate_type.gate.evaluate(w_u, w_v)
                 }
                 assert_eq!(wiring_res, proof.check_sum(subclaim.v.last().unwrap()));
@@ -434,15 +396,22 @@ impl<F: Field> GKR<F> {
 
                 let mut wiring_res = F::ZERO;
                 for gate_type in &layer.gates {
+                    let uuv: Vec<_> = u
+                        .iter()
+                        .chain(subclaim.u.iter())
+                        .chain(subclaim.v.iter())
+                        .copied()
+                        .collect();
+                    let vuv: Vec<_> = v
+                        .iter()
+                        .chain(subclaim.u.iter())
+                        .chain(subclaim.v.iter())
+                        .copied()
+                        .collect();
+
                     let wiring = &gate_type.wiring;
-                    let wiring_u = wiring
-                        .fix_variables(&u)
-                        .fix_variables(&subclaim.u)
-                        .evaluate(&subclaim.v);
-                    let wiring_v = wiring
-                        .fix_variables(&v)
-                        .fix_variables(&subclaim.u)
-                        .evaluate(&subclaim.v);
+                    let wiring_u = wiring.evaluate(&uuv);
+                    let wiring_v = wiring.evaluate(&vuv);
                     wiring_res +=
                         (alpha * wiring_u + beta * wiring_v) * gate_type.gate.evaluate(w_u, w_v);
                 }
@@ -488,7 +457,7 @@ impl<F: Field> GKR<F> {
                 let gate_output = wiring.num_vars - 2 * input_vars;
 
                 assert_eq!(gate_output, output_vars);
-                for (k, _v) in &wiring.evaluations {
+                for (k, _v) in &wiring.evaluations() {
                     let output_gate = k % (1 << output_vars);
                     let k = k >> output_vars;
                     let input_left = previous_layer[k % (1 << input_vars)];
@@ -503,6 +472,19 @@ impl<F: Field> GKR<F> {
         result.reverse();
         result
     }
+}
+
+/// Scale SparseMLE
+pub fn scale<F: Field>(
+    mle: &SparseMultilinearExtension<F>,
+    scalar: &F,
+) -> SparseMultilinearExtension<F> {
+    let evaluations = mle
+        .evaluations
+        .iter()
+        .map(|(i, v)| (*i, *v * scalar))
+        .collect::<Vec<_>>();
+    SparseMultilinearExtension::from_evaluations(mle.num_vars, &evaluations)
 }
 
 /// Scale and fix variables in SparseMLE

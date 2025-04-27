@@ -21,8 +21,9 @@ pub fn gkr_mul() {
         layers: vec![
             Layer::with_builder(1, 2, |out| (Gate::Mul, 2 * out, 2 * out + 1)),
             Layer {
-                gates: vec![LayerGate {
-                    wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                gates: vec![LayerGate::new(
+                    Gate::Mul,
+                    SparseMultilinearExtension::<Fr>::from_evaluations(
                         6,
                         vec![
                             eval_index(2, 0, 2, 0, 0),
@@ -32,8 +33,7 @@ pub fn gkr_mul() {
                         ]
                         .iter(),
                     ),
-                    gate: Gate::Mul,
-                }],
+                )],
             },
         ],
     };
@@ -61,25 +61,26 @@ pub fn gkr_add_mul() {
         layers: vec![
             Layer {
                 gates: vec![
-                    LayerGate {
-                        wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                    LayerGate::new(
+                        Gate::Mul,
+                        SparseMultilinearExtension::<Fr>::from_evaluations(
                             5,
                             vec![eval_index(1, 0, 2, 0, 1)].iter(),
                         ),
-                        gate: Gate::Mul,
-                    },
-                    LayerGate {
-                        wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                    ),
+                    LayerGate::new(
+                        Gate::Mul,
+                        SparseMultilinearExtension::<Fr>::from_evaluations(
                             5,
                             vec![eval_index(1, 1, 2, 2, 3)].iter(),
                         ),
-                        gate: Gate::Add,
-                    },
+                    ),
                 ],
             },
             Layer {
-                gates: vec![LayerGate {
-                    wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                gates: vec![LayerGate::new(
+                    Gate::Add,
+                    SparseMultilinearExtension::<Fr>::from_evaluations(
                         6,
                         vec![
                             eval_index(2, 0, 2, 0, 0),
@@ -89,12 +90,12 @@ pub fn gkr_add_mul() {
                         ]
                         .iter(),
                     ),
-                    gate: Gate::Add,
-                }],
+                )],
             },
             Layer {
-                gates: vec![LayerGate {
-                    wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                gates: vec![LayerGate::new(
+                    Gate::Add,
+                    SparseMultilinearExtension::<Fr>::from_evaluations(
                         4,
                         vec![
                             eval_index(2, 0, 1, 0, 1),
@@ -104,8 +105,7 @@ pub fn gkr_add_mul() {
                         ]
                         .iter(),
                     ),
-                    gate: Gate::Add,
-                }],
+                )],
             },
         ],
     };
@@ -130,17 +130,18 @@ pub fn gkr_id_xor() {
         outputs: vec![1.into(), 0.into()],
         layers: vec![
             Layer {
-                gates: vec![LayerGate {
-                    wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                gates: vec![LayerGate::new(
+                    Gate::Xor,
+                    SparseMultilinearExtension::<Fr>::from_evaluations(
                         5,
                         vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)].iter(),
                     ),
-                    gate: Gate::Xor,
-                }],
+                )],
             },
             Layer {
-                gates: vec![LayerGate {
-                    wiring: SparseMultilinearExtension::<Fr>::from_evaluations(
+                gates: vec![LayerGate::new(
+                    Gate::Left,
+                    SparseMultilinearExtension::<Fr>::from_evaluations(
                         6,
                         vec![
                             eval_index(2, 0, 2, 0, 0),
@@ -150,8 +151,7 @@ pub fn gkr_id_xor() {
                         ]
                         .iter(),
                     ),
-                    gate: Gate::Left,
-                }],
+                )],
             },
         ],
     };
@@ -500,6 +500,23 @@ fn test_keccak_f() {
 
     println!("input  {input:x?}");
     println!("output {output:x?}");
+
+    let mut gkr_input = vec![0; 8 * 8];
+    let mut gkr_output = vec![0; 8 * 8];
+
+    for row in 0..8 {
+        for col in 0..8 {
+            if row < 5 && col < 5 {
+                gkr_input[row * 8 + col] = input[row * 5 + col];
+                gkr_output[row * 8 + col] = output[row * 5 + col];
+            } else {
+                gkr_input[row * 8 + col] = 0;
+                gkr_output[row * 8 + col] = 0;
+            }
+        }
+    }
+    println!("gkr_input  {gkr_input:x?}");
+    println!("gkr_output {gkr_output:x?}");
 
     gkr_theta(&input, &output);
 }
