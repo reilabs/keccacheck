@@ -19,8 +19,7 @@ use ark_sumcheck::{
 // f2: ||    ||/  \     ||
 // w2: 3     2     3     1
 pub fn gkr_mul() {
-    // TODO: make wirings a formula for faster verification. V should be able to calc f_i in O(num_vars) time
-    // TOOD: make it data-parallel
+    // TODO: make it data-parallel
     let circuit = Circuit::<Fr> {
         inputs: vec![3.into(), 2.into(), 3.into(), 1.into()],
         outputs: vec![36.into(), 6.into()],
@@ -57,8 +56,7 @@ pub fn gkr_mul() {
 // f3 (add):
 // w3:           1        2
 pub fn gkr_add_mul() {
-    // TODO: make it a formula for faster verification. V should be able to calc f_i in O(num_vars) time
-    // TOOD: make it data-parallel
+    // TODO: make it data-parallel
     let circuit = Circuit::<Fr> {
         inputs: vec![1.into(), 2.into()],
         outputs: vec![24.into(), 9.into()],
@@ -111,8 +109,7 @@ pub fn gkr_add_mul() {
 // f2 (id) :  ||    ||/  \     ||    // copy left child
 // w2:         1     0     1     0
 pub fn gkr_id_xor() {
-    // TODO: make it a formula for faster verification. V should be able to calc f_i in O(num_vars) time
-    // TOOD: make it data-parallel
+    // TODO: make it data-parallel
     let circuit = Circuit::<Fr> {
         inputs: vec![1.into(), 0.into(), 1.into(), 0.into()],
         outputs: vec![1.into(), 0.into()],

@@ -102,7 +102,6 @@ pub struct GKRRound<F: Field> {
     /// List of functions under sum
     pub functions: Vec<GKRFunction<F>>,
     /// Layer evaluations
-    /// TODO: this is probably not needed
     pub layer: DenseMultilinearExtension<F>,
 }
 
@@ -201,7 +200,6 @@ impl<F: Field> GKRRoundSumcheck<F> {
             GKRRoundProof {
                 phase1_sumcheck_msgs: phase1_prover_msgs,
                 phase2_sumcheck_msgs: phase2_prover_msgs,
-                // TODO: potentially these values already exist somewhere in sumcheck and we don't need this evaluation
                 w_u: round.layer.evaluate(&u),
                 w_v: round.layer.evaluate(&v),
             },
