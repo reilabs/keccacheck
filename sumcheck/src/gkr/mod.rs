@@ -10,6 +10,7 @@ use ark_poly::{
     DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
 };
 use predicate::{Predicate, PredicateSum, SparseEvaluationPredicate};
+use util::bits_to_u64;
 
 use crate::{
     gkr_round_sumcheck::{data_structures::GKRRoundProof, GKRFunction, GKRRound, GKRRoundSumcheck},
@@ -277,8 +278,8 @@ impl<F: Field> GKR<F> {
         let num_vars = Self::layer_sizes(circuit);
 
         if evaluations[0] != circuit.outputs {
-            println!("expect {:x?}", &circuit.outputs);
-            println!("actual {:x?}", &evaluations[0]);
+            println!("expect {:x?}", bits_to_u64(&circuit.outputs));
+            println!("actual {:x?}", bits_to_u64(&evaluations[0]));
             panic!("evaluation failed");
 
             //assert_eq!(evaluations[0], circuit.outputs);
