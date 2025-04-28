@@ -1,127 +1,372 @@
-use std::collections::BTreeMap;
+use core::{
+    f32::consts::E,
+    ops::{Mul, MulAssign, RangeInclusive},
+    usize,
+};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    path::Prefix,
+};
 
 use ark_ff::Field;
-use ark_poly::{MultilinearExtension, SparseMultilinearExtension};
-
-#[derive(Copy, Clone, Debug)]
-pub struct VariableMask(pub usize);
+use ark_poly::{MultilinearExtension, Polynomial, SparseMultilinearExtension};
 
 #[derive(Clone)]
 /// a predicate that the verifier will evaluate by interpolation
-pub struct SparseEvaluationPredicate<F: Field> {
-    pub var_mask: VariableMask,
-    pub mle: SparseMultilinearExtension<F>,
+pub struct SparseEvaluationPredicate {
+    pub vars: Vec<u8>,
+    pub mle: HashMap<usize, usize>,
 }
 
 #[derive(Clone, Debug)]
-pub struct EqPredicate<F: Field> {
-    pub var_masks: Vec<VariableMask>,
-    pub consts: Option<Vec<F>>,
-}
-
-impl<F: Field> EqPredicate<F> {
-    // TODO: this is crazy inefficient
-    pub fn fix_variables(&self, partial_point: &[F]) -> SparseMultilinearExtension<F> {
-        if let Some(_consts) = &self.consts {
-            todo!();
-        }
-        let mut mask: usize = 0;
-        let popcount = self.var_masks[0].0.count_ones() as usize;
-
-        if partial_point.len() == self.var_masks.len() * popcount {
-            // TODO: this is a closed form evaluation in the verifier, return early
-        }
-
-        for vars in &self.var_masks {
-            assert_eq!(mask & vars.0, 0);
-            assert_eq!(popcount, vars.0.count_ones() as usize);
-            mask |= vars.0;
-        }
-
-        let mut evaluations = Vec::with_capacity(1 << popcount);
-        for i in 0..(1 << popcount) {
-            let mut index = 0;
-            let mut masks = self.var_masks.iter().map(|x| x.0).collect::<Vec<_>>();
-            for bit in 0..popcount {
-                let is_on = i & (1 << bit);
-                for var in masks.iter_mut() {
-                    index += is_on * (1 << var.trailing_zeros());
-                }
-            }
-            evaluations.push((index, F::ONE));
-        }
-
-        println!(
-            "EqPredicate popcount {} partial count {} evaluations len {}",
-            popcount,
-            partial_point.len(),
-            evaluations.len()
-        );
-
-        SparseMultilinearExtension::from_evaluations(mask.count_ones() as usize, &evaluations)
-            .fix_variables(partial_point)
-    }
+pub struct EqPredicate {
+    pub vars: Vec<u8>,
+    pub is_on: Option<bool>,
 }
 
 #[derive(Clone)]
-/// a single predicate type
-pub enum PredicateType<F: Field> {
-    /// a predicate that the verifier will evaluate by interpolation
-    SparseEvaluation(SparseEvaluationPredicate<F>),
-    /// eq(var_mask_1, var_mask_2, ... var_mask_n, consts)
-    Eq(EqPredicate<F>),
-}
-
 // a product of predicates
-pub struct Predicate<F: Field> {
-    pub predicates: Vec<PredicateType<F>>,
+pub struct Predicate {
+    pub eq_predicates: Vec<EqPredicate>,
+    pub sparse_predicates: Vec<SparseEvaluationPredicate>,
 }
 
-impl<F: Field> Predicate<F> {
-    pub fn fix_variables(&self, partial_point: &[F]) -> SparseMultilinearExtension<F> {
-        assert_eq!(self.predicates.len(), 1);
-
-        for predicate in &self.predicates {
-            match predicate {
-                PredicateType::SparseEvaluation(sparse_evaluation_predicate) => {
-                    return sparse_evaluation_predicate.mle.fix_variables(partial_point)
-                }
-                PredicateType::Eq(eq_predicate) => {
-                    return eq_predicate.fix_variables(partial_point)
-                }
-            }
-        }
+impl Predicate {
+    pub fn fix_variables<F: Field>(
+        &self,
+        partial_point: &[F],
+        outputs: usize,
+        inputs: usize,
+    ) -> SparseMultilinearExtension<F> {
         todo!()
     }
-}
 
-/// a chain of predicates
-pub struct PredicateSum<F: Field> {
-    pub predicates: Vec<Predicate<F>>,
-    pub num_vars: usize,
-}
+    pub fn evaluations(&self, outputs: usize, inputs: usize) -> Vec<(usize, usize, usize)> {
+        println!("evaluating predicate, should only be done once");
 
-impl<F: Field> PredicateSum<F> {
-    pub fn fix_variables(&self, partial_point: &[F]) -> Vec<SparseMultilinearExtension<F>> {
-        self.predicates
-            .iter()
-            .map(|predicate| predicate.fix_variables(partial_point))
-            .collect()
+        fn set_vars(
+            vars: &[u8],
+            is_on: bool,
+            constraints: &mut [Option<bool>],
+            changes: &mut bool,
+        ) -> bool {
+            for var in vars {
+                match constraints[*var as usize] {
+                    Some(x) if x == is_on => {}
+                    Some(_) => return false, //panic!("conflicting constraints on var {}", *var),
+                    None => {
+                        constraints[*var as usize] = Some(is_on);
+                        *changes = true;
+                    }
+                }
+            }
+
+            true
+        }
+        let num_vars = outputs + 2 * inputs;
+
+        let mut printed = 0;
+
+        let evaluations = (0..(1 << outputs))
+            .filter_map(|output| {
+                let mut output = output;
+                let mut constraints = vec![None; num_vars];
+
+                for i in 0..outputs {
+                    constraints[i] = Some(output % 2 == 1);
+                    output >>= 1;
+                }
+
+                let mut changes = true;
+                while changes {
+                    changes = false;
+
+                    for eq in &self.eq_predicates {
+                        if let Some(is_on) = eq.is_on {
+                            if !set_vars(&eq.vars, is_on, &mut constraints, &mut changes) {
+                                return None;
+                            }
+                        } else {
+                            let constrained = eq
+                                .vars
+                                .iter()
+                                .filter_map(|x| constraints[*x as usize])
+                                .collect::<Vec<_>>();
+                            if constrained.len() == 0 {
+                                continue;
+                            }
+                            if !all_equal(&constrained) {
+                                // panic!(
+                                //     "conflicting constraints on vars {:?}: {:?}",
+                                //     eq.vars, constrained
+                                // );
+                                return None;
+                            }
+                            set_vars(&eq.vars, constrained[0], &mut constraints, &mut changes);
+                        }
+                    }
+
+                    for sparse in &self.sparse_predicates {
+                        let output_vars = sparse
+                            .vars
+                            .iter()
+                            .filter(|x| (**x as usize) < outputs)
+                            .collect::<Vec<_>>();
+                        let input_vars = sparse
+                            .vars
+                            .iter()
+                            .filter(|x| (**x as usize) >= outputs)
+                            .collect::<Vec<_>>();
+
+                        if output_vars
+                            .iter()
+                            .any(|x| constraints[**x as usize].is_none())
+                        {
+                            continue;
+                        }
+
+                        let mut output = 0;
+                        for (bit, var) in output_vars.into_iter().enumerate() {
+                            if constraints[*var as usize] == Some(true) {
+                                output += 1 << bit;
+                            }
+                        }
+
+                        let mut input = sparse.mle.get(&output).cloned().unwrap_or(0);
+
+                        for var in input_vars {
+                            let is_on = input % 2 != 0;
+                            input >>= 1;
+                            match constraints[*var as usize] {
+                                Some(x) if x == is_on => {}
+                                Some(_) => return None, //panic!("conflicting constraints on var {}", *var),
+                                None => {
+                                    constraints[*var as usize] = Some(is_on);
+                                    changes = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let mut out = 0;
+                let mut in1 = 0;
+                let mut in2 = 0;
+
+                for bit in 0..outputs {
+                    if constraints[bit] == Some(true) {
+                        out += 1 << bit;
+                    }
+                }
+
+                // if printed < 3 {
+                //     debug_constraints(&constraints, outputs, inputs);
+                //     printed += 1;
+                // }
+
+                if constraints.iter().any(|x| x.is_none()) {
+                    debug_constraints(&constraints, outputs, inputs);
+                    panic!(
+                        "underconstrained predicate for out {out:x?}, all variables should be set"
+                    );
+                }
+
+                for bit in 0..inputs {
+                    if constraints[bit + outputs] == Some(true) {
+                        in1 += 1 << bit;
+                    }
+                    if constraints[bit + outputs + inputs] == Some(true) {
+                        in2 += 1 << bit;
+                    }
+                }
+
+                Some((out, in1, in2))
+            })
+            .collect::<Vec<_>>();
+
+        evaluations
     }
 
-    pub fn evaluate(&self, point: &[F]) -> F {
-        let result = self.fix_variables(point);
-        result.iter().fold(F::ZERO, |acc, e| acc + e[0])
-    }
-
-    pub fn evaluations(&self) -> BTreeMap<usize, F> {
-        let mles = self.fix_variables(&[]);
-        let mut result = BTreeMap::<usize, F>::new();
-        for mle in mles {
-            for (key, val) in mle.evaluations {
-                result.insert(key, *result.get(&key).unwrap_or(&F::zero()) + val);
+    fn var_labels(&self) -> HashSet<u8> {
+        let mut result = HashSet::new();
+        for predicate in &self.eq_predicates {
+            for var in &predicate.vars {
+                result.insert(*var);
+            }
+        }
+        for predicate in &self.sparse_predicates {
+            for var in &predicate.vars {
+                result.insert(*var);
             }
         }
         result
     }
+}
+
+pub fn eq(vars: &[u8], is_on: Option<bool>) -> Predicate {
+    Predicate {
+        eq_predicates: vec![EqPredicate {
+            vars: vars.to_vec(),
+            is_on,
+        }],
+        sparse_predicates: Default::default(),
+    }
+}
+
+pub fn eq_range(vars: &[RangeInclusive<u8>], is_on: Option<&[bool]>) -> Predicate {
+    let count = vars[0].len();
+    let vars = vars
+        .into_iter()
+        .map(|range| range.clone().collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+    let mut current_var: Vec<u8> = vars.iter().map(|x| x[0]).collect();
+    let mut predicate = eq(&current_var, is_on.map(|x| x[0]));
+    for i in 1..count {
+        current_var = vars.iter().map(|x| x[i]).collect();
+        predicate *= eq(&current_var, is_on.map(|x| x[i]))
+    }
+    predicate
+}
+
+pub fn rot<const N: u8>(
+    out: RangeInclusive<u8>,
+    input: RangeInclusive<u8>,
+) -> Predicate {
+    let len = out.len();
+    assert_eq!(input.len(), len);
+
+    let vars = out
+        .chain(input)
+        .collect::<Vec<_>>();
+    println!("rot inner vars {vars:?}");
+
+    let evaluations = (0..(1 << len))
+        .filter_map(|out_label| {
+            let in_label = (out_label + N as usize) % (1 << len);
+            Some((out_label, in_label))
+        })
+        .collect::<Vec<_>>();
+
+        println!("rot evaluations {evaluations:x?}");
+
+    Predicate {
+        eq_predicates: Default::default(),
+        sparse_predicates: vec![SparseEvaluationPredicate {
+            vars,
+            mle: evaluations.into_iter().collect(),
+        }],
+    }
+}
+
+impl MulAssign for Predicate {
+    fn mul_assign(&mut self, mut rhs: Self) {
+        let lft_vars = self.var_labels();
+        let rhs_vars = rhs.var_labels();
+        let intersection = lft_vars.intersection(&rhs_vars).collect::<Vec<_>>();
+        if intersection.len() > 0 {
+            panic!("predicate no longer linear in {:?}", intersection);
+        }
+        self.eq_predicates.append(&mut rhs.eq_predicates);
+        self.sparse_predicates.append(&mut rhs.sparse_predicates);
+    }
+}
+
+impl Mul for Predicate {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        let mut lft = self.clone();
+        lft *= rhs;
+        lft
+    }
+}
+
+/// a chain of predicates
+pub struct PredicateSum {
+    pub predicates: Vec<Predicate>,
+    pub inputs: usize,
+    pub outputs: usize,
+}
+
+impl PredicateSum {
+    // pub fn fix_variables<F: Field>(
+    //     &self,
+    //     partial_point: &[F],
+    // ) -> Vec<SparseMultilinearExtension<F>> {
+    //     self.predicates
+    //         .iter()
+    //         .map(|predicate| predicate.fix_variables(partial_point, self.outputs, self.inputs))
+    //         .collect()
+    // }
+
+    pub fn evaluate<F: Field>(&self, point: &Vec<F>) -> F {
+        self.sparse_mle()
+            .into_iter()
+            .map(|mle| mle.evaluate(point))
+            .fold(F::ZERO, |acc, e| acc + e)
+    }
+
+    pub fn evaluations(&self) -> Vec<(usize, usize, usize)> {
+        self.predicates
+            .iter()
+            .flat_map(|pred| pred.evaluations(self.outputs, self.inputs))
+            .collect()
+    }
+
+    pub fn sparse_mle<F: Field>(&self) -> Vec<SparseMultilinearExtension<F>> {
+        self.predicates
+            .iter()
+            .map(|pred| {
+                let evals = pred.evaluations(self.outputs, self.inputs);
+                let evaluations = evals
+                    .into_iter()
+                    .map(|(out, in1, in2)| {
+                        (
+                            out + (in1 << self.outputs) + (in2 << (self.outputs + self.inputs)),
+                            F::ONE,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                //println!("building mle with {} vars: {evaluations:?}", self.num_vars());
+                SparseMultilinearExtension::from_evaluations(self.num_vars(), &evaluations)
+            })
+            .collect()
+    }
+
+    pub fn num_vars(&self) -> usize {
+        self.outputs + 2 * self.inputs
+    }
+}
+
+fn all_equal<T: PartialEq>(slice: &[T]) -> bool {
+    slice.windows(2).all(|w| w[0] == w[1])
+}
+
+fn debug_constraints(constraints: &[Option<bool>], outputs: usize, inputs: usize) {
+    print!("out: ");
+    constraints[0..outputs].iter().for_each(|x| match x {
+        Some(true) => print!("1"),
+        Some(false) => print!("0"),
+        None => print!("_"),
+    });
+    println!();
+    print!("in1: ");
+    constraints[outputs..(outputs + inputs)]
+        .iter()
+        .for_each(|x| match x {
+            Some(true) => print!("1"),
+            Some(false) => print!("0"),
+            None => print!("_"),
+        });
+    println!();
+    print!("in2: ");
+    constraints[(outputs + inputs)..(outputs + inputs + inputs)]
+        .iter()
+        .for_each(|x| match x {
+            Some(true) => print!("1"),
+            Some(false) => print!("0"),
+            None => print!("_"),
+        });
+    println!("");
+    println!("");
 }

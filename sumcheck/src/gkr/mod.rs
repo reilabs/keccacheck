@@ -9,7 +9,8 @@ use ark_ff::Field;
 use ark_poly::{
     DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
 };
-use predicate::{Predicate, PredicateSum, PredicateType, SparseEvaluationPredicate, VariableMask};
+use predicate::{Predicate, PredicateSum, SparseEvaluationPredicate};
+use util::bits_to_u64;
 
 use crate::{
     gkr_round_sumcheck::{data_structures::GKRRoundProof, GKRFunction, GKRRound, GKRRoundSumcheck},
@@ -17,6 +18,7 @@ use crate::{
 };
 
 pub mod predicate;
+pub mod util;
 
 /// GKR circuit definition
 pub struct Circuit<F: Field> {
@@ -25,30 +27,32 @@ pub struct Circuit<F: Field> {
     /// GKR output data
     pub outputs: Vec<F>,
     /// GKR circuit layers
-    pub layers: Vec<Layer<F>>,
+    pub layers: Vec<Layer>,
 }
 
 /// Single GKR layer (round)
-pub struct Layer<F: Field> {
+pub struct Layer {
     /// all gate types in a layer
-    pub gates: Vec<LayerGate<F>>,
+    pub gates: Vec<LayerGate>,
 }
 
-impl<F: Field> Layer<F> {
+impl Layer {
     /// Create a layer
     pub fn with_builder<B>(output_vars: usize, input_vars: usize, builder: B) -> Self
     where
         B: Fn(usize) -> (Gate, usize, usize),
     {
-        let mut result = HashMap::<Gate, Vec<(usize, F)>>::new();
+        let mut result = HashMap::<Gate, HashMap<usize, usize>>::new();
 
-        for i in 0..(1 << output_vars) {
-            let (gate, left, right) = builder(i);
-            let evaluation = eval_index(output_vars, i, input_vars, left, right);
+        for out in 0..(1 << output_vars) {
+            let (gate, left, right) = builder(out);
+            let input = (right << input_vars) + left;
             if let Some(entry) = result.get_mut(&gate) {
-                entry.push(evaluation);
+                entry.insert(out, input);
             } else {
-                result.insert(gate, vec![evaluation]);
+                let mut hashmap = HashMap::new();
+                hashmap.insert(out, input);
+                result.insert(gate, hashmap);
             }
         }
 
@@ -57,17 +61,14 @@ impl<F: Field> Layer<F> {
             .map(|(k, v)| LayerGate {
                 wiring: PredicateSum {
                     predicates: vec![Predicate {
-                        predicates: vec![PredicateType::SparseEvaluation(
-                            SparseEvaluationPredicate {
-                                var_mask: VariableMask(usize::MAX),
-                                mle: SparseMultilinearExtension::from_evaluations(
-                                    output_vars + 2 * input_vars,
-                                    &v,
-                                ),
-                            },
-                        )],
+                        eq_predicates: vec![],
+                        sparse_predicates: vec![SparseEvaluationPredicate {
+                            vars: (0..(output_vars + 2 * input_vars) as u8).collect(),
+                            mle: v,
+                        }],
                     }],
-                    num_vars: output_vars + 2 * input_vars,
+                    inputs: input_vars,
+                    outputs: output_vars,
                 },
                 gate: k,
             })
@@ -107,7 +108,7 @@ impl Gate {
     /// Gate definitions on lower layers
     pub fn to_gkr_combination<F: Field>(
         &self,
-        wiring: &PredicateSum<F>,
+        wiring: &[SparseMultilinearExtension<F>],
         values: &DenseMultilinearExtension<F>,
         combination: &[(F, &[F])],
     ) -> Vec<GKRFunction<F>> {
@@ -222,25 +223,35 @@ impl Gate {
 }
 
 /// wiring for a single gate type in a layer
-pub struct LayerGate<F: Field> {
+pub struct LayerGate {
     /// GKR predicate
-    pub wiring: PredicateSum<F>,
+    pub wiring: PredicateSum,
     /// Gate type
     pub gate: Gate,
 }
 
-impl<F: Field> LayerGate<F> {
-    pub fn new(gate: Gate, wiring: SparseMultilinearExtension<F>) -> Self {
-        let num_vars = wiring.num_vars;
+impl LayerGate {
+    pub fn new(
+        outputs: usize,
+        inputs: usize,
+        gate: Gate,
+        wiring: Vec<(usize, usize, usize)>,
+    ) -> Self {
+        let num_vars = outputs + 2 * inputs;
         Self {
             wiring: PredicateSum {
                 predicates: vec![Predicate {
-                    predicates: vec![PredicateType::SparseEvaluation(SparseEvaluationPredicate {
-                        var_mask: VariableMask(usize::MAX),
-                        mle: wiring,
-                    })],
+                    eq_predicates: Default::default(),
+                    sparse_predicates: vec![SparseEvaluationPredicate {
+                        vars: (0..num_vars as u8).collect(),
+                        mle: wiring
+                            .into_iter()
+                            .map(|(out, in1, in2)| (out, in2 << inputs + in1))
+                            .collect(),
+                    }],
                 }],
-                num_vars,
+                inputs,
+                outputs,
             },
             gate,
         }
@@ -264,7 +275,14 @@ impl<F: Field> GKR<F> {
     pub fn prove<R: FeedableRNG>(rng: &mut R, circuit: &Circuit<F>) -> GKRProof<F> {
         let evaluations = Self::evaluate(circuit);
         let num_vars = Self::layer_sizes(circuit);
-        assert_eq!(evaluations[0], circuit.outputs);
+
+        if evaluations[0] != circuit.outputs {
+            println!("expect {:x?}", bits_to_u64(&circuit.outputs));
+            println!("actual {:x?}", bits_to_u64(&evaluations[0]));
+            panic!("evaluation failed");
+
+            //assert_eq!(evaluations[0], circuit.outputs);
+        }
 
         let mut gkr_proof = GKRProof {
             rounds: Vec::with_capacity(circuit.layers.len()),
@@ -285,7 +303,7 @@ impl<F: Field> GKR<F> {
                     .iter()
                     .flat_map(|gate_type| {
                         gate_type.gate.to_gkr_combination(
-                            &gate_type.wiring,
+                            &gate_type.wiring.sparse_mle(),
                             &w_i,
                             &[(F::ONE, &r_1)],
                         )
@@ -312,7 +330,7 @@ impl<F: Field> GKR<F> {
                     .iter()
                     .flat_map(|gate_type| {
                         gate_type.gate.to_gkr_combination(
-                            &gate_type.wiring,
+                            &gate_type.wiring.sparse_mle(),
                             &w_i,
                             &[(alpha, &u), (beta, &v)],
                         )
@@ -425,7 +443,7 @@ impl<F: Field> GKR<F> {
         result.push(previous_layer);
         for layer in &circuit.layers {
             let wiring = &layer.gates.first().expect("at least one gate type").wiring;
-            previous_layer = (wiring.num_vars - previous_layer) / 2;
+            previous_layer = (wiring.num_vars() - previous_layer) / 2;
             result.push(previous_layer);
         }
         result
@@ -438,28 +456,26 @@ impl<F: Field> GKR<F> {
         let mut previous_layer = &circuit.inputs;
         result.push(previous_layer.clone());
         for layer in circuit.layers.iter().rev() {
-            let input_vars = previous_layer.len().ilog2() as usize;
+            println!("evaluating layer");
             let output_vars = layer
                 .gates
                 .first()
                 .expect("at least one gate type")
                 .wiring
-                .num_vars
-                - 2 * input_vars;
+                .outputs;
             let mut evaluations = vec![F::ZERO; 1 << output_vars];
 
             for gate in &layer.gates {
+                println!("evaluating gate type {:?}", gate.gate);
+
                 let wiring = &gate.wiring;
-                let gate_output = wiring.num_vars - 2 * input_vars;
+                let gate_output = wiring.outputs;
 
                 assert_eq!(gate_output, output_vars);
-                for (k, _v) in &wiring.evaluations() {
-                    let output_gate = k % (1 << output_vars);
-                    let k = k >> output_vars;
-                    let input_left = previous_layer[k % (1 << input_vars)];
-                    let k = k >> input_vars;
-                    let input_right = previous_layer[k];
-                    evaluations[output_gate] += gate.gate.evaluate(input_left, input_right);
+                for (out_gate, left_gate, right_gate) in &wiring.evaluations() {
+                    let input_left = previous_layer[*left_gate];
+                    let input_right = previous_layer[*right_gate];
+                    evaluations[*out_gate] += gate.gate.evaluate(input_left, input_right);
                 }
             }
             result.push(evaluations);
@@ -498,14 +514,24 @@ pub fn scale_and_fix<F: Field>(
 }
 
 /// low bits index the output layer (i.e. fixed first), high bits index inputs
-pub fn eval_index<F: Field>(
+pub fn eval_index(
     out_size: usize,
     out: usize,
     in_size: usize,
     in1: usize,
     in2: usize,
-) -> (usize, F) {
-    let in2 = in2 << (in_size + out_size);
-    let in1 = in1 << out_size;
-    (out + in1 + in2, F::ONE)
+) -> (usize, usize, usize) {
+    (out, in1, in2)
+}
+
+trait EvaluateSparseSum<F: Field> {
+    fn fix_variables(&self, partial_point: &[F]) -> Vec<SparseMultilinearExtension<F>>;
+}
+
+impl<F: Field> EvaluateSparseSum<F> for [SparseMultilinearExtension<F>] {
+    fn fix_variables(&self, partial_point: &[F]) -> Vec<SparseMultilinearExtension<F>> {
+        self.iter()
+            .map(|x| x.fix_variables(partial_point))
+            .collect()
+    }
 }

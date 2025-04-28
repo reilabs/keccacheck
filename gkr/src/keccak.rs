@@ -6,7 +6,8 @@ use ark_poly::SparseMultilinearExtension;
 use ark_sumcheck::{
     gkr::{
         Circuit, GKR, Gate, Layer, LayerGate, eval_index,
-        predicate::{EqPredicate, Predicate, PredicateSum, PredicateType, VariableMask},
+        predicate::{EqPredicate, Predicate, PredicateSum, eq, eq_range, rot},
+        util::{bits_to_u64, u64_to_bits},
     },
     rng::{Blake2b512Rng, FeedableRNG},
 };
@@ -27,17 +28,15 @@ pub fn gkr_mul() {
             Layer::with_builder(1, 2, |out| (Gate::Mul, 2 * out, 2 * out + 1)),
             Layer {
                 gates: vec![LayerGate::new(
+                    2,
+                    2,
                     Gate::Mul,
-                    SparseMultilinearExtension::<Fr>::from_evaluations(
-                        6,
-                        vec![
-                            eval_index(2, 0, 2, 0, 0),
-                            eval_index(2, 1, 2, 1, 1),
-                            eval_index(2, 2, 2, 1, 2),
-                            eval_index(2, 3, 2, 3, 3),
-                        ]
-                        .iter(),
-                    ),
+                    vec![
+                        eval_index(2, 0, 2, 0, 0),
+                        eval_index(2, 1, 2, 1, 1),
+                        eval_index(2, 2, 2, 1, 2),
+                        eval_index(2, 3, 2, 3, 3),
+                    ],
                 )],
             },
         ],
@@ -66,50 +65,34 @@ pub fn gkr_add_mul() {
         layers: vec![
             Layer {
                 gates: vec![
-                    LayerGate::new(
-                        Gate::Mul,
-                        SparseMultilinearExtension::<Fr>::from_evaluations(
-                            5,
-                            vec![eval_index(1, 0, 2, 0, 1)].iter(),
-                        ),
-                    ),
-                    LayerGate::new(
-                        Gate::Mul,
-                        SparseMultilinearExtension::<Fr>::from_evaluations(
-                            5,
-                            vec![eval_index(1, 1, 2, 2, 3)].iter(),
-                        ),
-                    ),
+                    LayerGate::new(1, 2, Gate::Mul, vec![eval_index(1, 0, 2, 0, 1)]),
+                    LayerGate::new(1, 2, Gate::Mul, vec![eval_index(1, 1, 2, 2, 3)]),
                 ],
             },
             Layer {
                 gates: vec![LayerGate::new(
+                    2,
+                    2,
                     Gate::Add,
-                    SparseMultilinearExtension::<Fr>::from_evaluations(
-                        6,
-                        vec![
-                            eval_index(2, 0, 2, 0, 0),
-                            eval_index(2, 1, 2, 1, 1),
-                            eval_index(2, 2, 2, 1, 2),
-                            eval_index(2, 3, 2, 3, 3),
-                        ]
-                        .iter(),
-                    ),
+                    vec![
+                        eval_index(2, 0, 2, 0, 0),
+                        eval_index(2, 1, 2, 1, 1),
+                        eval_index(2, 2, 2, 1, 2),
+                        eval_index(2, 3, 2, 3, 3),
+                    ],
                 )],
             },
             Layer {
                 gates: vec![LayerGate::new(
+                    2,
+                    1,
                     Gate::Add,
-                    SparseMultilinearExtension::<Fr>::from_evaluations(
-                        4,
-                        vec![
-                            eval_index(2, 0, 1, 0, 1),
-                            eval_index(2, 1, 1, 0, 0),
-                            eval_index(2, 2, 1, 0, 1),
-                            eval_index(2, 3, 1, 0, 0),
-                        ]
-                        .iter(),
-                    ),
+                    vec![
+                        eval_index(2, 0, 1, 0, 1),
+                        eval_index(2, 1, 1, 0, 0),
+                        eval_index(2, 2, 1, 0, 1),
+                        eval_index(2, 3, 1, 0, 0),
+                    ],
                 )],
             },
         ],
@@ -136,26 +119,23 @@ pub fn gkr_id_xor() {
         layers: vec![
             Layer {
                 gates: vec![LayerGate::new(
+                    1,
+                    2,
                     Gate::Xor,
-                    SparseMultilinearExtension::<Fr>::from_evaluations(
-                        5,
-                        vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)].iter(),
-                    ),
+                    vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)],
                 )],
             },
             Layer {
                 gates: vec![LayerGate::new(
+                    2,
+                    2,
                     Gate::Left,
-                    SparseMultilinearExtension::<Fr>::from_evaluations(
-                        6,
-                        vec![
-                            eval_index(2, 0, 2, 0, 0),
-                            eval_index(2, 1, 2, 1, 1),
-                            eval_index(2, 2, 2, 1, 2),
-                            eval_index(2, 3, 2, 3, 3),
-                        ]
-                        .iter(),
-                    ),
+                    vec![
+                        eval_index(2, 0, 2, 0, 0),
+                        eval_index(2, 1, 2, 1, 1),
+                        eval_index(2, 2, 2, 1, 2),
+                        eval_index(2, 3, 2, 3, 3),
+                    ],
                 )],
             },
         ],
@@ -181,59 +161,6 @@ fn test_gkr_basic_add() {
 #[test]
 fn test_gkr_basic_id_xor() {
     gkr_id_xor();
-}
-
-fn ilog2_ceil(n: u64) -> u32 {
-    if n <= 1 {
-        return 0;
-    }
-    64 - (n - 1).leading_zeros()
-}
-
-fn u64_to_bits<F: Field>(vec: &[u64]) -> Vec<F> {
-    let size = 1 << ilog2_ceil((vec.len() * 64) as u64);
-    let mut result = Vec::<F>::with_capacity(size);
-    for element in vec {
-        let mut element = *element;
-        for _ in 0..64 {
-            result.push((element % 2).into());
-            element >>= 1;
-        }
-    }
-
-    while result.len() < size {
-        result.push(0.into());
-    }
-
-    result
-}
-
-fn bits_to_u64<F: Field>(vec: &[F]) -> Vec<u64> {
-    let size = vec.len() / 64;
-    let mut result = Vec::<u64>::with_capacity(size);
-
-    let mut buffer: u64 = 0;
-    let mut bit_pos: usize = 0;
-
-    for element in vec {
-        let value: u64 = if *element == F::ZERO {
-            0
-        } else if *element == F::ONE {
-            1
-        } else {
-            panic!("bit not a bit, found {}", element);
-        };
-        buffer += value << bit_pos;
-        bit_pos += 1;
-
-        if bit_pos == 64 {
-            result.push(buffer);
-            buffer = 0;
-            bit_pos = 0;
-        }
-    }
-
-    result
 }
 
 pub fn gkr_theta(input: &[u64], output: &[u64]) {
@@ -323,6 +250,7 @@ pub fn gkr_theta(input: &[u64], output: &[u64]) {
             }),
         ],
     };
+    println!("evaluate");
     let evaluations = GKR::evaluate(&circuit);
     for (i, layer) in evaluations.iter().enumerate() {
         println!("layer {i}");
@@ -505,22 +433,31 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
         inputs: u64_to_bits(&input),
         outputs: u64_to_bits(&output),
         layers: vec![Layer {
-            gates: vec![LayerGate {
-                wiring: PredicateSum {
-                    predicates: vec![Predicate {
-                        predicates: vec![PredicateType::Eq(EqPredicate {
-                            var_masks: vec![
-                                VariableMask(((1 << 12) - 1) << 24),
-                                VariableMask(((1 << 12) - 1) << 12),
-                                VariableMask((1 << 12) - 1),
-                            ],
-                            consts: None,
-                        })],
-                    }],
-                    num_vars: 36,
+            gates: vec![
+                LayerGate {
+                    wiring: PredicateSum {
+                        predicates: vec![eq_range(&[0..=11, 12..=23, 24..=35], None)],
+                        inputs: 12,
+                        outputs: 12,
+                    },
+                    gate: Gate::Left,
                 },
-                gate: Gate::Left,
-            }],
+                LayerGate {
+                    wiring: PredicateSum {
+                        predicates: vec![
+                            eq_range(&[10..=11], Some(&[true, true]))        // z in the last two rows of state (rows 1 1 0, 1 1 1)
+                                * eq_range(&[0..=8, 12..=20, 24..=32], None) // offset within row same for z, a, b
+                                * eq(&[21], Some(false))                     // even rows are a
+                                * eq(&[33], Some(true))                      // odd rows are b
+                                * eq(&[22, 34, 9], None)                     // first two or second two of state rows
+                                * eq(&[23, 35], Some(false))                 // a, b from first 4 rows of state
+                        ],
+                        inputs: 12,
+                        outputs: 12,
+                    },
+                    gate: Gate::Xor,
+                },
+            ],
         }],
     };
 
@@ -555,6 +492,12 @@ fn test_keccak_f() {
             if row < 5 && col < 5 {
                 gkr_input[row * 8 + col] = input[row * 5 + col];
                 gkr_output[row * 8 + col] = input[row * 5 + col];
+            } else if row == 6 && col < 5 {
+                gkr_input[row * 8 + col] = 0;
+                gkr_output[row * 8 + col] = input[0 * 5 + col] ^ input[1 * 5 + col];
+            } else if row == 7 && col < 5 {
+                gkr_input[row * 8 + col] = 0;
+                gkr_output[row * 8 + col] = input[2 * 5 + col] ^ input[3 * 5 + col];
             } else {
                 gkr_input[row * 8 + col] = 0;
                 gkr_output[row * 8 + col] = 0;
