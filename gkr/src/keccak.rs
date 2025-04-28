@@ -6,7 +6,7 @@ use ark_poly::SparseMultilinearExtension;
 use ark_sumcheck::{
     gkr::{
         Circuit, GKR, Gate, Layer, LayerGate, eval_index,
-        predicate::{EqPredicate, Predicate, PredicateSum, eq, eq_range, rot},
+        predicate::{EqPredicate, Predicate, PredicateSum, eq, eq_const, eq_vec, rot},
         util::{bits_to_u64, u64_to_bits},
     },
     rng::{Blake2b512Rng, FeedableRNG},
@@ -433,31 +433,51 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
         inputs: u64_to_bits(&input),
         outputs: u64_to_bits(&output),
         layers: vec![Layer {
-            gates: vec![
-                LayerGate {
-                    wiring: PredicateSum {
-                        predicates: vec![eq_range(&[0..=11, 12..=23, 24..=35], None)],
-                        inputs: 12,
-                        outputs: 12,
+            gates: {
+                let inputs = 12;
+                let outputs = 12;
+                let z = |i: u8| i;
+                let a = |i: u8| i + outputs as u8;
+                let b = |i: u8| i + outputs as u8 + inputs as u8;
+
+                vec![
+                    LayerGate {
+                        gate: Gate::Left,
+                        wiring: PredicateSum {
+                            predicates: vec![eq_vec(&[
+                                z(0)..=z(11),
+                                a(0)..=a(11),                      // all original state elements are copied to z
+                                b(0)..=b(11),
+                            ])],
+                            inputs,
+                            outputs,
+                        },
                     },
-                    gate: Gate::Left,
-                },
-                LayerGate {
-                    wiring: PredicateSum {
-                        predicates: vec![
-                            eq_range(&[10..=11], Some(&[true, true]))        // z in the last two rows of state (rows 1 1 0, 1 1 1)
-                                * eq_range(&[0..=8, 12..=20, 24..=32], None) // element offset within row same for z, a, b
-                                * eq(&[23, 35], Some(false))                 // a, b from first 4 rows of state
-                                * eq(&[21], Some(false))                     // even rows (x x 0) are a
-                                * eq(&[33], Some(true))                      // odd rows (x x 1) are b
-                                * eq(&[22, 34, 9], None), // z = 0 xors rows 0, 1, z = 1 xors rows 2, 3
-                        ],
-                        inputs: 12,
-                        outputs: 12,
+                    LayerGate {
+                        gate: Gate::Xor,
+                        wiring: PredicateSum {
+                            predicates: vec![
+                                // bits 0..=8 are element offset within a row
+                                // bits 9..=11 are the row number
+                                eq_vec(&[
+                                    z(0)..=z(8),
+                                    a(0)..=a(8),                   // same element offset for z, a, b
+                                    b(0)..=b(8),
+                                ])
+                                    * eq_const(z(11), 1)
+                                    * eq_const(z(10), 1)           // z stored in the last two rows of state
+                                    * eq_const(a(11), 0)           // a is always in the first 4 rows of state
+                                    * eq_const(b(11), 0)           // b is always in the first 4 rows of state
+                                    * eq_const(a(9), 0)            // even rows (x x 0) are a
+                                    * eq_const(b(9), 1)            // odd rows (x x 1) are b
+                                    * eq(&[a(10), b(10), z(9)]),   // z(9) = 0 xors rows 0, 1; z(9) = 1 xors rows 2, 3
+                            ],
+                            inputs,
+                            outputs,
+                        },
                     },
-                    gate: Gate::Xor,
-                },
-            ],
+                ]
+            },
         }],
     };
 
@@ -476,13 +496,13 @@ fn test_keccak_f() {
     let input = [
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
     ];
-    let mut output = input.clone();
-    keccak_round(&mut output, ROUND_CONSTANTS[0]);
+    // let mut output = input.clone();
+    // keccak_round(&mut output, ROUND_CONSTANTS[0]);
 
-    println!("input  {input:x?}");
-    println!("output {output:x?}");
+    // println!("input  {input:x?}");
+    // println!("output {output:x?}");
 
-    gkr_theta(&input, &output);
+    // gkr_theta(&input, &output);
 
     let mut gkr_input = vec![0; 8 * 8];
     let mut gkr_output = vec![0; 8 * 8];

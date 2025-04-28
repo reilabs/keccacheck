@@ -265,27 +265,37 @@ impl Predicate {
     }
 }
 
-pub fn eq(vars: &[u8], is_on: Option<bool>) -> Predicate {
+pub fn eq_const(var: u8, on: usize) -> Predicate {
     Predicate {
         eq_predicates: vec![EqPredicate {
-            vars: vars.to_vec(),
-            is_on,
+            vars: vec![var],
+            is_on: Some(on == 1),
         }],
         sparse_predicates: Default::default(),
     }
 }
 
-pub fn eq_range(vars: &[RangeInclusive<u8>], is_on: Option<&[bool]>) -> Predicate {
+pub fn eq(vars: &[u8]) -> Predicate {
+    Predicate {
+        eq_predicates: vec![EqPredicate {
+            vars: vars.to_vec(),
+            is_on: None,
+        }],
+        sparse_predicates: Default::default(),
+    }
+}
+
+pub fn eq_vec(vars: &[RangeInclusive<u8>]) -> Predicate {
     let count = vars[0].len();
     let vars = vars
         .into_iter()
         .map(|range| range.clone().collect::<Vec<_>>())
         .collect::<Vec<_>>();
     let mut current_var: Vec<u8> = vars.iter().map(|x| x[0]).collect();
-    let mut predicate = eq(&current_var, is_on.map(|x| x[0]));
+    let mut predicate = eq(&current_var);
     for i in 1..count {
         current_var = vars.iter().map(|x| x[i]).collect();
-        predicate *= eq(&current_var, is_on.map(|x| x[i]))
+        predicate *= eq(&current_var)
     }
     predicate
 }
