@@ -18,10 +18,55 @@ pub struct SparseEvaluationPredicate {
     pub mle: HashMap<usize, usize>,
 }
 
+impl SparseEvaluationPredicate {
+    pub fn evaluate<F: Field>(&self, point: &[F], outputs: usize, inputs: usize) -> F {
+        let evaluations = self
+            .mle
+            .iter()
+            .map(|(out, inp)| (out + (inp << outputs), F::ONE))
+            .collect::<Vec<_>>();
+
+        let point = self
+            .vars
+            .iter()
+            .map(|var| point[*var as usize])
+            .collect::<Vec<_>>();
+        println!(
+            "outputs: {outputs} inputs {inputs} vars {}",
+            outputs + 2 * inputs
+        );
+
+        SparseMultilinearExtension::from_evaluations(outputs + 2 * inputs, &evaluations)
+            .evaluate(&point)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct EqPredicate {
     pub vars: Vec<u8>,
     pub is_on: Option<bool>,
+}
+
+impl EqPredicate {
+    pub fn evaluate<F: Field>(&self, point: &[F]) -> F {
+        let var_values = self
+            .vars
+            .iter()
+            .map(|var| point[*var as usize])
+            .collect::<Vec<_>>();
+        let neg_values = var_values.iter().map(|v| F::ONE - v).collect::<Vec<_>>();
+        if let Some(is_on) = self.is_on {
+            if is_on {
+                var_values.iter().fold(F::ONE, |acc, e| acc * *e)
+            } else {
+                neg_values.iter().fold(F::ONE, |acc, e| acc * *e)
+            }
+        } else {
+            let a = var_values.iter().fold(F::ONE, |acc, e| acc * *e);
+            let b = neg_values.iter().fold(F::ONE, |acc, e| acc * *e);
+            a + b
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -41,9 +86,26 @@ impl Predicate {
         todo!()
     }
 
-    pub fn evaluations(&self, outputs: usize, inputs: usize) -> Vec<(usize, usize, usize)> {
-        println!("evaluating predicate, should only be done once");
+    pub fn evaluate<F: Field>(&self, point: &[F], outputs: usize, inputs: usize) -> F {
+        let mut result = F::ONE;
+        for pred in &self.eq_predicates {
+            result *= pred.evaluate(point);
+            if result.is_zero() {
+                return result;
+            }
+        }
+        for pred in &self.sparse_predicates {
+            //todo!();
+            result *= pred.evaluate(point, outputs, inputs);
+            if result.is_zero() {
+                return result;
+            }
+        }
 
+        result
+    }
+
+    pub fn evaluations(&self, outputs: usize, inputs: usize) -> Vec<(usize, usize, usize)> {
         fn set_vars(
             vars: &[u8],
             is_on: bool,
@@ -228,16 +290,11 @@ pub fn eq_range(vars: &[RangeInclusive<u8>], is_on: Option<&[bool]>) -> Predicat
     predicate
 }
 
-pub fn rot<const N: u8>(
-    out: RangeInclusive<u8>,
-    input: RangeInclusive<u8>,
-) -> Predicate {
+pub fn rot<const N: u8>(out: RangeInclusive<u8>, input: RangeInclusive<u8>) -> Predicate {
     let len = out.len();
     assert_eq!(input.len(), len);
 
-    let vars = out
-        .chain(input)
-        .collect::<Vec<_>>();
+    let vars = out.chain(input).collect::<Vec<_>>();
     println!("rot inner vars {vars:?}");
 
     let evaluations = (0..(1 << len))
@@ -247,7 +304,7 @@ pub fn rot<const N: u8>(
         })
         .collect::<Vec<_>>();
 
-        println!("rot evaluations {evaluations:x?}");
+    println!("rot evaluations {evaluations:x?}");
 
     Predicate {
         eq_predicates: Default::default(),
@@ -300,9 +357,9 @@ impl PredicateSum {
     // }
 
     pub fn evaluate<F: Field>(&self, point: &Vec<F>) -> F {
-        self.sparse_mle()
-            .into_iter()
-            .map(|mle| mle.evaluate(point))
+        self.predicates
+            .iter()
+            .map(|predicate| predicate.evaluate(point, self.outputs, self.inputs))
             .fold(F::ZERO, |acc, e| acc + e)
     }
 

@@ -358,6 +358,7 @@ impl<F: Field> GKR<F> {
         let (mut w_u, mut w_v) = Default::default();
 
         for (i, layer) in circuit.layers.iter().enumerate() {
+            println!("verify layer {i}");
             if i == 0 {
                 let r_1 = (0..num_vars[0]).map(|_| F::rand(rng)).collect::<Vec<_>>();
                 let w_0 = DenseMultilinearExtension::from_evaluations_slice(
@@ -379,6 +380,7 @@ impl<F: Field> GKR<F> {
                         .copied()
                         .collect();
 
+                    println!("verify gate {:?}", gate_type.gate);
                     let wiring = gate_type.wiring.evaluate(&ruv);
                     wiring_res += wiring * gate_type.gate.evaluate(w_u, w_v)
                 }

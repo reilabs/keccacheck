@@ -446,11 +446,11 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                     wiring: PredicateSum {
                         predicates: vec![
                             eq_range(&[10..=11], Some(&[true, true]))        // z in the last two rows of state (rows 1 1 0, 1 1 1)
-                                * eq_range(&[0..=8, 12..=20, 24..=32], None) // offset within row same for z, a, b
-                                * eq(&[21], Some(false))                     // even rows are a
-                                * eq(&[33], Some(true))                      // odd rows are b
-                                * eq(&[22, 34, 9], None)                     // first two or second two of state rows
+                                * eq_range(&[0..=8, 12..=20, 24..=32], None) // element offset within row same for z, a, b
                                 * eq(&[23, 35], Some(false))                 // a, b from first 4 rows of state
+                                * eq(&[21], Some(false))                     // even rows (x x 0) are a
+                                * eq(&[33], Some(true))                      // odd rows (x x 1) are b
+                                * eq(&[22, 34, 9], None), // z = 0 xors rows 0, 1, z = 1 xors rows 2, 3
                         ],
                         inputs: 12,
                         outputs: 12,
