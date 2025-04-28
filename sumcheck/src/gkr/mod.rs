@@ -10,7 +10,6 @@ use ark_poly::{
     DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
 };
 use predicate::{Predicate, PredicateSum, SparseEvaluationPredicate};
-use util::bits_to_u64;
 
 use crate::{
     gkr_round_sumcheck::{data_structures::GKRRoundProof, GKRFunction, GKRRound, GKRRoundSumcheck},
@@ -509,17 +508,6 @@ pub fn scale_and_fix<F: Field>(
         .map(|(i, v)| (*i, *v * scalar))
         .collect::<Vec<_>>();
     SparseMultilinearExtension::from_evaluations(mle.num_vars, &evaluations).fix_variables(g)
-}
-
-/// low bits index the output layer (i.e. fixed first), high bits index inputs
-pub fn eval_index(
-    out_size: usize,
-    out: usize,
-    in_size: usize,
-    in1: usize,
-    in2: usize,
-) -> (usize, usize, usize) {
-    (out, in1, in2)
 }
 
 trait EvaluateSparseSum<F: Field> {

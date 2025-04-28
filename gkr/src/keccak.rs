@@ -1,13 +1,9 @@
-use std::marker::PhantomData;
-
 use ark_bn254::Fr;
-use ark_ff::Field;
-use ark_poly::SparseMultilinearExtension;
 use ark_sumcheck::{
     gkr::{
-        Circuit, GKR, Gate, Layer, LayerGate, eval_index,
-        predicate::{EqPredicate, Predicate, PredicateSum, eq, eq_const, eq_vec, rot},
-        util::{bits_to_u64, u64_to_bits},
+        Circuit, GKR, Gate, Layer, LayerGate,
+        predicate::{PredicateSum, eq, eq_const, eq_vec},
+        util::u64_to_bits,
     },
     rng::{Blake2b512Rng, FeedableRNG},
 };
@@ -30,12 +26,7 @@ pub fn gkr_mul() {
                     2,
                     2,
                     Gate::Mul,
-                    vec![
-                        eval_index(2, 0, 2, 0, 0),
-                        eval_index(2, 1, 2, 1, 1),
-                        eval_index(2, 2, 2, 1, 2),
-                        eval_index(2, 3, 2, 3, 3),
-                    ],
+                    vec![(1, 1, 1), (2, 1, 2), (0, 0, 0), (3, 3, 3)],
                 )],
             },
         ],
@@ -63,8 +54,8 @@ pub fn gkr_add_mul() {
         layers: vec![
             Layer {
                 gates: vec![
-                    LayerGate::new(1, 2, Gate::Mul, vec![eval_index(1, 0, 2, 0, 1)]),
-                    LayerGate::new(1, 2, Gate::Add, vec![eval_index(1, 1, 2, 2, 3)]),
+                    LayerGate::new(1, 2, Gate::Mul, vec![(0, 0, 1)]),
+                    LayerGate::new(1, 2, Gate::Add, vec![(1, 2, 3)]),
                 ],
             },
             Layer {
@@ -72,12 +63,7 @@ pub fn gkr_add_mul() {
                     2,
                     2,
                     Gate::Add,
-                    vec![
-                        eval_index(2, 0, 2, 0, 0),
-                        eval_index(2, 1, 2, 1, 1),
-                        eval_index(2, 2, 2, 1, 2),
-                        eval_index(2, 3, 2, 3, 3),
-                    ],
+                    vec![(0, 0, 0), (1, 1, 1), (2, 1, 2), (3, 3, 3)],
                 )],
             },
             Layer {
@@ -85,12 +71,7 @@ pub fn gkr_add_mul() {
                     2,
                     1,
                     Gate::Add,
-                    vec![
-                        eval_index(2, 0, 1, 0, 1),
-                        eval_index(2, 1, 1, 0, 0),
-                        eval_index(2, 2, 1, 0, 1),
-                        eval_index(2, 3, 1, 0, 0),
-                    ],
+                    vec![(0, 0, 1), (1, 0, 0), (2, 0, 1), (3, 0, 0)],
                 )],
             },
         ],
@@ -115,24 +96,14 @@ pub fn gkr_id_xor() {
         outputs: vec![1.into(), 0.into()],
         layers: vec![
             Layer {
-                gates: vec![LayerGate::new(
-                    1,
-                    2,
-                    Gate::Xor,
-                    vec![eval_index(1, 0, 2, 0, 1), eval_index(1, 1, 2, 2, 3)],
-                )],
+                gates: vec![LayerGate::new(1, 2, Gate::Xor, vec![(0, 0, 1), (1, 2, 3)])],
             },
             Layer {
                 gates: vec![LayerGate::new(
                     2,
                     2,
                     Gate::Left,
-                    vec![
-                        eval_index(2, 0, 2, 0, 0),
-                        eval_index(2, 1, 2, 1, 1),
-                        eval_index(2, 2, 2, 1, 2),
-                        eval_index(2, 3, 2, 3, 3),
-                    ],
+                    vec![(0, 0, 0), (1, 1, 1), (2, 1, 2), (3, 3, 3)],
                 )],
             },
         ],
@@ -277,54 +248,7 @@ pub fn gkr_theta(input: &[u64], output: &[u64]) {
     println!("done.");
 }
 
-// pub fn gkr_theta() {
-//     let input = vec![0; 1 << 11];
-//     let output = vec![0; 1 << 11];
-
-//     // layer 0: output
-//     // gates: g_xor(x, y)
-//     // wiring: for each output element, xor it with a corresponding array column
-//     let mut f_0 = Vec::with_capacity(25 * 64);
-//     for y in 0..5 {
-//         for x in 0..5 {
-//             for bit in 0..64 {
-//                 let out = y * 5 * 64 + x * 64 + bit;
-//                 let in1 = y * 5 * 64 + x * 64 + bit;
-//                 let in2 =  5 * 5 * 64 + x * 64 + bit;
-//                 f_0.push((in1, in2));
-//             }
-//         }
-//     }
-//     let mut f_0 = SparseMultilinearExtension::from_evaluations(33, f_0.iter().enumerate().map(|(out, (in1, in2))| {
-//         &(out << 22 + in1 << 11 + in2, Fr::ONE)
-//     }));
-
-//     // layer 1: copy inputs, array is xor of previous and next, shifted left (within each 64 bit element)
-//     let mut f_1_copy = (0..25 * 64).map(|x| (x, x)).collect::<Vec<_>>();
-//     let mut f_1_xorshl = Vec::with_capacity(5 * 64);
-
-//     // inputs: all state bits: 25 * 64 < 32 * 64 = (1 << 11)
-//     // layer 1-4: xor all columns (array), but also copy inputs. fits in (1 << 11)
-//     //   can squeeze this into 3 layers
-//     // layer 5: array is now xor of previous and next, also copy inputs. fits in (1 << 11)
-//     // layer 5b: rotate array elements (can be done in one step above)
-//     // output: xor all columns with corresponding array elements
-
-//     // for each layer:
-//     // - a wiring (predicate) polynomial f - what's connected to what, fan-in <= 2
-//     // - a gate polynomial (but ours are not uniform?)
-//     //   but I can probably have separate wiring for each gate type
-//     //   it's still multilinear so should be fine, right?
-
-//     // layers 1:
-//     // - g_id(x) -> x          with wiring f_id(x, z) = eq(x, z)
-//     // - g_xor(x, y) -> x ^ y  with wiring f_xor(x, y, z) = z is in the array section,
-//     //                                                      x, y are corresponding 1st bits of state inputs
-//     // layers 2:
-
-// }
-
-pub fn keccak_round(a: &mut [u64; 25], rc: u64) {
+pub fn keccak_round(a: &mut [u64; 25], _rc: u64) {
     let mut array: [u64; 5] = [0; 5];
 
     // Theta
@@ -404,11 +328,11 @@ const ROUND_CONSTANTS: [u64; 24] = [
     0x8000000080008008,
 ];
 
-const RHO_OFFSETS: [u32; 24] = [
+const _RHO_OFFSETS: [u32; 24] = [
     1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14,
 ];
 
-const PI: [usize; 24] = [
+const _PI: [usize; 24] = [
     10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1,
 ];
 
@@ -417,8 +341,6 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
     // layer 1-3: xor all columns (array), but also copy inputs. fits in (1 << 11)
     // layer 4: array is now xor of previous and (next rotated one left), also copy inputs. fits in (1 << 11)
     // output: xor all columns with corresponding array elements
-    let state_length = 5 * 8 * 64;
-    let row_length = 8 * 64;
     let circuit = Circuit::<Fr> {
         inputs: u64_to_bits(&input),
         outputs: u64_to_bits(&output),

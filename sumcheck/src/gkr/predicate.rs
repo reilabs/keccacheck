@@ -1,15 +1,11 @@
 use core::{
-    f32::consts::E,
     ops::{Mul, MulAssign, RangeInclusive},
     usize,
 };
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    path::Prefix,
-};
+use std::collections::{HashMap, HashSet};
 
 use ark_ff::Field;
-use ark_poly::{MultilinearExtension, Polynomial, SparseMultilinearExtension};
+use ark_poly::{Polynomial, SparseMultilinearExtension};
 use tracing::warn;
 
 #[derive(Clone, Debug)]
@@ -74,15 +70,6 @@ pub struct Predicate {
 }
 
 impl Predicate {
-    pub fn fix_variables<F: Field>(
-        &self,
-        partial_point: &[F],
-        outputs: usize,
-        inputs: usize,
-    ) -> SparseMultilinearExtension<F> {
-        todo!()
-    }
-
     pub fn evaluate<F: Field>(&self, point: &[F], outputs: usize, inputs: usize) -> F {
         let mut result = F::ONE;
         for pred in &self.eq_predicates {
@@ -399,6 +386,7 @@ fn all_equal<T: PartialEq>(slice: &[T]) -> bool {
     slice.windows(2).all(|w| w[0] == w[1])
 }
 
+#[allow(unused)]
 fn debug_constraints(constraints: &[Option<bool>], outputs: usize, inputs: usize) {
     print!("out: ");
     constraints[0..outputs].iter().for_each(|x| match x {
