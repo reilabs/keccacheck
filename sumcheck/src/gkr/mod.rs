@@ -222,6 +222,7 @@ impl Gate {
     }
 }
 
+#[derive(Debug)]
 /// wiring for a single gate type in a layer
 pub struct LayerGate {
     /// GKR predicate
@@ -246,7 +247,7 @@ impl LayerGate {
                         vars: (0..num_vars as u8).collect(),
                         mle: wiring
                             .into_iter()
-                            .map(|(out, in1, in2)| (out, in2 << inputs + in1))
+                            .map(|(out, in1, in2)| (out, (in2 << inputs) + in1))
                             .collect(),
                     }],
                 }],
@@ -277,8 +278,8 @@ impl<F: Field> GKR<F> {
         let num_vars = Self::layer_sizes(circuit);
 
         if evaluations[0] != circuit.outputs {
-            println!("expect {:x?}", bits_to_u64(&circuit.outputs));
-            println!("actual {:x?}", bits_to_u64(&evaluations[0]));
+            println!("expect {:x?}", &circuit.outputs);
+            println!("actual {:x?}", &evaluations[0]);
             panic!("evaluation failed");
 
             //assert_eq!(evaluations[0], circuit.outputs);
@@ -358,7 +359,6 @@ impl<F: Field> GKR<F> {
         let (mut w_u, mut w_v) = Default::default();
 
         for (i, layer) in circuit.layers.iter().enumerate() {
-            println!("verify layer {i}");
             if i == 0 {
                 let r_1 = (0..num_vars[0]).map(|_| F::rand(rng)).collect::<Vec<_>>();
                 let w_0 = DenseMultilinearExtension::from_evaluations_slice(
@@ -380,7 +380,6 @@ impl<F: Field> GKR<F> {
                         .copied()
                         .collect();
 
-                    println!("verify gate {:?}", gate_type.gate);
                     let wiring = gate_type.wiring.evaluate(&ruv);
                     wiring_res += wiring * gate_type.gate.evaluate(w_u, w_v)
                 }
@@ -458,7 +457,6 @@ impl<F: Field> GKR<F> {
         let mut previous_layer = &circuit.inputs;
         result.push(previous_layer.clone());
         for layer in circuit.layers.iter().rev() {
-            println!("evaluating layer");
             let output_vars = layer
                 .gates
                 .first()
@@ -468,8 +466,6 @@ impl<F: Field> GKR<F> {
             let mut evaluations = vec![F::ZERO; 1 << output_vars];
 
             for gate in &layer.gates {
-                println!("evaluating gate type {:?}", gate.gate);
-
                 let wiring = &gate.wiring;
                 let gate_output = wiring.outputs;
 

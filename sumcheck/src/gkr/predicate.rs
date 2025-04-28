@@ -10,8 +10,9 @@ use std::{
 
 use ark_ff::Field;
 use ark_poly::{MultilinearExtension, Polynomial, SparseMultilinearExtension};
+use tracing::warn;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 /// a predicate that the verifier will evaluate by interpolation
 pub struct SparseEvaluationPredicate {
     pub vars: Vec<u8>,
@@ -31,10 +32,6 @@ impl SparseEvaluationPredicate {
             .iter()
             .map(|var| point[*var as usize])
             .collect::<Vec<_>>();
-        println!(
-            "outputs: {outputs} inputs {inputs} vars {}",
-            outputs + 2 * inputs
-        );
 
         SparseMultilinearExtension::from_evaluations(outputs + 2 * inputs, &evaluations)
             .evaluate(&point)
@@ -69,7 +66,7 @@ impl EqPredicate {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 // a product of predicates
 pub struct Predicate {
     pub eq_predicates: Vec<EqPredicate>,
@@ -127,9 +124,7 @@ impl Predicate {
         }
         let num_vars = outputs + 2 * inputs;
 
-        let mut printed = 0;
-
-        let evaluations = (0..(1 << outputs))
+        let evaluations: Vec<(usize, usize, usize)> = (0..(1 << outputs))
             .filter_map(|output| {
                 let mut output = output;
                 let mut constraints = vec![None; num_vars];
@@ -158,10 +153,6 @@ impl Predicate {
                                 continue;
                             }
                             if !all_equal(&constrained) {
-                                // panic!(
-                                //     "conflicting constraints on vars {:?}: {:?}",
-                                //     eq.vars, constrained
-                                // );
                                 return None;
                             }
                             set_vars(&eq.vars, constrained[0], &mut constraints, &mut changes);
@@ -194,7 +185,9 @@ impl Predicate {
                             }
                         }
 
-                        let mut input = sparse.mle.get(&output).cloned().unwrap_or(0);
+                        let Some(mut input) = sparse.mle.get(&output).cloned() else {
+                            continue;
+                        };
 
                         for var in input_vars {
                             let is_on = input % 2 != 0;
@@ -221,16 +214,12 @@ impl Predicate {
                     }
                 }
 
-                // if printed < 3 {
-                //     debug_constraints(&constraints, outputs, inputs);
-                //     printed += 1;
-                // }
-
                 if constraints.iter().any(|x| x.is_none()) {
-                    debug_constraints(&constraints, outputs, inputs);
-                    panic!(
+                    //debug_constraints(&constraints, outputs, inputs);
+                    warn!(
                         "underconstrained predicate for out {out:x?}, all variables should be set"
                     );
+                    return None;
                 }
 
                 for bit in 0..inputs {
@@ -244,7 +233,7 @@ impl Predicate {
 
                 Some((out, in1, in2))
             })
-            .collect::<Vec<_>>();
+            .collect();
 
         evaluations
     }
@@ -348,6 +337,7 @@ impl Mul for Predicate {
     }
 }
 
+#[derive(Debug)]
 /// a chain of predicates
 pub struct PredicateSum {
     pub predicates: Vec<Predicate>,

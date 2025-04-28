@@ -66,7 +66,7 @@ pub fn gkr_add_mul() {
             Layer {
                 gates: vec![
                     LayerGate::new(1, 2, Gate::Mul, vec![eval_index(1, 0, 2, 0, 1)]),
-                    LayerGate::new(1, 2, Gate::Mul, vec![eval_index(1, 1, 2, 2, 3)]),
+                    LayerGate::new(1, 2, Gate::Add, vec![eval_index(1, 1, 2, 2, 3)]),
                 ],
             },
             Layer {
@@ -250,13 +250,6 @@ pub fn gkr_theta(input: &[u64], output: &[u64]) {
             }),
         ],
     };
-    println!("evaluate");
-    let evaluations = GKR::evaluate(&circuit);
-    for (i, layer) in evaluations.iter().enumerate() {
-        println!("layer {i}");
-        let layer = bits_to_u64(&layer);
-        println!("{layer:x?}");
-    }
 
     println!("proving...");
     let mut fs_rng = Blake2b512Rng::setup();
@@ -446,7 +439,7 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                         wiring: PredicateSum {
                             predicates: vec![eq_vec(&[
                                 z(0)..=z(11),
-                                a(0)..=a(11),                      // all original state elements are copied to z
+                                a(0)..=a(11), // all original state elements are copied to z
                                 b(0)..=b(11),
                             ])],
                             inputs,
@@ -470,7 +463,7 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                                     * eq_const(b(11), 0)           // b is always in the first 4 rows of state
                                     * eq_const(a(9), 0)            // even rows (x x 0) are a
                                     * eq_const(b(9), 1)            // odd rows (x x 1) are b
-                                    * eq(&[a(10), b(10), z(9)]),   // z(9) = 0 xors rows 0, 1; z(9) = 1 xors rows 2, 3
+                                    * eq(&[a(10), b(10), z(9)]), // z(9) = 0 xors rows 0, 1; z(9) = 1 xors rows 2, 3
                             ],
                             inputs,
                             outputs,
@@ -496,13 +489,13 @@ fn test_keccak_f() {
     let input = [
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
     ];
-    // let mut output = input.clone();
-    // keccak_round(&mut output, ROUND_CONSTANTS[0]);
+    let mut output = input.clone();
+    keccak_round(&mut output, ROUND_CONSTANTS[0]);
 
-    // println!("input  {input:x?}");
-    // println!("output {output:x?}");
+    println!("input  {input:x?}");
+    println!("output {output:x?}");
 
-    // gkr_theta(&input, &output);
+    gkr_theta(&input, &output);
 
     let mut gkr_input = vec![0; 8 * 8];
     let mut gkr_output = vec![0; 8 * 8];
