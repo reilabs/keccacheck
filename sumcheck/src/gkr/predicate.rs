@@ -1,4 +1,5 @@
 use core::{
+    iter::Product,
     ops::{Add, AddAssign, Mul, MulAssign, RangeInclusive},
     usize,
 };
@@ -8,7 +9,9 @@ use ark_ff::Field;
 use ark_poly::{Polynomial, SparseMultilinearExtension};
 use tracing::warn;
 
-struct VarMaskIterator(usize);
+use super::graph::to_evaluation_graph;
+
+pub struct VarMaskIterator(pub usize);
 
 impl Iterator for VarMaskIterator {
     type Item = usize;
@@ -163,6 +166,13 @@ impl BasePredicate {
             BasePredicate::Sparse(mle) => mle.evaluate(point),
         }
     }
+
+    pub fn mask(&self) -> usize {
+        match self {
+            BasePredicate::Eq(eq) => eq.var_mask,
+            BasePredicate::Sparse(sparse) => sparse.var_mask,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -174,24 +184,23 @@ impl PredicateDnf {
         outputs: usize,
         inputs: usize,
     ) -> Vec<SparseMultilinearExtension<F>> {
-        // TODO this is OK for now, we have only single product
-        assert_eq!(self.0.len(), 1);
-        let evaluations = self
-            .to_evaluation_graph(outputs, inputs)
-            .into_iter()
-            .enumerate()
-            .filter_map(|(out, pred)| {
-                let Some((in1, in2)) = pred else {
-                    return None;
-                };
-                Some((out + (in1 << outputs) + (in2 << (outputs + inputs)), F::ONE))
-            })
-            .collect::<Vec<_>>();
+        self.0
+            .iter()
+            .map(|product| {
+                let evaluations = to_evaluation_graph(product, outputs, inputs)
+                    .into_iter()
+                    .enumerate()
+                    .filter_map(|(out, pred)| {
+                        let Some((in1, in2)) = pred else {
+                            return None;
+                        };
+                        Some((out + (in1 << outputs) + (in2 << (outputs + inputs)), F::ONE))
+                    })
+                    .collect::<Vec<_>>();
 
-        vec![SparseMultilinearExtension::from_evaluations(
-            outputs + 2 * inputs,
-            &evaluations,
-        )]
+                SparseMultilinearExtension::from_evaluations(outputs + 2 * inputs, &evaluations)
+            })
+            .collect()
     }
 
     pub fn to_evaluation_graph(
@@ -199,140 +208,24 @@ impl PredicateDnf {
         outputs: usize,
         inputs: usize,
     ) -> Vec<Option<(usize, usize)>> {
-        fn set_vars(
-            vars: usize,
-            is_on: bool,
-            constraints: &mut [Option<bool>],
-            changes: &mut bool,
-        ) -> bool {
-            for var in VarMaskIterator(vars) {
-                match constraints[var] {
-                    Some(x) if x == is_on => {}
-                    Some(_) => return false, //panic!("conflicting constraints on var {}", *var),
-                    None => {
-                        constraints[var] = Some(is_on);
-                        *changes = true;
-                    }
+        let mut result = vec![None; 1 << outputs];
+        for product in &self.0 {
+            let addend = to_evaluation_graph(product, outputs, inputs);
+            for (i, val) in addend.iter().enumerate() {
+                if result[i].is_some() && val.is_some() {
+                    panic!(
+                        "addends not exclusive for out {}: {:?} and {:?}",
+                        i,
+                        result[i].unwrap(),
+                        val.unwrap()
+                    );
+                }
+                if result[i].is_none() {
+                    result[i] = *val;
                 }
             }
-
-            true
         }
-        let num_vars = outputs + 2 * inputs;
-
-        assert_eq!(self.0.len(), 1, "only one product supported");
-        let predicate_product = &self.0[0];
-
-        (0..(1 << outputs))
-            .map(|output| {
-                let mut output = output;
-                let mut constraints = vec![None; num_vars];
-
-                for i in 0..outputs {
-                    constraints[i] = Some(output % 2 == 1);
-                    output >>= 1;
-                }
-
-                let mut changes = true;
-                while changes {
-                    changes = false;
-
-                    for predicate in predicate_product {
-                        match predicate {
-                            BasePredicate::Eq(eq) => {
-                                if let Some(is_on) = eq.is_on {
-                                    if !set_vars(eq.var_mask, is_on, &mut constraints, &mut changes)
-                                    {
-                                        return None;
-                                    }
-                                } else {
-                                    let constrained = VarMaskIterator(eq.var_mask)
-                                        .filter_map(|x| constraints[x])
-                                        .collect::<Vec<_>>();
-                                    if constrained.len() == 0 {
-                                        continue;
-                                    }
-                                    if !all_equal(&constrained) {
-                                        return None;
-                                    }
-                                    set_vars(
-                                        eq.var_mask,
-                                        constrained[0],
-                                        &mut constraints,
-                                        &mut changes,
-                                    );
-                                }
-                            }
-                            BasePredicate::Sparse(sparse) => {
-                                let output_vars = VarMaskIterator(sparse.var_mask)
-                                    .filter(|x| *x < outputs)
-                                    .collect::<Vec<_>>();
-                                let input_vars = VarMaskIterator(sparse.var_mask)
-                                    .filter(|x| *x >= outputs)
-                                    .collect::<Vec<_>>();
-
-                                if output_vars.iter().any(|x| constraints[*x].is_none()) {
-                                    continue;
-                                }
-
-                                let mut output = 0;
-                                for (bit, var) in output_vars.into_iter().enumerate() {
-                                    if constraints[var] == Some(true) {
-                                        output += 1 << bit;
-                                    }
-                                }
-
-                                let Some(mut input) = sparse.mle.get(&output).cloned() else {
-                                    continue;
-                                };
-
-                                for var in input_vars {
-                                    let is_on = input % 2 != 0;
-                                    input >>= 1;
-                                    match constraints[var] {
-                                        Some(x) if x == is_on => {}
-                                        Some(_) => return None, //panic!("conflicting constraints on var {}", *var),
-                                        None => {
-                                            constraints[var] = Some(is_on);
-                                            changes = true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let mut out = 0;
-                let mut in1 = 0;
-                let mut in2 = 0;
-
-                for bit in 0..outputs {
-                    if constraints[bit] == Some(true) {
-                        out += 1 << bit;
-                    }
-                }
-
-                if constraints.iter().any(|x| x.is_none()) {
-                    //debug_constraints(&constraints, outputs, inputs);
-                    warn!(
-                        "underconstrained predicate for out {out:x?}, all variables should be set"
-                    );
-                    return None;
-                }
-
-                for bit in 0..inputs {
-                    if constraints[bit + outputs] == Some(true) {
-                        in1 += 1 << bit;
-                    }
-                    if constraints[bit + outputs + inputs] == Some(true) {
-                        in2 += 1 << bit;
-                    }
-                }
-
-                Some((in1, in2))
-            })
-            .collect()
+        result
     }
 }
 
@@ -348,14 +241,24 @@ impl PredicateExpr {
     pub fn to_dnf(&self) -> PredicateDnf {
         match self {
             PredicateExpr::Mul(left, right) => {
+                let mut result = vec![];
+                let left = left.to_dnf().0;
+                let right = right.to_dnf().0;
+                for left_vec in &left {
+                    for right_vec in &right {
+                        let mut concat = left_vec.clone();
+                        concat.extend(right_vec.iter().cloned());
+                        result.push(concat);
+                    }
+                }
+                PredicateDnf(result)
+            }
+            PredicateExpr::Add(left, right) => {
                 let mut left = left.to_dnf().0;
                 let right = right.to_dnf().0;
-                assert_eq!(left.len(), 1);
-                assert_eq!(right.len(), 1);
-                left[0].extend_from_slice(&right[0]);
+                left.extend(right);
                 PredicateDnf(left)
             }
-            PredicateExpr::Add(_l, _r) => todo!(),
             PredicateExpr::Base(base) => PredicateDnf(vec![vec![base.clone()]]),
         }
     }
@@ -363,8 +266,16 @@ impl PredicateExpr {
     pub fn evaluate<F: Field>(&self, point: &[F]) -> F {
         match self {
             PredicateExpr::Mul(left, right) => left.evaluate(point) * right.evaluate(point),
-            PredicateExpr::Add(left, right) => left.evaluate(point) * right.evaluate(point),
+            PredicateExpr::Add(left, right) => left.evaluate(point) + right.evaluate(point),
             PredicateExpr::Base(predicate) => predicate.evaluate(point),
+        }
+    }
+
+    pub fn mask(&self) -> usize {
+        match self {
+            PredicateExpr::Mul(left, right) => left.mask() | right.mask(),
+            PredicateExpr::Add(left, right) => left.mask() | right.mask(),
+            PredicateExpr::Base(base_predicate) => base_predicate.mask(),
         }
     }
 }
@@ -387,18 +298,32 @@ impl Mul for PredicateExpr {
     type Output = PredicateExpr;
 
     fn mul(self, rhs: Self) -> Self::Output {
+        let lhs_mask = self.mask();
+        let rhs_mask = rhs.mask();
+        if lhs_mask & rhs_mask != 0 {
+            panic!(
+                "no longer multilinear. conflicting mask {:b}",
+                lhs_mask & rhs_mask
+            );
+        }
+
         PredicateExpr::Mul(Box::new(self), Box::new(rhs))
     }
 }
 
 impl MulAssign for PredicateExpr {
     fn mul_assign(&mut self, rhs: Self) {
+        let lhs_mask = self.mask();
+        let rhs_mask = rhs.mask();
+        if lhs_mask & rhs_mask != 0 {
+            panic!(
+                "no longer multilinear. conflicting mask {:b}",
+                lhs_mask & rhs_mask
+            );
+        }
+
         *self = PredicateExpr::Mul(Box::new(self.clone()), Box::new(rhs))
     }
-}
-
-fn all_equal<T: PartialEq>(slice: &[T]) -> bool {
-    slice.windows(2).all(|w| w[0] == w[1])
 }
 
 #[allow(unused)]

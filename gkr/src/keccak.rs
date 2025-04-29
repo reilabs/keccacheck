@@ -77,7 +77,7 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                                     )
 
                                     * rot(
-                                        (z(6)..=z(8), 0, 5),
+                                        (z(6)..=z(8), 0, 5),       // TODO: this spills to other columns
                                         (a(6)..=a(8), 4, 5),       // add 4 mod 5, i.e. select previous element
                                         (b(6)..=b(8), 1, 5),       // add 1 mod 5, i.e. select next element
                                     )

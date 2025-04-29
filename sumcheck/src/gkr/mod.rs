@@ -17,6 +17,7 @@ use crate::{
     rng::FeedableRNG,
 };
 
+pub mod graph;
 pub mod predicate;
 pub mod util;
 
@@ -262,10 +263,10 @@ impl Gate {
 #[derive(Debug)]
 /// wiring for a single gate type in a layer
 pub struct LayerGate {
-    /// GKR predicate
-    pub wiring: PredicateExpr,
     /// Gate type
     pub gate: Gate,
+    /// GKR predicate
+    pub wiring: PredicateExpr,
 }
 
 impl LayerGate {
@@ -308,7 +309,6 @@ impl<F: Field> GKR<F> {
         let evaluations = Self::evaluate(circuit);
         let num_vars = Self::layer_sizes(circuit);
 
-        println!("num vars {num_vars:?}");
         if evaluations[0] != circuit.outputs {
             println!("expect {:x?}", bits_to_u64(&circuit.outputs));
             println!("actual {:x?}", bits_to_u64(&evaluations[0]));
