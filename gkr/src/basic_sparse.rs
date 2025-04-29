@@ -1,5 +1,8 @@
 use ark_bn254::Fr;
-use ark_sumcheck::{gkr::{Circuit, Gate, Layer, LayerGate, GKR}, rng::{Blake2b512Rng, FeedableRNG}};
+use ark_sumcheck::{
+    gkr::{Circuit, GKR, Gate, Layer, LayerGate},
+    rng::{Blake2b512Rng, FeedableRNG},
+};
 
 // all gates are multiplications
 // w0:   36         6

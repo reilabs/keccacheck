@@ -1,10 +1,12 @@
-
 use ark_bn254::Fr;
-use ark_sumcheck::{gkr::{util::u64_to_bits, Circuit, Gate, Layer, GKR}, rng::{Blake2b512Rng, FeedableRNG}};
+use ark_sumcheck::{
+    gkr::{Circuit, GKR, Gate, Layer, util::u64_to_bits},
+    rng::{Blake2b512Rng, FeedableRNG},
+};
 
-use crate::keccak_definition::{keccak_round, ROUND_CONSTANTS};
+use crate::keccak_definition::{ROUND_CONSTANTS, keccak_round};
 
-pub fn gkr_theta(input: &[u64], output: &[u64]) {
+fn gkr_theta(input: &[u64], output: &[u64]) {
     // inputs: all state bits: 25 * 64 < 32 * 64 = (1 << 11)
     // layer 1-3: xor all columns (array), but also copy inputs. fits in (1 << 11)
     // layer 4: array is now xor of previous and (next rotated one left), also copy inputs. fits in (1 << 11)
@@ -121,7 +123,7 @@ pub fn gkr_theta(input: &[u64], output: &[u64]) {
     println!("done.");
 }
 
-
+#[test]
 fn test_keccak_sparse() {
     //gkr_theta();
     let input = [

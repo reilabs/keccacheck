@@ -1,5 +1,5 @@
 use core::{
-    ops::{AddAssign, Mul, MulAssign, RangeInclusive},
+    ops::{Mul, MulAssign, RangeInclusive},
     usize,
 };
 use std::collections::{HashMap, HashSet};
@@ -276,22 +276,6 @@ pub fn eq_vec(vars: &[RangeInclusive<u8>]) -> Predicate {
     predicate
 }
 
-pub fn eq_vec_const(vars: &[u8], on: usize) -> Predicate {
-    todo!()
-    // let count = vars.len();
-    // let vars = vars
-    //     .into_iter()
-    //     .map(|range| range.clone().collect::<Vec<_>>())
-    //     .collect::<Vec<_>>();
-    // let mut current_var: Vec<u8> = vars.iter().map(|x| x[0]).collect();
-    // let mut predicate = eq(&current_var);
-    // for i in 1..count {
-    //     current_var = vars.iter().map(|x| x[i]).collect();
-    //     predicate *= eq(&current_var)
-    // }
-    // predicate
-}
-
 pub fn rot<const N: u8>(out: RangeInclusive<u8>, input: RangeInclusive<u8>) -> Predicate {
     let len = out.len();
     assert_eq!(input.len(), len);
@@ -391,12 +375,6 @@ impl PredicateSum {
 
     pub fn num_vars(&self) -> usize {
         self.outputs + 2 * self.inputs
-    }
-}
-
-impl AddAssign for PredicateSum {
-    fn add_assign(&mut self, rhs: Self) {
-        todo!()
     }
 }
 

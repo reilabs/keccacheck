@@ -8,7 +8,7 @@ use ark_sumcheck::{
     rng::{Blake2b512Rng, FeedableRNG},
 };
 
-use crate::keccak_definition::{keccak_round, ROUND_CONSTANTS};
+use crate::keccak_definition::{ROUND_CONSTANTS, keccak_round};
 
 pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
     // inputs: all state bits: 25 * 64 < 32 * 64 = (1 << 11)
