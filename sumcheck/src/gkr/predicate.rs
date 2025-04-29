@@ -209,14 +209,16 @@ fn mul_optional(current: Option<PredicateExpr>, predicate: PredicateExpr) -> Opt
 type VarRotation = (RangeInclusive<u8>, usize, usize);
 
 pub fn rot(out: VarRotation, in1: VarRotation, in2: VarRotation) -> PredicateExpr {
-    let len = out.0.len();
-    assert_eq!(in1.0.len(), len);
-    assert_eq!(in2.0.len(), len);
-
+    let (out_vars, _out_add, out_mod) = out;
     let (in1_vars, in1_add, in1_mod) = in1;
     let (in2_vars, in2_add, in2_mod) = in2;
 
-    let vars = out.0.chain(in1_vars).chain(in2_vars).collect::<Vec<_>>();
+    let len = out_vars.len();
+
+    assert_eq!(in1_vars.len(), len);
+    assert_eq!(in2_vars.len(), len);
+
+    let vars = out_vars.chain(in1_vars).chain(in2_vars).collect::<Vec<_>>();
     let mut var_mask = 0;
     for var in vars {
         let var = 1 << var;
@@ -226,6 +228,9 @@ pub fn rot(out: VarRotation, in1: VarRotation, in2: VarRotation) -> PredicateExp
 
     let evaluations = (0..(1 << len))
         .filter_map(|out_label| {
+            if out_label >= out_mod {
+                return None;
+            }
             let in1_label = (out_label + in1_add) % in1_mod;
             let in2_label = (out_label + in2_add) % in2_mod;
             let in_label = (in2_label << len) + in1_label;

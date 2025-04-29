@@ -26,10 +26,6 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
         outputs: u64_to_bits(&output),
         layers: vec![
             // keccak_f theta, xor state columns with aux array
-            // WARNING: after this step, we have a lot of garbage in non-output positions
-            // the current implementation assumes it starts with clean slate, which will
-            // not be true in subsequent rounds!
-            // TODO: put additional constraints on xor(prev, left) so it doesn't spill beyond 5 columns
             Layer {
                 label_size: 12,
                 gates: {
@@ -53,8 +49,6 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                 },
             },
             // aux array = xor(prev, next.rotate_left(1))
-            // TODO: put additional constraints on xor(prev, left) so it doesn't spill beyond 5 columns
-            // as per the comment above
             Layer {
                 label_size: 12,
                 gates: {
@@ -76,7 +70,7 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                                     )
 
                                     * rot(
-                                        (z(6)..=z(8), 0, 5),       // TODO: this spills to other columns
+                                        (z(6)..=z(8), 0, 5),
                                         (a(6)..=a(8), 4, 5),       // add 4 mod 5, i.e. select previous element
                                         (b(6)..=b(8), 1, 5),       // add 1 mod 5, i.e. select next element
                                     )
@@ -216,21 +210,16 @@ fn test_keccak_f() {
     println!("keccak_round {output:x?}");
 
     let mut gkr_input = vec![0; 8 * 8];
-
-    let gkr_output = [
-        26, 9, 13, 29, 47, 26, 8, 15, 31, 14, 8, 22, 34, 26, 8, 15, 16, 3, 3, 19, 37, 26, 8, 15,
-        21, 24, 30, 12, 56, 26, 8, 15, 14, 29, 25, 9, 51, 26, 8, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    ];
+    let mut gkr_output = vec![0; 8 * 8];
 
     for row in 0..8 {
         for col in 0..8 {
             if row < 5 && col < 5 {
                 gkr_input[row * 8 + col] = input[row * 5 + col];
-                // make sure the test is correct on the relevant output positions
-                assert_eq!(gkr_output[row * 8 + col], output[row * 5 + col]);
+                gkr_output[row * 8 + col] = output[row * 5 + col];
             } else {
                 gkr_input[row * 8 + col] = 0;
+                gkr_output[row * 8 + col] = 0;
             }
         }
     }
