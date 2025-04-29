@@ -85,8 +85,11 @@ pub enum Gate {
     Add,
     /// Mul gate
     Mul,
-    /// Xor gate
+    /// Xor gate: xor(a, b) = a + b - 2ab
     Xor,
+    /// Xor gate when the right input is already in the destination
+    /// register: xor_left(a, b) = a - 2ab
+    XorLeft,
     /// left child gate
     Left,
     /// empty value
@@ -100,6 +103,7 @@ impl Gate {
             Gate::Add => left + right,
             Gate::Mul => left * right,
             Gate::Xor => left + right - left * right * F::from(2),
+            Gate::XorLeft => left - left * right * F::from(2),
             Gate::Left => left,
             Gate::Null => F::zero(),
         }
@@ -177,6 +181,40 @@ impl Gate {
                                         f2: const_one.clone(),
                                         f3: values.clone(),
                                     },
+                                    GKRFunction {
+                                        f1_g: scale(&predicate, coeff),
+                                        f2: values.clone(),
+                                        f3: const_one.clone(),
+                                    },
+                                    GKRFunction {
+                                        f1_g: scale(&predicate, &(*coeff * Into::<F>::into(-2))),
+                                        f2: values.clone(),
+                                        f3: values.clone(),
+                                    },
+                                ]
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect()
+            }
+            Gate::XorLeft => {
+                let const_one = DenseMultilinearExtension::from_evaluations_vec(
+                    values.num_vars,
+                    vec![F::ONE; 1 << values.num_vars],
+                );
+                combination
+                    .into_iter()
+                    .flat_map(|(coeff, partial_point)| {
+                        wiring
+                            .fix_variables(partial_point)
+                            .into_iter()
+                            .flat_map(|predicate| {
+                                vec![
+                                    // GKRFunction {
+                                    //     f1_g: scale(&predicate, coeff),
+                                    //     f2: const_one.clone(),
+                                    //     f3: values.clone(),
+                                    // },
                                     GKRFunction {
                                         f1_g: scale(&predicate, coeff),
                                         f2: values.clone(),

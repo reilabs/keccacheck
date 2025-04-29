@@ -1,5 +1,5 @@
 use core::{
-    ops::{Mul, MulAssign, RangeInclusive},
+    ops::{AddAssign, Mul, MulAssign, RangeInclusive},
     usize,
 };
 use std::collections::{HashMap, HashSet};
@@ -276,6 +276,22 @@ pub fn eq_vec(vars: &[RangeInclusive<u8>]) -> Predicate {
     predicate
 }
 
+pub fn eq_vec_const(vars: &[u8], on: usize) -> Predicate {
+    todo!()
+    // let count = vars.len();
+    // let vars = vars
+    //     .into_iter()
+    //     .map(|range| range.clone().collect::<Vec<_>>())
+    //     .collect::<Vec<_>>();
+    // let mut current_var: Vec<u8> = vars.iter().map(|x| x[0]).collect();
+    // let mut predicate = eq(&current_var);
+    // for i in 1..count {
+    //     current_var = vars.iter().map(|x| x[i]).collect();
+    //     predicate *= eq(&current_var)
+    // }
+    // predicate
+}
+
 pub fn rot<const N: u8>(out: RangeInclusive<u8>, input: RangeInclusive<u8>) -> Predicate {
     let len = out.len();
     assert_eq!(input.len(), len);
@@ -324,6 +340,12 @@ impl Mul for Predicate {
     }
 }
 
+pub enum PredicateOps {
+    Mul(Box<PredicateOps>, Box<PredicateOps>),
+    Add(Box<PredicateOps>, Box<PredicateOps>),
+    Pred(Predicate),
+}
+
 #[derive(Debug)]
 /// a chain of predicates
 pub struct PredicateSum {
@@ -333,16 +355,6 @@ pub struct PredicateSum {
 }
 
 impl PredicateSum {
-    // pub fn fix_variables<F: Field>(
-    //     &self,
-    //     partial_point: &[F],
-    // ) -> Vec<SparseMultilinearExtension<F>> {
-    //     self.predicates
-    //         .iter()
-    //         .map(|predicate| predicate.fix_variables(partial_point, self.outputs, self.inputs))
-    //         .collect()
-    // }
-
     pub fn evaluate<F: Field>(&self, point: &Vec<F>) -> F {
         self.predicates
             .iter()
@@ -379,6 +391,12 @@ impl PredicateSum {
 
     pub fn num_vars(&self) -> usize {
         self.outputs + 2 * self.inputs
+    }
+}
+
+impl AddAssign for PredicateSum {
+    fn add_assign(&mut self, rhs: Self) {
+        todo!()
     }
 }
 

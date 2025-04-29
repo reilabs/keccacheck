@@ -2,7 +2,7 @@ use ark_bn254::Fr;
 use ark_sumcheck::{
     gkr::{
         Circuit, GKR, Gate, Layer, LayerGate,
-        predicate::{PredicateSum, eq, eq_const, eq_vec},
+        predicate::{PredicateSum, eq, eq_const, eq_vec, eq_vec_const},
         util::u64_to_bits,
     },
     rng::{Blake2b512Rng, FeedableRNG},
@@ -367,7 +367,7 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                             },
                         },
                         LayerGate {
-                            gate: Gate::Xor,
+                            gate: Gate::XorLeft,
                             wiring: PredicateSum {
                                 predicates: vec![
                                     // bits 0..=8 are element offset within a row
@@ -378,7 +378,52 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                                         b(0)..=b(8),
                                     ])
                                         * eq_const(z(11), 1)
-                                        * eq_const(z(10), 0)           // z stored in the 5th row of state
+                                        * eq_const(z(10), 1)           // z stored in the last row of state
+                                        * eq_const(z(9), 1)
+
+                                        * eq_const(a(11), 1)
+                                        * eq_const(a(10), 1)           // a is xor(0, 1)
+                                        * eq_const(a(9), 0)
+
+                                        * eq_const(b(11), 1)
+                                        * eq_const(b(10), 1)           // b is xor(2, 3, 4)
+                                        * eq_const(b(9), 1),
+                                ],
+                                inputs,
+                                outputs,
+                            },
+                        },
+                    ]
+                },
+            },
+            Layer {
+                gates: {
+                    vec![
+                        LayerGate {
+                            gate: Gate::Left,
+                            wiring: PredicateSum {
+                                predicates: vec![eq_vec(&[
+                                    z(0)..=z(11),
+                                    a(0)..=a(11), // all original state elements are copied to z
+                                    b(0)..=b(11),
+                                ])],
+                                inputs,
+                                outputs,
+                            },
+                        },
+                        LayerGate {
+                            gate: Gate::XorLeft,
+                            wiring: PredicateSum {
+                                predicates: vec![
+                                    // bits 0..=8 are element offset within a row
+                                    // bits 9..=11 are the row number
+                                    eq_vec(&[
+                                        z(0)..=z(8),
+                                        a(0)..=a(8),                   // same element offset for z, a, b
+                                        b(0)..=b(8),
+                                    ])
+                                        * eq_const(z(11), 1)
+                                        * eq_const(z(10), 1)           // z stored in the last row of state
                                         * eq_const(z(9), 1)
 
                                         * eq_const(a(11), 1)
@@ -387,7 +432,7 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
 
                                         * eq_const(b(11), 1)
                                         * eq_const(b(10), 1)           // b is xor(2, 3)
-                                        * eq_const(b(9), 1)
+                                        * eq_const(b(9), 1),
                                 ],
                                 inputs,
                                 outputs,
@@ -469,15 +514,19 @@ fn test_keccak_f() {
             if row < 5 && col < 5 {
                 gkr_input[row * 8 + col] = input[row * 5 + col];
                 gkr_output[row * 8 + col] = input[row * 5 + col];
-            } else if row == 5 && col < 5 {
-                gkr_input[row * 8 + col] = 0;
-                gkr_output[row * 8 + col] = input[2 * 5 + col] ^ input[3 * 5 + col] ^ input[4 * 5 + col];
+            // } else if row == 5 && col < 5 {
+            //     gkr_input[row * 8 + col] = 0;
+            //     gkr_output[row * 8 + col] = input[2 * 5 + col] ^ input[3 * 5 + col] ^ input[4 * 5 + col];
             } else if row == 6 && col < 5 {
                 gkr_input[row * 8 + col] = 0;
                 gkr_output[row * 8 + col] = input[0 * 5 + col] ^ input[1 * 5 + col];
             } else if row == 7 && col < 5 {
                 gkr_input[row * 8 + col] = 0;
-                gkr_output[row * 8 + col] = input[2 * 5 + col] ^ input[3 * 5 + col];
+                gkr_output[row * 8 + col] = input[0 * 5 + col]
+                    ^ input[1 * 5 + col]
+                    ^ input[2 * 5 + col]
+                    ^ input[3 * 5 + col]
+                    ^ input[4 * 5 + col];
             } else {
                 gkr_input[row * 8 + col] = 0;
                 gkr_output[row * 8 + col] = 0;
