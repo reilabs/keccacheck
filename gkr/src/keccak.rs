@@ -26,6 +26,11 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
         outputs: u64_to_bits(&output),
         layers: vec![
             // keccak_f theta, xor state columns with aux array
+            // WARNING: after this step, we have a lot of garbage in non-output positions
+            // the current implementation assumes it starts with clean slate, which will
+            // not be true in subsequent rounds!
+            // TODO: put additional constraints on xor(prev, left) so it doesn't spill beyond 5 columns
+            // TODO: put additional constraints so z(9..=11) <= 0b101
             Layer {
                 gates: {
                     vec![LayerGate {
@@ -39,8 +44,8 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                                     ])
 
                                     * eq_vec(&[
-                                        z(9)..=z(11),
-                                        a(9)..=a(11),              // z = a
+                                        z(9)..=z(11),              // TODO: need eq_cmp to constraint to
+                                        a(9)..=a(11),              // z(9..=11) <= 0b101 per comment above
                                     ])
 
                                     * eq_const(b(11), 1)
@@ -54,6 +59,8 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                 },
             },
             // aux array = xor(prev, next.rotate_left(1))
+            // TODO: put additional constraints on xor(prev, left) so it doesn't spill beyond 5 columns
+            // as per the comment above
             Layer {
                 gates: {
                     vec![
