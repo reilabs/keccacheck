@@ -336,7 +336,10 @@ impl<F: Field> GKR<F> {
                     .iter()
                     .flat_map(|gate_type| {
                         gate_type.gate.to_gkr_combination(
-                            &gate_type.wiring.to_dnf().to_sum_of_sparse_mle(num_vars[i], num_vars[i + 1]),
+                            &gate_type
+                                .wiring
+                                .to_dnf()
+                                .to_sum_of_sparse_mle(num_vars[i], num_vars[i + 1]),
                             &w_i,
                             &[(F::ONE, &r_1)],
                         )
@@ -363,7 +366,10 @@ impl<F: Field> GKR<F> {
                     .iter()
                     .flat_map(|gate_type| {
                         gate_type.gate.to_gkr_combination(
-                            &gate_type.wiring.to_dnf().to_sum_of_sparse_mle(num_vars[i], num_vars[i + 1]),
+                            &gate_type
+                                .wiring
+                                .to_dnf()
+                                .to_sum_of_sparse_mle(num_vars[i], num_vars[i + 1]),
                             &w_i,
                             &[(alpha, &u), (beta, &v)],
                         )
