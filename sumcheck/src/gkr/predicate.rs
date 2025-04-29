@@ -30,11 +30,7 @@ impl SparseEvaluationPredicate {
             .map(|var| point[*var as usize])
             .collect::<Vec<_>>();
 
-        println!("SparseEvaluationPredicate vars {:?} out len {:?}", self.vars, self.out_len);
-        println!("point {:?}, mle {:?}", point.len(), self.mle);
-
-        SparseMultilinearExtension::from_evaluations(self.vars.len(), &evaluations)
-            .evaluate(&point)
+        SparseMultilinearExtension::from_evaluations(self.vars.len(), &evaluations).evaluate(&point)
     }
 }
 
@@ -291,23 +287,15 @@ pub fn rot(out: VarRotation, in1: VarRotation, in2: VarRotation) -> Predicate {
     let (in2_vars, in2_add, in2_mod) = in2;
 
     let vars = out.0.chain(in1_vars).chain(in2_vars).collect::<Vec<_>>();
-    println!("rot inner vars {vars:?}");
 
     let evaluations = (0..(1 << len))
         .filter_map(|out_label| {
             let in1_label = (out_label + in1_add) % in1_mod;
             let in2_label = (out_label + in2_add) % in2_mod;
-
-            println!("rot {out_label:x}: a {in1_label:x?} b {in2_label:x?}");
-
             let in_label = (in2_label << len) + in1_label;
             Some((out_label, in_label))
         })
         .collect::<Vec<_>>();
-
-    println!("rot evaluations {evaluations:x?}");
-
-    // todo!();
 
     Predicate {
         eq_predicates: Default::default(),
