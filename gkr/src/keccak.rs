@@ -2,7 +2,7 @@ use ark_bn254::Fr;
 use ark_sumcheck::{
     gkr::{
         Circuit, GKR, Gate, Layer, LayerGate,
-        predicate::{PredicateSum, eq, eq_const, eq_vec, rot},
+        predicate::{eq, eq_const, eq_vec, rot},
         util::u64_to_bits,
     },
     rng::{Blake2b512Rng, FeedableRNG},
@@ -32,12 +32,11 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
             // TODO: put additional constraints on xor(prev, left) so it doesn't spill beyond 5 columns
             // TODO: put additional constraints so z(9..=11) <= 0b101
             Layer {
+                label_size: 12,
                 gates: {
                     vec![LayerGate {
                         gate: Gate::Xor,
-                        wiring: PredicateSum {
-                            predicates: vec![
-                                eq_vec(&[
+                        wiring: eq_vec(&[
                                         z(0)..=z(8),
                                         a(0)..=a(8),               // same element offset for z, a, b
                                         b(0)..=b(8),
@@ -51,10 +50,6 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                                     * eq_const(b(11), 1)
                                     * eq_const(b(10), 0)           // b is the aux array in the row 0b101
                                     * eq_const(b(9), 1),
-                            ],
-                            inputs,
-                            outputs,
-                        },
                     }]
                 },
             },
@@ -62,25 +57,20 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
             // TODO: put additional constraints on xor(prev, left) so it doesn't spill beyond 5 columns
             // as per the comment above
             Layer {
+                label_size: 12,
                 gates: {
                     vec![
                         LayerGate {
                             gate: Gate::Left,
-                            wiring: PredicateSum {
-                                predicates: vec![eq_vec(&[
-                                    z(0)..=z(11),
-                                    a(0)..=a(11), // all original state elements are copied to z
-                                    b(0)..=b(11),
-                                ])],
-                                inputs,
-                                outputs,
-                            },
+                            wiring: eq_vec(&[
+                                z(0)..=z(11),
+                                a(0)..=a(11), // all original state elements are copied to z
+                                b(0)..=b(11),
+                            ]),
                         },
                         LayerGate {
                             gate: Gate::Xor,
-                            wiring: PredicateSum {
-                                predicates: vec![
-                                    rot(
+                            wiring: rot(
                                         (z(0)..=z(5), 0, 64),
                                         (a(0)..=a(5), 0, 64),
                                         (b(0)..=b(5), 63, 64),     // rotate_left(1)
@@ -103,37 +93,26 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                                     * eq_const(z(11), 1)
                                     * eq_const(z(10), 0)           // z is xor(prev, next) in the row 0b101
                                     * eq_const(z(9), 1),
-                                ],
-                                inputs,
-                                outputs,
-                            },
                         },
                     ]
                 },
             },
             // Xor the entire column (4 xors, 3 layers) into aux array
             Layer {
+                label_size: 12,
                 gates: {
                     vec![
                         LayerGate {
                             gate: Gate::Left,
-                            wiring: PredicateSum {
-                                predicates: vec![eq_vec(&[
-                                    z(0)..=z(11),
-                                    a(0)..=a(11), // all original state elements are copied to z
-                                    b(0)..=b(11),
-                                ])],
-                                inputs,
-                                outputs,
-                            },
+                            wiring: eq_vec(&[
+                                z(0)..=z(11),
+                                a(0)..=a(11), // all original state elements are copied to z
+                                b(0)..=b(11),
+                            ]),
                         },
                         LayerGate {
                             gate: Gate::XorLeft,
-                            wiring: PredicateSum {
-                                predicates: vec![
-                                    // bits 0..=8 are element offset within a row
-                                    // bits 9..=11 are the row number
-                                    eq_vec(&[
+                            wiring: eq_vec(&[
                                         z(0)..=z(8),
                                         a(0)..=a(8),                   // same element offset for z, a, b
                                         b(0)..=b(8),
@@ -149,36 +128,25 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                                         * eq_const(z(11), 1)
                                         * eq_const(z(10), 1)           // z is xor(0, 1, 2, 3, 4) in the last row
                                         * eq_const(z(9), 1),
-                                ],
-                                inputs,
-                                outputs,
-                            },
                         },
                     ]
                 },
             },
             Layer {
+                label_size: 12,
                 gates: {
                     vec![
                         LayerGate {
                             gate: Gate::Left,
-                            wiring: PredicateSum {
-                                predicates: vec![eq_vec(&[
-                                    z(0)..=z(11),
-                                    a(0)..=a(11), // all original state elements are copied to z
-                                    b(0)..=b(11),
-                                ])],
-                                inputs,
-                                outputs,
-                            },
+                            wiring: eq_vec(&[
+                                z(0)..=z(11),
+                                a(0)..=a(11), // all original state elements are copied to z
+                                b(0)..=b(11),
+                            ]),
                         },
                         LayerGate {
                             gate: Gate::XorLeft,
-                            wiring: PredicateSum {
-                                predicates: vec![
-                                    // bits 0..=8 are element offset within a row
-                                    // bits 9..=11 are the row number
-                                    eq_vec(&[
+                            wiring: eq_vec(&[
                                         z(0)..=z(8),
                                         a(0)..=a(8),                   // same element offset for z, a, b
                                         b(0)..=b(8),
@@ -194,35 +162,24 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                                         * eq_const(b(11), 1)
                                         * eq_const(b(10), 1)           // b is xor(2, 3)
                                         * eq_const(b(9), 1),
-                                ],
-                                inputs,
-                                outputs,
-                            },
                         },
                     ]
                 },
             },
             Layer {
+                label_size: 12,
                 gates: vec![
                     LayerGate {
                         gate: Gate::Left,
-                        wiring: PredicateSum {
-                            predicates: vec![eq_vec(&[
-                                z(0)..=z(11),
-                                a(0)..=a(11), // all original state elements are copied to z
-                                b(0)..=b(11),
-                            ])],
-                            inputs,
-                            outputs,
-                        },
+                        wiring: eq_vec(&[
+                            z(0)..=z(11),
+                            a(0)..=a(11), // all original state elements are copied to z
+                            b(0)..=b(11),
+                        ]),
                     },
                     LayerGate {
                         gate: Gate::Xor,
-                        wiring: PredicateSum {
-                            predicates: vec![
-                                // bits 0..=8 are element offset within a row
-                                // bits 9..=11 are the row number
-                                eq_vec(&[
+                        wiring: eq_vec(&[
                                     z(0)..=z(8),
                                     a(0)..=a(8),                   // same element offset for z, a, b
                                     b(0)..=b(8),
@@ -234,10 +191,6 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                                     * eq_const(a(9), 0)            // even rows (x x 0) are a
                                     * eq_const(b(9), 1)            // odd rows (x x 1) are b
                                     * eq(&[a(10), b(10), z(9)]), // z(9) = 0 xors rows 0, 1; z(9) = 1 xors rows 2, 3
-                            ],
-                            inputs,
-                            outputs,
-                        },
                     },
                 ],
             },

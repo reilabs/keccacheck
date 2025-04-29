@@ -9,8 +9,8 @@ use ark_ff::Field;
 use ark_poly::{
     DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
 };
-use predicate::{Predicate, PredicateSum, SparseEvaluationPredicate};
-use util::bits_to_u64;
+use predicate::{BasePredicate, PredicateExpr, SparseEvaluationPredicate};
+use util::{bits_to_u64, ilog2_ceil};
 
 use crate::{
     gkr_round_sumcheck::{data_structures::GKRRoundProof, GKRFunction, GKRRound, GKRRoundSumcheck},
@@ -32,6 +32,8 @@ pub struct Circuit<F: Field> {
 
 /// Single GKR layer (round)
 pub struct Layer {
+    /// number of variables in the layer
+    pub label_size: usize,
     /// all gate types in a layer
     pub gates: Vec<LayerGate>,
 }
@@ -59,23 +61,19 @@ impl Layer {
         let gates = result
             .into_iter()
             .map(|(k, v)| LayerGate {
-                wiring: PredicateSum {
-                    predicates: vec![Predicate {
-                        eq_predicates: vec![],
-                        sparse_predicates: vec![SparseEvaluationPredicate {
-                            vars: (0..(output_vars + 2 * input_vars) as u8).collect(),
-                            out_len: output_vars,
-                            mle: v,
-                        }],
-                    }],
-                    inputs: input_vars,
-                    outputs: output_vars,
-                },
+                wiring: PredicateExpr::Base(BasePredicate::Sparse(SparseEvaluationPredicate {
+                    var_mask: (1 << (output_vars + 2 * input_vars)) - 1,
+                    out_len: output_vars,
+                    mle: v,
+                })),
                 gate: k,
             })
             .collect::<Vec<_>>();
 
-        Self { gates }
+        Self {
+            label_size: output_vars,
+            gates,
+        }
     }
 }
 
@@ -265,7 +263,7 @@ impl Gate {
 /// wiring for a single gate type in a layer
 pub struct LayerGate {
     /// GKR predicate
-    pub wiring: PredicateSum,
+    pub wiring: PredicateExpr,
     /// Gate type
     pub gate: Gate,
 }
@@ -279,21 +277,14 @@ impl LayerGate {
     ) -> Self {
         let num_vars = outputs + 2 * inputs;
         Self {
-            wiring: PredicateSum {
-                predicates: vec![Predicate {
-                    eq_predicates: Default::default(),
-                    sparse_predicates: vec![SparseEvaluationPredicate {
-                        vars: (0..num_vars as u8).collect(),
-                        out_len: outputs,
-                        mle: wiring
-                            .into_iter()
-                            .map(|(out, in1, in2)| (out, (in2 << inputs) + in1))
-                            .collect(),
-                    }],
-                }],
-                inputs,
-                outputs,
-            },
+            wiring: PredicateExpr::Base(BasePredicate::Sparse(SparseEvaluationPredicate {
+                var_mask: (1 << num_vars) - 1,
+                out_len: outputs,
+                mle: wiring
+                    .into_iter()
+                    .map(|(out, in1, in2)| (out, (in2 << inputs) + in1))
+                    .collect(),
+            })),
             gate,
         }
     }
@@ -317,6 +308,7 @@ impl<F: Field> GKR<F> {
         let evaluations = Self::evaluate(circuit);
         let num_vars = Self::layer_sizes(circuit);
 
+        println!("num vars {num_vars:?}");
         if evaluations[0] != circuit.outputs {
             println!("expect {:x?}", bits_to_u64(&circuit.outputs));
             println!("actual {:x?}", bits_to_u64(&evaluations[0]));
@@ -344,7 +336,7 @@ impl<F: Field> GKR<F> {
                     .iter()
                     .flat_map(|gate_type| {
                         gate_type.gate.to_gkr_combination(
-                            &gate_type.wiring.sparse_mle(),
+                            &gate_type.wiring.to_dnf().to_sum_of_sparse_mle(num_vars[i], num_vars[i + 1]),
                             &w_i,
                             &[(F::ONE, &r_1)],
                         )
@@ -371,7 +363,7 @@ impl<F: Field> GKR<F> {
                     .iter()
                     .flat_map(|gate_type| {
                         gate_type.gate.to_gkr_combination(
-                            &gate_type.wiring.sparse_mle(),
+                            &gate_type.wiring.to_dnf().to_sum_of_sparse_mle(num_vars[i], num_vars[i + 1]),
                             &w_i,
                             &[(alpha, &u), (beta, &v)],
                         )
@@ -480,13 +472,10 @@ impl<F: Field> GKR<F> {
     /// in all intermediate layers
     pub fn layer_sizes(circuit: &Circuit<F>) -> Vec<usize> {
         let mut result = Vec::with_capacity(circuit.layers.len() + 1);
-        let mut previous_layer = circuit.outputs.len().ilog2() as usize;
-        result.push(previous_layer);
         for layer in &circuit.layers {
-            let wiring = &layer.gates.first().expect("at least one gate type").wiring;
-            previous_layer = (wiring.num_vars() - previous_layer) / 2;
-            result.push(previous_layer);
+            result.push(layer.label_size);
         }
+        result.push(circuit.inputs.len().ilog2() as usize);
         result
     }
 
@@ -495,29 +484,30 @@ impl<F: Field> GKR<F> {
     pub fn evaluate(circuit: &Circuit<F>) -> Vec<Vec<F>> {
         let mut result = Vec::with_capacity(circuit.layers.len());
         let mut previous_layer = &circuit.inputs;
+        let mut input_vars = ilog2_ceil(previous_layer.len() as u64) as usize;
         result.push(previous_layer.clone());
         for layer in circuit.layers.iter().rev() {
-            let output_vars = layer
-                .gates
-                .first()
-                .expect("at least one gate type")
-                .wiring
-                .outputs;
+            let output_vars = layer.label_size;
             let mut evaluations = vec![F::ZERO; 1 << output_vars];
 
             for gate in &layer.gates {
                 let wiring = &gate.wiring;
-                let gate_output = wiring.outputs;
-
-                assert_eq!(gate_output, output_vars);
-                for (out_gate, left_gate, right_gate) in &wiring.evaluations() {
-                    let input_left = previous_layer[*left_gate];
-                    let input_right = previous_layer[*right_gate];
-                    evaluations[*out_gate] += gate.gate.evaluate(input_left, input_right);
+                for (out_gate, maybe_gates) in wiring
+                    .to_dnf()
+                    .to_evaluation_graph(output_vars, input_vars)
+                    .into_iter()
+                    .enumerate()
+                {
+                    if let Some((left_gate, right_gate)) = maybe_gates {
+                        let input_left = previous_layer[left_gate];
+                        let input_right = previous_layer[right_gate];
+                        evaluations[out_gate] += gate.gate.evaluate(input_left, input_right);
+                    }
                 }
             }
             result.push(evaluations);
             previous_layer = result.last().unwrap();
+            input_vars = output_vars;
         }
         result.reverse();
         result
