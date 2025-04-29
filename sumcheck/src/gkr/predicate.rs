@@ -1,5 +1,4 @@
 use core::{
-    iter::Product,
     ops::{Add, AddAssign, Mul, MulAssign, RangeInclusive},
     usize,
 };
@@ -7,7 +6,6 @@ use std::collections::HashMap;
 
 use ark_ff::Field;
 use ark_poly::{Polynomial, SparseMultilinearExtension};
-use tracing::warn;
 
 use super::graph::to_evaluation_graph;
 
@@ -104,6 +102,20 @@ pub fn eq(vars: &[u8]) -> PredicateExpr {
     }))
 }
 
+// TODO: maaaaaybe, just maybe, rethink the naming of these predicates :D
+pub fn eq_c(vars: &[u8], c: usize) -> PredicateExpr {
+    let mut var_mask = 0;
+    for var in vars {
+        let var = 1 << var;
+        assert_eq!(var_mask & var, 0);
+        var_mask |= var;
+    }
+    PredicateExpr::Base(BasePredicate::Eq(EqPredicate {
+        var_mask,
+        is_on: Some(c == 1),
+    }))
+}
+
 pub fn eq_vec(vars: &[RangeInclusive<u8>]) -> PredicateExpr {
     let count = vars[0].len();
     let vars = vars
@@ -117,6 +129,81 @@ pub fn eq_vec(vars: &[RangeInclusive<u8>]) -> PredicateExpr {
         predicate *= eq(&current_var)
     }
     predicate
+}
+
+pub fn cmp_leq(vars: &[RangeInclusive<u8>], consts: &[usize]) -> PredicateExpr {
+    for range in vars {
+        assert_eq!(
+            range.len(),
+            consts.len(),
+            "all vectors must be of equal length"
+        );
+    }
+
+    let vars = vars
+        .iter()
+        .map(|x| x.clone().collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+
+    // e.g. <= 1 0 1
+    // if top bit 0, done
+    // if top bit 1, continue recursively
+
+    // e.g. <= 0 1 1
+    // top bit must be zero. NO MORE CHECKS ARE NEEDED
+    // if second bit 0, done
+    // if second bit 1, continue recursively
+
+    // e.g. <= 1 0 1 0
+    // if top bit 0, done
+    // if top bit 1, continue recursively
+    // next bit must be zero
+    // if next bit 0, done
+    // if next bit 1, the next must be zero
+
+    // e.g. <= 0 1 1 0 0 1
+    // top bit must be zero
+    // if second bit 0, done, check equality
+    // if second bit 1, continue recursively
+
+    let mut checked_true: Vec<PredicateExpr> = Vec::new();
+    let mut current: Option<PredicateExpr> = None;
+
+    // loops from the most significant bit (the last one first)
+    // TODO: trailing ones don't need to add new predicates
+    for (index, &c) in consts.iter().enumerate().rev() {
+        assert!(c == 0 || c == 1);
+        let vars_at_index = vars.iter().map(|v| v[index]).collect::<Vec<_>>();
+
+        for already_true in checked_true.iter_mut() {
+            *already_true *= eq(&vars_at_index);
+        }
+
+        if c == 0 {
+            current = mul_optional(current, eq_c(&vars_at_index, 0));
+        } else if c == 1 {
+            checked_true.push(mul_optional(current.clone(), eq_c(&vars_at_index, 0)).unwrap());
+            current = mul_optional(current, eq_c(&vars_at_index, 1));
+        }
+    }
+
+    if let Some(current) = current {
+        checked_true.push(current);
+    }
+
+    let mut iter = checked_true.into_iter();
+    let mut result = iter.next().unwrap();
+    while let Some(predicate) = iter.next() {
+        result += predicate;
+    }
+
+    println!("cmp result {result:?}");
+
+    result
+}
+
+fn mul_optional(current: Option<PredicateExpr>, predicate: PredicateExpr) -> Option<PredicateExpr> {
+    current.map(|x| x * predicate.clone()).or(Some(predicate))
 }
 
 type VarRotation = (RangeInclusive<u8>, usize, usize);

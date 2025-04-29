@@ -2,7 +2,7 @@ use ark_bn254::Fr;
 use ark_sumcheck::{
     gkr::{
         Circuit, GKR, Gate, Layer, LayerGate,
-        predicate::{eq, eq_const, eq_vec, rot},
+        predicate::{cmp_leq, eq, eq_const, eq_vec, rot},
         util::u64_to_bits,
     },
     rng::{Blake2b512Rng, FeedableRNG},
@@ -30,7 +30,6 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
             // the current implementation assumes it starts with clean slate, which will
             // not be true in subsequent rounds!
             // TODO: put additional constraints on xor(prev, left) so it doesn't spill beyond 5 columns
-            // TODO: put additional constraints so z(9..=11) <= 0b101
             Layer {
                 label_size: 12,
                 gates: {
@@ -42,10 +41,10 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                                         b(0)..=b(8),
                                     ])
 
-                                    * eq_vec(&[
-                                        z(9)..=z(11),              // TODO: need eq_cmp to constraint to
-                                        a(9)..=a(11),              // z(9..=11) <= 0b101 per comment above
-                                    ])
+                                    * cmp_leq(&[
+                                        z(9)..=z(11),
+                                        a(9)..=a(11),
+                                    ], &[1, 0, 1])
 
                                     * eq_const(b(11), 1)
                                     * eq_const(b(10), 0)           // b is the aux array in the row 0b101
@@ -220,8 +219,8 @@ fn test_keccak_f() {
 
     let gkr_output = [
         26, 9, 13, 29, 47, 26, 8, 15, 31, 14, 8, 22, 34, 26, 8, 15, 16, 3, 3, 19, 37, 26, 8, 15,
-        21, 24, 30, 12, 56, 26, 8, 15, 14, 29, 25, 9, 51, 26, 8, 15, 0, 0, 0, 0, 0, 0, 0, 0, 31,
-        15, 10, 21, 38, 26, 8, 15, 14, 1, 1, 29, 35, 26, 8, 15,
+        21, 24, 30, 12, 56, 26, 8, 15, 14, 29, 25, 9, 51, 26, 8, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ];
 
     for row in 0..8 {
