@@ -1,9 +1,7 @@
 use ark_bn254::Fr;
 use ark_sumcheck::{
     gkr::{
-        Circuit, GKR, Gate, Layer, LayerGate,
-        predicate::{PredicateSum, eq, eq_const, eq_vec},
-        util::u64_to_bits,
+        predicate::{eq, eq_const, eq_vec, rot, PredicateSum}, util::u64_to_bits, Circuit, Gate, Layer, LayerGate, GKR
     },
     rng::{Blake2b512Rng, FeedableRNG},
 };
@@ -25,6 +23,109 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
         inputs: u64_to_bits(&input),
         outputs: u64_to_bits(&output),
         layers: vec![
+            // keccak_f theta, xor state columns with aux array
+            // Layer {
+            //     gates: {
+            //         vec![
+            //             LayerGate {
+            //                 gate: Gate::Left,
+            //                 wiring: PredicateSum {
+            //                     predicates: vec![eq_vec(&[
+            //                         z(0)..=z(11),
+            //                         a(0)..=a(11), // all original state elements are copied to z
+            //                         b(0)..=b(11),
+            //                     ])],
+            //                     inputs,
+            //                     outputs,
+            //                 },
+            //             },
+            //             LayerGate {
+            //                 gate: Gate::Xor,
+            //                 wiring: PredicateSum {
+            //                     predicates: vec![
+            //                         rot(
+            //                             (z(0)..=z(5), 0, 64),
+            //                             (a(0)..=a(5), 0, 64),
+            //                             (b(0)..=b(5), 63, 64),     // rotate_left(1)
+            //                         )
+
+            //                         * rot(
+            //                             (z(6)..=z(8), 0, 5),
+            //                             (a(6)..=a(8), 4, 5),       // add 4 mod 5, i.e. select previous element
+            //                             (b(6)..=b(8), 1, 5),       // add 1 mod 5, i.e. select next element
+            //                         )
+
+            //                         * eq_const(a(11), 1)
+            //                         * eq_const(a(10), 1)           // a is xor(column)
+            //                         * eq_const(a(9), 1)
+
+            //                         * eq_const(b(11), 1)
+            //                         * eq_const(b(10), 1)           // b is xor(column)
+            //                         * eq_const(b(9), 1)
+
+            //                         * eq_const(z(11), 1)
+            //                         * eq_const(z(10), 0)           // z is xor(prev, next) in the row 0b101
+            //                         * eq_const(z(9), 1),
+            //                     ],
+            //                     inputs,
+            //                     outputs,
+            //                 },
+            //             },
+            //         ]
+            //     },
+            // },            
+            // aux array = xor(prev, next.rotate_left(1))
+            Layer {
+                gates: {
+                    vec![
+                        LayerGate {
+                            gate: Gate::Left,
+                            wiring: PredicateSum {
+                                predicates: vec![eq_vec(&[
+                                    z(0)..=z(11),
+                                    a(0)..=a(11), // all original state elements are copied to z
+                                    b(0)..=b(11),
+                                ])],
+                                inputs,
+                                outputs,
+                            },
+                        },
+                        LayerGate {
+                            gate: Gate::Xor,
+                            wiring: PredicateSum {
+                                predicates: vec![
+                                    rot(
+                                        (z(0)..=z(5), 0, 64),
+                                        (a(0)..=a(5), 0, 64),
+                                        (b(0)..=b(5), 63, 64),     // rotate_left(1)
+                                    )
+
+                                    * rot(
+                                        (z(6)..=z(8), 0, 5),
+                                        (a(6)..=a(8), 4, 5),       // add 4 mod 5, i.e. select previous element
+                                        (b(6)..=b(8), 1, 5),       // add 1 mod 5, i.e. select next element
+                                    )
+
+                                    * eq_const(a(11), 1)
+                                    * eq_const(a(10), 1)           // a is xor(column)
+                                    * eq_const(a(9), 1)
+
+                                    * eq_const(b(11), 1)
+                                    * eq_const(b(10), 1)           // b is xor(column)
+                                    * eq_const(b(9), 1)
+
+                                    * eq_const(z(11), 1)
+                                    * eq_const(z(10), 0)           // z is xor(prev, next) in the row 0b101
+                                    * eq_const(z(9), 1),
+                                ],
+                                inputs,
+                                outputs,
+                            },
+                        },
+                    ]
+                },
+            },
+            // Xor the entire column (4 xors, 3 layers) into aux array
             Layer {
                 gates: {
                     vec![
@@ -51,17 +152,17 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                                         a(0)..=a(8),                   // same element offset for z, a, b
                                         b(0)..=b(8),
                                     ])
-                                        * eq_const(z(11), 1)
-                                        * eq_const(z(10), 1)           // z stored in the last row of state
-                                        * eq_const(z(9), 1)
-
                                         * eq_const(a(11), 1)
                                         * eq_const(a(10), 1)           // a is xor(0, 1)
                                         * eq_const(a(9), 0)
 
                                         * eq_const(b(11), 1)
                                         * eq_const(b(10), 1)           // b is xor(2, 3, 4)
-                                        * eq_const(b(9), 1),
+                                        * eq_const(b(9), 1)
+
+                                        * eq_const(z(11), 1)
+                                        * eq_const(z(10), 1)           // z is xor(0, 1, 2, 3, 4) in the last row
+                                        * eq_const(z(9), 1),
                                 ],
                                 inputs,
                                 outputs,
@@ -203,6 +304,10 @@ fn test_keccak_f() {
     }
     println!("gkr_input  {gkr_input:x?}");
     println!("gkr_output {gkr_output:x?}");
+
+    let gkr_output = [
+        0, 1, 2, 3, 4, 0, 0, 0, 5, 6, 7, 8, 9, 0, 0, 0, 10, 11, 12, 13, 14, 0, 0, 0, 15, 16, 17, 18, 19, 0, 0, 0, 20, 21, 22, 23, 24, 0, 0, 0, 26, 8, 15, 30, 43, 26, 8, 15, 5, 7, 5, 11, 13, 0, 0, 0, 20, 9, 14, 3, 8, 0, 0, 0
+    ];
 
     gkr_pred_theta(&gkr_input, &gkr_output);
 }

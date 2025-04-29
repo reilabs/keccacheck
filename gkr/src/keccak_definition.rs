@@ -13,6 +13,11 @@ pub fn keccak_round(a: &mut [u64; 25], _rc: u64) {
         // for each column:
         //   d = xor previous and (next with bits rotated) (wrapping)
         //   for each state element: element xor d
+        let d_test1 = array[(x + 4) % 5] ^ array[(x + 1) % 5];
+        let d_test2 = array[(x + 4) % 5] ^ array[(x + 1) % 5].rotate_left(1);
+
+        println!("xor(-1, +1) = {d_test1:x?}, xor(-1, rot(+1)) = {d_test2:x?},");
+
         let d = array[(x + 4) % 5] ^ array[(x + 1) % 5].rotate_left(1);
         for y_count in 0..5 {
             let y = y_count * 5;

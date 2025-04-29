@@ -12,15 +12,16 @@ use tracing::warn;
 /// a predicate that the verifier will evaluate by interpolation
 pub struct SparseEvaluationPredicate {
     pub vars: Vec<u8>,
+    pub out_len: usize,
     pub mle: HashMap<usize, usize>,
 }
 
 impl SparseEvaluationPredicate {
-    pub fn evaluate<F: Field>(&self, point: &[F], outputs: usize, inputs: usize) -> F {
+    pub fn evaluate<F: Field>(&self, point: &[F]) -> F {
         let evaluations = self
             .mle
             .iter()
-            .map(|(out, inp)| (out + (inp << outputs), F::ONE))
+            .map(|(out, inp)| (out + (inp << self.out_len), F::ONE))
             .collect::<Vec<_>>();
 
         let point = self
@@ -29,7 +30,10 @@ impl SparseEvaluationPredicate {
             .map(|var| point[*var as usize])
             .collect::<Vec<_>>();
 
-        SparseMultilinearExtension::from_evaluations(outputs + 2 * inputs, &evaluations)
+        println!("SparseEvaluationPredicate vars {:?} out len {:?}", self.vars, self.out_len);
+        println!("point {:?}, mle {:?}", point.len(), self.mle);
+
+        SparseMultilinearExtension::from_evaluations(self.vars.len(), &evaluations)
             .evaluate(&point)
     }
 }
@@ -70,7 +74,7 @@ pub struct Predicate {
 }
 
 impl Predicate {
-    pub fn evaluate<F: Field>(&self, point: &[F], outputs: usize, inputs: usize) -> F {
+    pub fn evaluate<F: Field>(&self, point: &[F]) -> F {
         let mut result = F::ONE;
         for pred in &self.eq_predicates {
             result *= pred.evaluate(point);
@@ -80,7 +84,7 @@ impl Predicate {
         }
         for pred in &self.sparse_predicates {
             //todo!();
-            result *= pred.evaluate(point, outputs, inputs);
+            result *= pred.evaluate(point);
             if result.is_zero() {
                 return result;
             }
@@ -276,26 +280,40 @@ pub fn eq_vec(vars: &[RangeInclusive<u8>]) -> Predicate {
     predicate
 }
 
-pub fn rot<const N: u8>(out: RangeInclusive<u8>, input: RangeInclusive<u8>) -> Predicate {
-    let len = out.len();
-    assert_eq!(input.len(), len);
+type VarRotation = (RangeInclusive<u8>, usize, usize);
 
-    let vars = out.chain(input).collect::<Vec<_>>();
+pub fn rot(out: VarRotation, in1: VarRotation, in2: VarRotation) -> Predicate {
+    let len = out.0.len();
+    assert_eq!(in1.0.len(), len);
+    assert_eq!(in2.0.len(), len);
+
+    let (in1_vars, in1_add, in1_mod) = in1;
+    let (in2_vars, in2_add, in2_mod) = in2;
+
+    let vars = out.0.chain(in1_vars).chain(in2_vars).collect::<Vec<_>>();
     println!("rot inner vars {vars:?}");
 
     let evaluations = (0..(1 << len))
         .filter_map(|out_label| {
-            let in_label = (out_label + N as usize) % (1 << len);
+            let in1_label = (out_label + in1_add) % in1_mod;
+            let in2_label = (out_label + in2_add) % in2_mod;
+
+            println!("rot {out_label:x}: a {in1_label:x?} b {in2_label:x?}");
+
+            let in_label = (in2_label << len) + in1_label;
             Some((out_label, in_label))
         })
         .collect::<Vec<_>>();
 
     println!("rot evaluations {evaluations:x?}");
 
+    // todo!();
+
     Predicate {
         eq_predicates: Default::default(),
         sparse_predicates: vec![SparseEvaluationPredicate {
             vars,
+            out_len: len,
             mle: evaluations.into_iter().collect(),
         }],
     }
@@ -342,7 +360,7 @@ impl PredicateSum {
     pub fn evaluate<F: Field>(&self, point: &Vec<F>) -> F {
         self.predicates
             .iter()
-            .map(|predicate| predicate.evaluate(point, self.outputs, self.inputs))
+            .map(|predicate| predicate.evaluate(point))
             .fold(F::ZERO, |acc, e| acc + e)
     }
 

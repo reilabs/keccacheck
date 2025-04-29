@@ -64,6 +64,7 @@ impl Layer {
                         eq_predicates: vec![],
                         sparse_predicates: vec![SparseEvaluationPredicate {
                             vars: (0..(output_vars + 2 * input_vars) as u8).collect(),
+                            out_len: output_vars,
                             mle: v,
                         }],
                     }],
@@ -283,6 +284,7 @@ impl LayerGate {
                     eq_predicates: Default::default(),
                     sparse_predicates: vec![SparseEvaluationPredicate {
                         vars: (0..num_vars as u8).collect(),
+                        out_len: outputs,
                         mle: wiring
                             .into_iter()
                             .map(|(out, in1, in2)| (out, (in2 << inputs) + in1))
@@ -316,8 +318,8 @@ impl<F: Field> GKR<F> {
         let num_vars = Self::layer_sizes(circuit);
 
         if evaluations[0] != circuit.outputs {
-            println!("expect {:x?}", bits_to_u64(&circuit.outputs));
-            println!("actual {:x?}", bits_to_u64(&evaluations[0]));
+            println!("expect {:?}", bits_to_u64(&circuit.outputs));
+            println!("actual {:?}", bits_to_u64(&evaluations[0]));
             panic!("evaluation failed");
 
             //assert_eq!(evaluations[0], circuit.outputs);
