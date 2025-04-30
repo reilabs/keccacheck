@@ -216,7 +216,7 @@ impl<F: Field> GKR<F> {
 
     /// Takes a GKR circuit definition and returns value assignments
     /// in all intermediate layers
-    pub fn evaluate(graph: &EvaluationGraph, instance: &Instance<F>) -> Vec<Vec<F>> {
+    pub fn evaluate(graph: &EvaluationGraph<F>, instance: &Instance<F>) -> Vec<Vec<F>> {
         let mut result = Vec::with_capacity(graph.layers.len() + 1);
         let mut previous_layer = &instance.inputs;
         result.push(previous_layer.clone());
