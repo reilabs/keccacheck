@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use ark_ff::Field;
 use ark_poly::{Polynomial, SparseMultilinearExtension};
 
+use crate::gkr::graph::EvaluationEdge;
+
 use super::graph::to_evaluation_graph;
 
 pub struct VarMaskIterator(pub usize);
@@ -266,29 +268,39 @@ impl BasePredicate {
 }
 
 #[derive(Clone, Debug)]
-pub struct PredicateDnf(Vec<Vec<BasePredicate>>);
+pub struct PredicateDnf(pub Vec<Vec<BasePredicate>>);
 
 impl PredicateDnf {
     pub fn to_sum_of_sparse_mle<F: Field>(
         &self,
         outputs: usize,
         inputs: usize,
+        instance_bits: usize,
     ) -> Vec<SparseMultilinearExtension<F>> {
         self.0
             .iter()
             .map(|product| {
-                let evaluations = to_evaluation_graph(product, outputs, inputs)
+                let num_vars = outputs + (2 * inputs) + (2 * instance_bits);
+
+                let evaluations = to_evaluation_graph(product, outputs, inputs, instance_bits)
                     .into_iter()
                     .enumerate()
-                    .filter_map(|(out, pred)| {
-                        let Some((in1, in2)) = pred else {
+                    .filter_map(|(out_and_instance, pred)| {
+                        let Some(EvaluationEdge { instance, left, right }) = pred else {
                             return None;
                         };
-                        Some((out + (in1 << outputs) + (in2 << (outputs + inputs)), F::ONE))
+                        let key = out_and_instance
+                            + (instance << (outputs + instance_bits))
+                            + (left << (outputs + instance_bits + instance_bits))
+                            + (right << (outputs + instance_bits + instance_bits + inputs));
+
+                        Some((key, F::ONE))
                     })
                     .collect::<Vec<_>>();
 
-                SparseMultilinearExtension::from_evaluations(outputs + 2 * inputs, &evaluations)
+                println!("num_vars {num_vars} evaluations len {}", evaluations.len());
+
+                SparseMultilinearExtension::from_evaluations(num_vars, &evaluations)
             })
             .collect()
     }
@@ -297,10 +309,10 @@ impl PredicateDnf {
         &self,
         outputs: usize,
         inputs: usize,
-    ) -> Vec<Option<(usize, usize)>> {
+    ) -> Vec<Option<EvaluationEdge>> {
         let mut result = vec![None; 1 << outputs];
         for product in &self.0 {
-            let addend = to_evaluation_graph(product, outputs, inputs);
+            let addend = to_evaluation_graph(product, outputs, inputs, 0);
             for (i, val) in addend.iter().enumerate() {
                 if result[i].is_some() && val.is_some() {
                     panic!(

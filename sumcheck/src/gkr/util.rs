@@ -1,14 +1,14 @@
 use ark_ff::Field;
 
-pub fn ilog2_ceil(n: u64) -> u32 {
+pub fn ilog2_ceil(n: usize) -> usize {
     if n <= 1 {
         return 0;
     }
-    64 - (n - 1).leading_zeros()
+    64 - (n - 1).leading_zeros() as usize
 }
 
 pub fn u64_to_bits<F: Field>(vec: &[u64]) -> Vec<F> {
-    let size = 1 << ilog2_ceil((vec.len() * 64) as u64);
+    let size = 1 << ilog2_ceil(vec.len() * 64);
     let mut result = Vec::<F>::with_capacity(size);
     for element in vec {
         let mut element = *element;
