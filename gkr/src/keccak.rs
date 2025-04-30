@@ -2,6 +2,7 @@ use ark_bn254::Fr;
 use ark_sumcheck::{
     gkr::{
         Circuit, GKR, Gate, Instance, Layer, LayerGate,
+        compiled::CompiledCircuit,
         predicate::{cmp_leq, eq, eq_const, eq_vec, rot},
         util::u64_to_bits,
     },
@@ -195,9 +196,11 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
         outputs: u64_to_bits(&output),
     };
 
+    let compiled = CompiledCircuit::from_circuit(&circuit);
+
     println!("proving...");
     let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &circuit, &[&instance]);
+    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &[&instance]);
 
     println!("verifying...");
     let mut fs_rng = Blake2b512Rng::setup();

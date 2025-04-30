@@ -1,6 +1,6 @@
 use ark_bn254::Fr;
 use ark_sumcheck::{
-    gkr::{Circuit, GKR, Gate, Instance, Layer, LayerGate},
+    gkr::{Circuit, GKR, Gate, Instance, Layer, LayerGate, compiled::CompiledCircuit},
     rng::{Blake2b512Rng, FeedableRNG},
 };
 
@@ -35,8 +35,10 @@ fn test_gkr_basic_mul() {
         outputs: vec![36.into(), 6.into()],
     };
 
+    let compiled = CompiledCircuit::from_circuit(&circuit);
+
     let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &circuit, &[&instance]);
+    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &[&instance]);
 
     let mut fs_rng = Blake2b512Rng::setup();
     GKR::verify(&mut fs_rng, &circuit, &[&instance], &gkr_proof);
@@ -89,8 +91,10 @@ fn test_gkr_basic_add() {
         outputs: vec![24.into(), 9.into()],
     };
 
+    let compiled = CompiledCircuit::from_circuit(&circuit);
+
     let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &circuit, &[&instance]);
+    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &[&instance]);
 
     let mut fs_rng = Blake2b512Rng::setup();
     GKR::verify(&mut fs_rng, &circuit, &[&instance], &gkr_proof);
@@ -129,8 +133,10 @@ fn test_gkr_basic_id_xor() {
         outputs: vec![1.into(), 0.into()],
     };
 
+    let compiled = CompiledCircuit::from_circuit(&circuit);
+
     let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &circuit, &[&instance]);
+    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &[&instance]);
 
     let mut fs_rng = Blake2b512Rng::setup();
     GKR::verify(&mut fs_rng, &circuit, &[&instance], &gkr_proof);
