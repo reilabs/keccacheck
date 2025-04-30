@@ -1,6 +1,6 @@
 use ark_bn254::Fr;
 use ark_sumcheck::{
-    gkr::{Circuit, GKR, Gate, Layer, LayerGate},
+    gkr::{Circuit, Gate, Instance, Layer, LayerGate, GKR},
     rng::{Blake2b512Rng, FeedableRNG},
 };
 
@@ -13,9 +13,9 @@ use ark_sumcheck::{
 #[test]
 fn test_gkr_basic_mul() {
     // TODO: make it data-parallel
-    let circuit = Circuit::<Fr> {
-        inputs: vec![3.into(), 2.into(), 3.into(), 1.into()],
-        outputs: vec![36.into(), 6.into()],
+    let circuit = Circuit {
+        inputs: 2,
+        outputs: 1,
         layers: vec![
             Layer::with_builder(1, 2, |out| (Gate::Mul, 2 * out, 2 * out + 1)),
             Layer {
@@ -30,11 +30,16 @@ fn test_gkr_basic_mul() {
         ],
     };
 
-    let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &circuit);
+    let instance = Instance::<Fr> {
+        inputs: vec![3.into(), 2.into(), 3.into(), 1.into()],
+        outputs: vec![36.into(), 6.into()],
+    };
 
     let mut fs_rng = Blake2b512Rng::setup();
-    GKR::verify(&mut fs_rng, &circuit, &gkr_proof);
+    let gkr_proof = GKR::prove(&mut fs_rng, &circuit, &[&instance]);
+
+    let mut fs_rng = Blake2b512Rng::setup();
+    GKR::verify(&mut fs_rng, &circuit, &[&instance], &gkr_proof);
 }
 
 // w0:           24          9
@@ -47,9 +52,9 @@ fn test_gkr_basic_mul() {
 #[test]
 fn test_gkr_basic_add() {
     // TODO: make it data-parallel
-    let circuit = Circuit::<Fr> {
-        inputs: vec![1.into(), 2.into()],
-        outputs: vec![24.into(), 9.into()],
+    let circuit = Circuit {
+        inputs: 1,
+        outputs: 1,
         layers: vec![
             Layer {
                 label_size: 1,
@@ -79,11 +84,16 @@ fn test_gkr_basic_add() {
         ],
     };
 
-    let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &circuit);
+    let instance = Instance::<Fr> {
+        inputs: vec![1.into(), 2.into()],
+        outputs: vec![24.into(), 9.into()],
+    };
 
     let mut fs_rng = Blake2b512Rng::setup();
-    GKR::verify(&mut fs_rng, &circuit, &gkr_proof);
+    let gkr_proof = GKR::prove(&mut fs_rng, &circuit, &[&instance]);
+
+    let mut fs_rng = Blake2b512Rng::setup();
+    GKR::verify(&mut fs_rng, &circuit, &[&instance], &gkr_proof);
 }
 
 // w0:           1          0
@@ -94,9 +104,9 @@ fn test_gkr_basic_add() {
 #[test]
 fn test_gkr_basic_id_xor() {
     // TODO: make it data-parallel
-    let circuit = Circuit::<Fr> {
-        inputs: vec![1.into(), 0.into(), 1.into(), 0.into()],
-        outputs: vec![1.into(), 0.into()],
+    let circuit = Circuit {
+        inputs: 2,
+        outputs: 1,
         layers: vec![
             Layer {
                 label_size: 1,
@@ -114,9 +124,14 @@ fn test_gkr_basic_id_xor() {
         ],
     };
 
-    let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &circuit);
+    let instance = Instance::<Fr> {
+        inputs: vec![1.into(), 0.into(), 1.into(), 0.into()],
+        outputs: vec![1.into(), 0.into()],
+    };
 
     let mut fs_rng = Blake2b512Rng::setup();
-    GKR::verify(&mut fs_rng, &circuit, &gkr_proof);
+    let gkr_proof = GKR::prove(&mut fs_rng, &circuit, &[&instance]);
+
+    let mut fs_rng = Blake2b512Rng::setup();
+    GKR::verify(&mut fs_rng, &circuit, &[&instance], &gkr_proof);
 }
