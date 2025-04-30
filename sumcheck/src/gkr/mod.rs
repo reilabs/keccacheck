@@ -1,7 +1,3 @@
-//! Implementation of GKR algorithm as described in [XZZPS19](https://eprint.iacr.org/2019/317.pdf#subsection.3.3) (Section 3.3)
-//!
-//! GKR will use `gkr_round_sumcheck` as a subroutine.
-
 use core::{marker::PhantomData, usize};
 use std::collections::HashMap;
 
