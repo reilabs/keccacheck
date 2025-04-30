@@ -11,7 +11,7 @@ use ark_sumcheck::{
 
 use crate::keccak_definition::{ROUND_CONSTANTS, keccak_round};
 
-pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
+pub fn gkr_pred_theta(instances: &[Instance<Fr>]) {
     // inputs: all state bits: 25 * 64 < 32 * 64 = (1 << 11)
     // layer 1-3: xor all columns (array), but also copy inputs. fits in (1 << 11)
     // layer 4: array is now xor of previous and (next rotated one left), also copy inputs. fits in (1 << 11)
@@ -191,49 +191,62 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
         ],
     };
 
-    let instances = vec![Instance::<Fr> {
-        inputs: u64_to_bits(&input),
-        outputs: u64_to_bits(&output),
-    }];
-
     let compiled = CompiledCircuit::from_circuit(&circuit);
 
     println!("proving...");
     let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &instances);
+    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, instances);
 
     println!("verifying...");
     let mut fs_rng = Blake2b512Rng::setup();
-    GKR::verify(&mut fs_rng, &circuit, &instances, &gkr_proof);
+    GKR::verify(&mut fs_rng, &circuit, instances, &gkr_proof);
 }
 
 #[test]
 fn test_keccak_f() {
-    let input = [
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-    ];
+    let instances = 4;
+
+    let instance_size = 25;
+
+    let input = (0..(instances * instance_size)).map(|x| x as u64).collect::<Vec<_>>();
     let mut output = input.clone();
-    keccak_round(&mut output, ROUND_CONSTANTS[0]);
 
-    println!("keccak_round {output:x?}");
-
-    let mut gkr_input = vec![0; 8 * 8];
-    let mut gkr_output = vec![0; 8 * 8];
-
-    for row in 0..8 {
-        for col in 0..8 {
-            if row < 5 && col < 5 {
-                gkr_input[row * 8 + col] = input[row * 5 + col];
-                gkr_output[row * 8 + col] = output[row * 5 + col];
-            } else {
-                gkr_input[row * 8 + col] = 0;
-                gkr_output[row * 8 + col] = 0;
-            }
-        }
+    for i in 0..instances {
+        let output_slice = &mut output[(i*instance_size)..((i+1)*instance_size)];
+        keccak_round(output_slice, ROUND_CONSTANTS[0]);
+        println!("keccak_round {output_slice:x?}");
     }
 
-    println!("gkr_input  {gkr_input:x?}");
-    println!("gkr_output {gkr_output:x?}");
+    let gkr_instance_size = 64;
 
-    gkr_pred_theta(&gkr_input, &gkr_output);
+    let mut gkr_input = vec![0; instances * 8 * 8];
+    let mut gkr_output = vec![0; instances * 8 * 8];
+
+    let mut gkr_instances = Vec::with_capacity(instances);
+
+    for i in 0..instances {
+        let gkr_input = &mut gkr_input[(i * gkr_instance_size)..((i+1) * gkr_instance_size)];
+        let gkr_output = &mut gkr_output[(i * gkr_instance_size)..((i+1) * gkr_instance_size)];
+
+        for row in 0..8 {
+            for col in 0..8 {
+                if row < 5 && col < 5 {
+                    gkr_input[row * 8 + col] = input[i * instance_size + row * 5 + col];
+                    gkr_output[row * 8 + col] = output[i * instance_size + row * 5 + col];
+                } else {
+                    gkr_input[row * 8 + col] = 0;
+                    gkr_output[row * 8 + col] = 0;
+                }
+            }
+        }
+
+        println!("gkr_input  {gkr_input:x?}");
+        println!("gkr_output {gkr_output:x?}");
+
+        gkr_instances.push(Instance::<Fr> {
+            inputs: u64_to_bits(gkr_input),
+            outputs: u64_to_bits(gkr_output),    
+        });
+    }
+    gkr_pred_theta(&gkr_instances);
 }

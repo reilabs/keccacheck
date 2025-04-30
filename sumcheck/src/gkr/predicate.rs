@@ -197,8 +197,6 @@ pub fn cmp_leq(vars: &[RangeInclusive<u8>], consts: &[usize]) -> PredicateExpr {
         result += predicate;
     }
 
-    println!("cmp result {result:?}");
-
     result
 }
 

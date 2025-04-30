@@ -30,18 +30,18 @@ fn test_gkr_basic_mul() {
         ],
     };
 
-    let instance = Instance::<Fr> {
+    let instances = vec![Instance::<Fr> {
         inputs: vec![3.into(), 2.into(), 3.into(), 1.into()],
         outputs: vec![36.into(), 6.into()],
-    };
+    }];
 
     let compiled = CompiledCircuit::from_circuit(&circuit);
 
     let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &[&instance]);
+    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &instances);
 
     let mut fs_rng = Blake2b512Rng::setup();
-    GKR::verify(&mut fs_rng, &circuit, &[&instance], &gkr_proof);
+    GKR::verify(&mut fs_rng, &circuit, &instances, &gkr_proof);
 }
 
 // w0:           24          9
@@ -86,18 +86,18 @@ fn test_gkr_basic_add() {
         ],
     };
 
-    let instance = Instance::<Fr> {
+    let instances = vec![Instance::<Fr> {
         inputs: vec![1.into(), 2.into()],
         outputs: vec![24.into(), 9.into()],
-    };
+    }];
 
     let compiled = CompiledCircuit::from_circuit(&circuit);
 
     let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &[&instance]);
+    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &instances);
 
     let mut fs_rng = Blake2b512Rng::setup();
-    GKR::verify(&mut fs_rng, &circuit, &[&instance], &gkr_proof);
+    GKR::verify(&mut fs_rng, &circuit, &instances, &gkr_proof);
 }
 
 // w0:           1          0
@@ -128,16 +128,16 @@ fn test_gkr_basic_id_xor() {
         ],
     };
 
-    let instance = Instance::<Fr> {
+    let instances = vec![Instance::<Fr> {
         inputs: vec![1.into(), 0.into(), 1.into(), 0.into()],
         outputs: vec![1.into(), 0.into()],
-    };
+    }];
 
     let compiled = CompiledCircuit::from_circuit(&circuit);
 
     let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &[&instance]);
+    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &instances);
 
     let mut fs_rng = Blake2b512Rng::setup();
-    GKR::verify(&mut fs_rng, &circuit, &[&instance], &gkr_proof);
+    GKR::verify(&mut fs_rng, &circuit, &instances, &gkr_proof);
 }

@@ -44,7 +44,7 @@ fn test_cmp() {
         }],
     };
 
-    let instance = Instance::<Fr> {
+    let instances = vec![Instance::<Fr> {
         //000 001 010 011 101
         inputs: vec![
             1.into(),
@@ -66,15 +66,13 @@ fn test_cmp() {
             0.into(),
             0.into(),
         ],
-    };
+    }];
 
     let compiled = CompiledCircuit::from_circuit(&circuit);
 
-    println!("proving...");
     let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &[&instance]);
+    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &instances);
 
-    println!("verifying...");
     let mut fs_rng = Blake2b512Rng::setup();
-    GKR::verify(&mut fs_rng, &circuit, &[&instance], &gkr_proof);
+    GKR::verify(&mut fs_rng, &circuit, &instances, &gkr_proof);
 }
