@@ -1,8 +1,7 @@
 use ark_bn254::Fr;
 use ark_sumcheck::{
     gkr::{
-        Circuit, GKR, Gate, Layer, LayerGate,
-        predicate::{eq, eq_const},
+        predicate::{eq, eq_const}, Circuit, Gate, Instance, Layer, LayerGate, GKR
     },
     rng::{Blake2b512Rng, FeedableRNG},
 };
@@ -15,28 +14,10 @@ use ark_sumcheck::{
 // w2: 3     2     3     1
 #[test]
 fn test_cmp() {
-    let circuit = Circuit::<Fr> {
+    let circuit = Circuit {
         //000 001 010 011 101
-        inputs: vec![
-            1.into(),
-            2.into(),
-            3.into(),
-            4.into(),
-            5.into(),
-            6.into(),
-            7.into(),
-            8.into(),
-        ],
-        outputs: vec![
-            1.into(),
-            2.into(),
-            3.into(),
-            4.into(),
-            5.into(),
-            6.into(),
-            0.into(),
-            0.into(),
-        ],
+        inputs: 3,
+        outputs: 3,
         layers: vec![Layer {
             label_size: 3,
             gates: vec![LayerGate {
@@ -61,11 +42,35 @@ fn test_cmp() {
         }],
     };
 
+    let instance = Instance::<Fr> {
+        //000 001 010 011 101
+        inputs: vec![
+            1.into(),
+            2.into(),
+            3.into(),
+            4.into(),
+            5.into(),
+            6.into(),
+            7.into(),
+            8.into(),
+        ],
+        outputs: vec![
+            1.into(),
+            2.into(),
+            3.into(),
+            4.into(),
+            5.into(),
+            6.into(),
+            0.into(),
+            0.into(),
+        ],
+    };
+
     println!("proving...");
     let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &circuit);
+    let gkr_proof = GKR::prove(&mut fs_rng, &circuit, &[&instance]);
 
     println!("verifying...");
     let mut fs_rng = Blake2b512Rng::setup();
-    GKR::verify(&mut fs_rng, &circuit, &gkr_proof);
+    GKR::verify(&mut fs_rng, &circuit, &[&instance], &gkr_proof);
 }

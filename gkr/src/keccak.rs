@@ -1,9 +1,7 @@
 use ark_bn254::Fr;
 use ark_sumcheck::{
     gkr::{
-        Circuit, GKR, Gate, Layer, LayerGate,
-        predicate::{cmp_leq, eq, eq_const, eq_vec, rot},
-        util::u64_to_bits,
+        predicate::{cmp_leq, eq, eq_const, eq_vec, rot}, util::u64_to_bits, Circuit, Gate, Instance, Layer, LayerGate, GKR
     },
     rng::{Blake2b512Rng, FeedableRNG},
 };
@@ -21,9 +19,9 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
     let a = |i: u8| i + outputs as u8;
     let b = |i: u8| i + outputs as u8 + inputs as u8;
 
-    let circuit = Circuit::<Fr> {
-        inputs: u64_to_bits(&input),
-        outputs: u64_to_bits(&output),
+    let circuit = Circuit {
+        inputs,
+        outputs,
         layers: vec![
             // keccak_f theta, xor state columns with aux array
             Layer {
@@ -190,13 +188,18 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
         ],
     };
 
+    let instance = Instance::<Fr> {
+        inputs: u64_to_bits(&input),
+        outputs: u64_to_bits(&output),
+    };
+
     println!("proving...");
     let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &circuit);
+    let gkr_proof = GKR::prove(&mut fs_rng, &circuit, &[&instance]);
 
     println!("verifying...");
     let mut fs_rng = Blake2b512Rng::setup();
-    GKR::verify(&mut fs_rng, &circuit, &gkr_proof);
+    GKR::verify(&mut fs_rng, &circuit, &[&instance], &gkr_proof);
 }
 
 #[test]

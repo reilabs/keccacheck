@@ -21,14 +21,34 @@ pub mod graph;
 pub mod predicate;
 pub mod util;
 
-/// GKR circuit definition
-pub struct Circuit<F: Field> {
+/// GKR problem instance
+pub struct Instance<F: Field> {
     /// GKR input data
     pub inputs: Vec<F>,
     /// GKR output data
     pub outputs: Vec<F>,
+}
+
+/// GKR circuit definition
+pub struct Circuit {
+    /// GKR input size
+    pub inputs: usize,
+    /// GKR output size
+    pub outputs: usize,
     /// GKR circuit layers
     pub layers: Vec<Layer>,
+}
+
+pub struct EvaluationGraph {
+    pub layers: Vec<EvaluationLayer>,
+}
+
+pub struct EvaluationLayer {
+    pub gates: Vec<EvaluationGate>,
+}
+
+pub struct EvaluationGate {
+    pub graph: Vec<(usize, usize)>,
 }
 
 /// Single GKR layer (round)
@@ -305,12 +325,15 @@ pub struct GKRProof<F: Field> {
 
 impl<F: Field> GKR<F> {
     /// Takes a GKR Circuit and proves the output.
-    pub fn prove<R: FeedableRNG>(rng: &mut R, circuit: &Circuit<F>) -> GKRProof<F> {
-        let evaluations = Self::evaluate(circuit);
+    pub fn prove<R: FeedableRNG>(rng: &mut R, circuit: &Circuit, instances: &[&Instance<F>]) -> GKRProof<F> {
+        assert_eq!(instances.len(), 1, "currently only one instance supported");
+        let instance = &instances[0];
+
+        let evaluations = Self::evaluate(circuit, instance);
         let num_vars = Self::layer_sizes(circuit);
 
-        if evaluations[0] != circuit.outputs {
-            println!("expect {:x?}", bits_to_u64(&circuit.outputs));
+        if evaluations[0] != instance.outputs {
+            println!("expect {:x?}", bits_to_u64(&instance.outputs));
             println!("actual {:x?}", bits_to_u64(&evaluations[0]));
             panic!("evaluation failed");
 
@@ -390,7 +413,10 @@ impl<F: Field> GKR<F> {
     }
 
     /// Verifies a proof of a GKR circuit execution.
-    pub fn verify<R: FeedableRNG>(rng: &mut R, circuit: &Circuit<F>, gkr_proof: &GKRProof<F>) {
+    pub fn verify<R: FeedableRNG>(rng: &mut R, circuit: &Circuit, instances: &[&Instance<F>], gkr_proof: &GKRProof<F>) {
+        assert_eq!(instances.len(), 1, "currently only one instance supported");
+        let instance = instances[0];
+
         let num_vars = Self::layer_sizes(circuit);
 
         let (mut u, mut v) = Default::default();
@@ -400,8 +426,8 @@ impl<F: Field> GKR<F> {
             if i == 0 {
                 let r_1 = (0..num_vars[0]).map(|_| F::rand(rng)).collect::<Vec<_>>();
                 let w_0 = DenseMultilinearExtension::from_evaluations_slice(
-                    circuit.outputs.len().ilog2() as usize,
-                    &circuit.outputs,
+                    circuit.outputs,
+                    &instance.outputs,
                 );
                 let expected_sum = w_0.evaluate(&r_1);
                 let proof = &gkr_proof.rounds[i];
@@ -433,8 +459,8 @@ impl<F: Field> GKR<F> {
 
                 // verify last round matches actual inputs
                 let w_n = DenseMultilinearExtension::from_evaluations_slice(
-                    circuit.inputs.len().ilog2() as usize,
-                    &circuit.inputs,
+                    circuit.inputs,
+                    &instance.inputs,
                 );
                 assert_eq!(w_n.evaluate(&subclaim.u), subclaim.w_u);
                 assert_eq!(w_n.evaluate(&subclaim.v), subclaim.w_v);
@@ -476,20 +502,20 @@ impl<F: Field> GKR<F> {
 
     /// Takes a GKR circuit definition and returns value assignments
     /// in all intermediate layers
-    pub fn layer_sizes(circuit: &Circuit<F>) -> Vec<usize> {
+    pub fn layer_sizes(circuit: &Circuit) -> Vec<usize> {
         let mut result = Vec::with_capacity(circuit.layers.len() + 1);
         for layer in &circuit.layers {
             result.push(layer.label_size);
         }
-        result.push(circuit.inputs.len().ilog2() as usize);
+        result.push(circuit.inputs);
         result
     }
 
     /// Takes a GKR circuit definition and returns value assignments
     /// in all intermediate layers
-    pub fn evaluate(circuit: &Circuit<F>) -> Vec<Vec<F>> {
+    pub fn evaluate(circuit: &Circuit, instance: &Instance<F>) -> Vec<Vec<F>> {
         let mut result = Vec::with_capacity(circuit.layers.len());
-        let mut previous_layer = &circuit.inputs;
+        let mut previous_layer = &instance.inputs;
         let mut input_vars = ilog2_ceil(previous_layer.len() as u64) as usize;
         result.push(previous_layer.clone());
         for layer in circuit.layers.iter().rev() {
