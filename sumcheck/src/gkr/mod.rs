@@ -1,16 +1,14 @@
 use core::{marker::PhantomData, usize};
-use std::collections::HashMap;
 
 use ark_ff::Field;
-use ark_poly::{
-    DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
-};
+use ark_poly::{DenseMultilinearExtension, Polynomial};
+pub use circuit::{Circuit, Layer, LayerGate};
+use compiled::EvaluationGraph;
 pub use gate::Gate;
-use predicate::{BasePredicate, PredicateExpr, SparseEvaluationPredicate};
 use util::bits_to_u64;
 
 use crate::{
-    gkr_round_sumcheck::{data_structures::GKRRoundProof, GKRFunction, GKRRound, GKRRoundSumcheck},
+    gkr_round_sumcheck::{data_structures::GKRRoundProof, GKRRound, GKRRoundSumcheck},
     rng::FeedableRNG,
 };
 
@@ -27,144 +25,6 @@ pub struct Instance<F: Field> {
     pub inputs: Vec<F>,
     /// GKR output data
     pub outputs: Vec<F>,
-}
-
-/// GKR circuit definition
-pub struct Circuit {
-    /// GKR input size
-    pub input_bits: usize,
-    /// GKR output size
-    pub output_bits: usize,
-    /// GKR circuit layers
-    pub layers: Vec<Layer>,
-}
-
-impl Circuit {
-    pub fn to_evaluation_graph(&self) -> EvaluationGraph {
-        let mut input_bits = self.input_bits;
-
-        let mut layers = Vec::with_capacity(self.layers.len());
-        for layer in self.layers.iter().rev() {
-            let layer_bits = layer.layer_bits;
-            let gates = layer
-                .gates
-                .iter()
-                .map(|gate| {
-                    let wiring = &gate.wiring;
-                    let graph = wiring.to_dnf().to_evaluation_graph(layer_bits, input_bits);
-
-                    EvaluationGate {
-                        gate: gate.gate,
-                        graph,
-                    }
-                })
-                .collect();
-
-            input_bits = layer_bits;
-
-            layers.push(EvaluationLayer { layer_bits, gates });
-        }
-        layers.reverse();
-        EvaluationGraph { layers }
-    }
-}
-
-#[derive(Debug)]
-pub struct EvaluationGraph {
-    pub layers: Vec<EvaluationLayer>,
-}
-
-#[derive(Debug)]
-pub struct EvaluationLayer {
-    /// number of variables in the layer
-    pub layer_bits: usize,
-    /// all gate types in a layer    
-    pub gates: Vec<EvaluationGate>,
-}
-
-#[derive(Debug)]
-pub struct EvaluationGate {
-    pub gate: Gate,
-    pub graph: Vec<Option<(usize, usize)>>,
-}
-
-/// Single GKR layer (round)
-pub struct Layer {
-    /// number of variables in the layer
-    pub layer_bits: usize,
-    /// all gate types in a layer
-    pub gates: Vec<LayerGate>,
-}
-
-impl Layer {
-    /// Create a layer
-    pub fn with_builder<B>(output_bits: usize, input_bits: usize, builder: B) -> Self
-    where
-        B: Fn(usize) -> (Gate, usize, usize),
-    {
-        let mut result = HashMap::<Gate, HashMap<usize, usize>>::new();
-
-        for out in 0..(1 << output_bits) {
-            let (gate, left, right) = builder(out);
-            let input = (right << input_bits) + left;
-            if let Some(entry) = result.get_mut(&gate) {
-                entry.insert(out, input);
-            } else {
-                let mut hashmap = HashMap::new();
-                hashmap.insert(out, input);
-                result.insert(gate, hashmap);
-            }
-        }
-
-        let gates = result
-            .into_iter()
-            .map(|(k, v)| LayerGate {
-                wiring: PredicateExpr::Base(BasePredicate::Sparse(SparseEvaluationPredicate {
-                    var_mask: (1 << (output_bits + 2 * input_bits)) - 1,
-                    out_len: output_bits,
-                    mle: v,
-                })),
-                gate: k,
-            })
-            .collect::<Vec<_>>();
-
-        println!("layer with bits {output_bits}");
-        Self {
-            layer_bits: output_bits,
-            gates,
-        }
-    }
-}
-
-#[derive(Debug)]
-/// wiring for a single gate type in a layer
-pub struct LayerGate {
-    /// Gate type
-    pub gate: Gate,
-    /// GKR predicate
-    pub wiring: PredicateExpr,
-}
-
-impl LayerGate {
-    pub fn new(
-        outputs: usize,
-        inputs: usize,
-        gate: Gate,
-        wiring: Vec<(usize, usize, usize)>,
-    ) -> Self {
-        let num_vars = outputs + 2 * inputs;
-        Self {
-            wiring: PredicateExpr::Base(BasePredicate::Sparse(SparseEvaluationPredicate {
-                var_mask: (1 << num_vars) - 1,
-                out_len: outputs,
-                mle: wiring
-                    .into_iter()
-                    .map(|(out, in1, in2)| (out, (in2 << inputs) + in1))
-                    .collect(),
-            })),
-            gate,
-        }
-    }
 }
 
 /// GKR algorithm
@@ -189,7 +49,7 @@ impl<F: Field> GKR<F> {
         assert_eq!(instances.len(), 1, "currently only one instance supported");
         let instance = &instances[0];
 
-        let eval_graph = circuit.to_evaluation_graph();
+        let eval_graph = EvaluationGraph::from_circuit(circuit);
         let evaluations = Self::evaluate(&eval_graph, instance);
         let num_vars = Self::layer_sizes(circuit);
 
@@ -378,17 +238,5 @@ impl<F: Field> GKR<F> {
         }
         result.reverse();
         result
-    }
-}
-
-trait EvaluateSparseSum<F: Field> {
-    fn fix_variables(&self, partial_point: &[F]) -> Vec<SparseMultilinearExtension<F>>;
-}
-
-impl<F: Field> EvaluateSparseSum<F> for [SparseMultilinearExtension<F>] {
-    fn fix_variables(&self, partial_point: &[F]) -> Vec<SparseMultilinearExtension<F>> {
-        self.iter()
-            .map(|x| x.fix_variables(partial_point))
-            .collect()
     }
 }
