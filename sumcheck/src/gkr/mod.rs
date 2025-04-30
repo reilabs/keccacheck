@@ -1,4 +1,4 @@
-use core::{marker::PhantomData, usize};
+use core::marker::PhantomData;
 
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, Polynomial};
@@ -44,7 +44,7 @@ impl<F: Field> GKR<F> {
     pub fn prove<R: FeedableRNG>(
         rng: &mut R,
         circuit: &CompiledCircuit<F>,
-        instances: &[&Instance<F>],
+        instances: &[Instance<F>],
     ) -> GKRProof<F> {
         assert_eq!(instances.len(), 1, "currently only one instance supported");
         let instance = &instances[0];
@@ -110,11 +110,11 @@ impl<F: Field> GKR<F> {
     pub fn verify<R: FeedableRNG>(
         rng: &mut R,
         circuit: &Circuit,
-        instances: &[&Instance<F>],
+        instances: &[Instance<F>],
         gkr_proof: &GKRProof<F>,
     ) {
         assert_eq!(instances.len(), 1, "currently only one instance supported");
-        let instance = instances[0];
+        let instance = &instances[0];
 
         let num_vars = circuit.layer_sizes();
 

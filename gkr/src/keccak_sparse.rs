@@ -94,16 +94,16 @@ fn gkr_theta(input: &[u64], output: &[u64]) {
         ],
     };
 
-    let instance = Instance::<Fr> {
+    let instances = vec![Instance::<Fr> {
         inputs: u64_to_bits(&input),
         outputs: u64_to_bits(&output),
-    };
+    }];
 
     let compiled = CompiledCircuit::from_circuit(&circuit);
 
     println!("proving...");
     let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &[&instance]);
+    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &instances);
 
     // verify proof size
     let rounds = gkr_proof
@@ -125,7 +125,7 @@ fn gkr_theta(input: &[u64], output: &[u64]) {
 
     println!("verifying...");
     let mut fs_rng = Blake2b512Rng::setup();
-    GKR::verify(&mut fs_rng, &circuit, &[&instance], &gkr_proof);
+    GKR::verify(&mut fs_rng, &circuit, &instances, &gkr_proof);
 
     println!("done.");
 }

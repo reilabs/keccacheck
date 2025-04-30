@@ -1,4 +1,6 @@
-pub fn keccak_round(a: &mut [u64; 25], _rc: u64) {
+pub fn keccak_round(a: &mut [u64], _rc: u64) {
+    assert_eq!(a.len(), 25);
+    
     let mut array: [u64; 5] = [0; 5];
 
     // Theta
