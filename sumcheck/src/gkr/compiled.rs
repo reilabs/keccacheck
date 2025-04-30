@@ -1,15 +1,16 @@
 use ark_ff::Field;
 use ark_poly::SparseMultilinearExtension;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
 use super::{circuit::Circuit, Gate, Instance};
 
-#[derive(Debug)]
+#[derive(Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct CompiledCircuit<F: Field> {
     pub input_bits: usize,
     pub layers: Vec<CompiledLayer<F>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct CompiledLayer<F: Field> {
     /// number of variables in the layer
     pub layer_bits: usize,
@@ -17,7 +18,7 @@ pub struct CompiledLayer<F: Field> {
     pub gates: Vec<CompiledLayerGate<F>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct CompiledLayerGate<F: Field> {
     pub gate: Gate,
     pub graph: Vec<Option<(usize, usize)>>,

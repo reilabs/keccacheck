@@ -1,10 +1,13 @@
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
 
 use crate::gkr_round_sumcheck::GKRFunction;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
 /// Supported gate types
+/// NOTE: Remember to update deserialization cases at the bottom of this file
 pub enum Gate {
     /// Add gate
     Add,
@@ -207,5 +210,49 @@ impl<F: Field> EvaluateSparseSum<F> for [SparseMultilinearExtension<F>] {
         self.iter()
             .map(|x| x.fix_variables(partial_point))
             .collect()
+    }
+}
+
+// SERIALIZATION
+
+impl Valid for Gate {
+    fn check(&self) -> Result<(), ark_serialize::SerializationError> {
+        Ok(())
+    }
+}
+
+impl CanonicalSerialize for Gate {
+    fn serialize_with_mode<W: std::io::Write>(
+        &self,
+        writer: W,
+        compress: ark_serialize::Compress,
+    ) -> Result<(), ark_serialize::SerializationError> {
+        let value = *self as u8;
+        value.serialize_with_mode(writer, compress)?;
+        Ok(())
+    }
+
+    fn serialized_size(&self, compress: ark_serialize::Compress) -> usize {
+        let value = *self as u8;
+        value.serialized_size(compress)
+    }
+}
+
+impl CanonicalDeserialize for Gate {
+    fn deserialize_with_mode<R: std::io::Read>(
+        reader: R,
+        compress: ark_serialize::Compress,
+        validate: ark_serialize::Validate,
+    ) -> Result<Self, ark_serialize::SerializationError> {
+        let value = u8::deserialize_with_mode(reader, compress, validate)?;
+        match value {
+            0 => Ok(Self::Add),
+            1 => Ok(Self::Mul),
+            2 => Ok(Self::Xor),
+            3 => Ok(Self::XorLeft),
+            4 => Ok(Self::Left),
+            6 => Ok(Self::Null),
+            _ => Err(ark_serialize::SerializationError::InvalidData),
+        }
     }
 }
