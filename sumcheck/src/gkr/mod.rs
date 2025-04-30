@@ -3,7 +3,7 @@ use core::{marker::PhantomData, usize};
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, Polynomial};
 pub use circuit::{Circuit, Layer, LayerGate};
-use compiled::EvaluationGraph;
+use compiled::CompiledCircuit;
 pub use gate::Gate;
 use util::bits_to_u64;
 
@@ -43,15 +43,14 @@ impl<F: Field> GKR<F> {
     /// Takes a GKR Circuit and proves the output.
     pub fn prove<R: FeedableRNG>(
         rng: &mut R,
-        circuit: &Circuit,
+        circuit: &CompiledCircuit<F>,
         instances: &[&Instance<F>],
     ) -> GKRProof<F> {
         assert_eq!(instances.len(), 1, "currently only one instance supported");
         let instance = &instances[0];
 
-        let eval_graph = EvaluationGraph::from_circuit(circuit);
-        let evaluations = Self::evaluate(&eval_graph, instance);
-        let num_vars = Self::layer_sizes(circuit);
+        let evaluations = circuit.evaluate(instance);
+        let num_vars = circuit.layer_sizes();
 
         if evaluations[0] != instance.outputs {
             println!("expect {:x?}", bits_to_u64(&instance.outputs));
@@ -88,10 +87,7 @@ impl<F: Field> GKR<F> {
                 .iter()
                 .flat_map(|gate_type| {
                     gate_type.gate.to_gkr_combination(
-                        &gate_type
-                            .wiring
-                            .to_dnf()
-                            .to_sum_of_sparse_mle(num_vars[i], num_vars[i + 1]),
+                        &gate_type.sum_of_sparse_mle,
                         &w_i,
                         combination,
                     )
@@ -211,32 +207,6 @@ impl<F: Field> GKR<F> {
             result.push(layer.layer_bits);
         }
         result.push(circuit.input_bits);
-        result
-    }
-
-    /// Takes a GKR circuit definition and returns value assignments
-    /// in all intermediate layers
-    pub fn evaluate(graph: &EvaluationGraph<F>, instance: &Instance<F>) -> Vec<Vec<F>> {
-        let mut result = Vec::with_capacity(graph.layers.len() + 1);
-        let mut previous_layer = &instance.inputs;
-        result.push(previous_layer.clone());
-        for layer in graph.layers.iter().rev() {
-            let output_vars = layer.layer_bits;
-            let mut evaluations = vec![F::ZERO; 1 << output_vars];
-
-            for gate in &layer.gates {
-                for (out_gate, maybe_gates) in gate.graph.iter().enumerate() {
-                    if let Some((left_gate, right_gate)) = maybe_gates {
-                        let input_left = previous_layer[*left_gate];
-                        let input_right = previous_layer[*right_gate];
-                        evaluations[out_gate] += gate.gate.evaluate(input_left, input_right);
-                    }
-                }
-            }
-            result.push(evaluations);
-            previous_layer = result.last().unwrap();
-        }
-        result.reverse();
         result
     }
 }

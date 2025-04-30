@@ -1,6 +1,6 @@
 use ark_bn254::Fr;
 use ark_sumcheck::{
-    gkr::{Circuit, GKR, Gate, Instance, Layer, util::u64_to_bits},
+    gkr::{Circuit, GKR, Gate, Instance, Layer, compiled::CompiledCircuit, util::u64_to_bits},
     rng::{Blake2b512Rng, FeedableRNG},
 };
 
@@ -99,9 +99,11 @@ fn gkr_theta(input: &[u64], output: &[u64]) {
         outputs: u64_to_bits(&output),
     };
 
+    let compiled = CompiledCircuit::from_circuit(&circuit);
+
     println!("proving...");
     let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &circuit, &[&instance]);
+    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &[&instance]);
 
     // verify proof size
     let rounds = gkr_proof

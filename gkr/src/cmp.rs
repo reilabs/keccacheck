@@ -2,6 +2,7 @@ use ark_bn254::Fr;
 use ark_sumcheck::{
     gkr::{
         Circuit, GKR, Gate, Instance, Layer, LayerGate,
+        compiled::CompiledCircuit,
         predicate::{eq, eq_const},
     },
     rng::{Blake2b512Rng, FeedableRNG},
@@ -67,9 +68,11 @@ fn test_cmp() {
         ],
     };
 
+    let compiled = CompiledCircuit::from_circuit(&circuit);
+
     println!("proving...");
     let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &circuit, &[&instance]);
+    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &[&instance]);
 
     println!("verifying...");
     let mut fs_rng = Blake2b512Rng::setup();
