@@ -191,7 +191,7 @@ pub fn gkr_pred_theta(instances: &[Instance<Fr>]) {
         ],
     };
 
-    let compiled = CompiledCircuit::from_circuit(&circuit);
+    let compiled = CompiledCircuit::from_circuit_batched(&circuit, instances.len());
 
     println!("proving...");
     let mut fs_rng = Blake2b512Rng::setup();

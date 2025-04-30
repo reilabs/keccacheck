@@ -58,7 +58,7 @@ impl<F: Field> GKR<F> {
             })
             .collect::<Vec<_>>();
 
-        let instance_bits = ilog2_ceil(instances.len() as u64) as usize;
+        let instance_bits = ilog2_ceil(instances.len());
         let num_vars = circuit.layer_sizes();
 
         // for (eval, instance) in evaluations.iter().zip(instances) {
@@ -75,7 +75,7 @@ impl<F: Field> GKR<F> {
 
         let mut u = Vec::new();
         let mut v = Vec::new();
-        let r_1 = (0..num_vars[0]).map(|_| F::rand(rng)).collect::<Vec<_>>();
+        let r_1 = (0..(instance_bits + num_vars[0])).map(|_| F::rand(rng)).collect::<Vec<_>>();
 
         for (i, layer) in circuit.layers.iter().enumerate() {
             let combination: &[(F, &[F])] = if i == 0 {
@@ -106,9 +106,11 @@ impl<F: Field> GKR<F> {
             let round = GKRRound {
                 functions,
                 layer: w_i,
+                instance_bits
             };
             let (proof, rand) = GKRRoundSumcheck::prove(rng, &round);
             (u, v) = rand;
+            println!("round proof {proof:?}");
             gkr_proof.rounds.push(proof);
         }
 
@@ -122,25 +124,27 @@ impl<F: Field> GKR<F> {
         instances: &[Instance<F>],
         gkr_proof: &GKRProof<F>,
     ) {
-        assert_eq!(instances.len(), 1, "currently only one instance supported");
-        let instance = &instances[0];
-
+        let instance_bits = ilog2_ceil(instances.len());
         let num_vars = circuit.layer_sizes();
 
         let (mut u, mut v) = Default::default();
         let (mut w_u, mut w_v) = Default::default();
 
+        // TODO: this allocates too much
+        let inputs = instances.iter().flat_map(|instance| instance.inputs.clone()).collect::<Vec<_>>();
+        let outputs = instances.iter().flat_map(|instance| instance.outputs.clone()).collect::<Vec<_>>();
+
         for (i, layer) in circuit.layers.iter().enumerate() {
             if i == 0 {
-                let r_1 = (0..num_vars[0]).map(|_| F::rand(rng)).collect::<Vec<_>>();
+                let r_1 = (0..(instance_bits + num_vars[0])).map(|_| F::rand(rng)).collect::<Vec<_>>();
                 let w_0 = DenseMultilinearExtension::from_evaluations_slice(
-                    circuit.output_bits,
-                    &instance.outputs,
+                    instance_bits + circuit.output_bits,
+                    &outputs,
                 );
                 let expected_sum = w_0.evaluate(&r_1);
                 let proof = &gkr_proof.rounds[i];
                 let subclaim =
-                    GKRRoundSumcheck::verify(rng, num_vars[i + 1], proof, expected_sum).unwrap();
+                    GKRRoundSumcheck::verify(rng, instance_bits + num_vars[i + 1], proof, expected_sum).unwrap();
                 (w_u, w_v) = (subclaim.w_u, subclaim.w_v);
 
                 let mut wiring_res = F::ZERO;
@@ -163,12 +167,12 @@ impl<F: Field> GKR<F> {
                 let expected_sum = alpha * w_u + beta * w_v;
                 let proof = &gkr_proof.rounds[i];
                 let subclaim =
-                    GKRRoundSumcheck::verify(rng, num_vars[i + 1], proof, expected_sum).unwrap();
+                    GKRRoundSumcheck::verify(rng, instance_bits + num_vars[i + 1], proof, expected_sum).unwrap();
 
                 // verify last round matches actual inputs
                 let w_n = DenseMultilinearExtension::from_evaluations_slice(
-                    circuit.input_bits,
-                    &instance.inputs,
+                    instance_bits + circuit.input_bits,
+                    &inputs,
                 );
                 assert_eq!(w_n.evaluate(&subclaim.u), subclaim.w_u);
                 assert_eq!(w_n.evaluate(&subclaim.v), subclaim.w_v);
@@ -178,7 +182,7 @@ impl<F: Field> GKR<F> {
                 let expected_sum = alpha * w_u + beta * w_v;
                 let proof = &gkr_proof.rounds[i];
                 let subclaim =
-                    GKRRoundSumcheck::verify(rng, num_vars[i + 1], proof, expected_sum).unwrap();
+                    GKRRoundSumcheck::verify(rng, instance_bits + num_vars[i + 1], proof, expected_sum).unwrap();
                 (w_u, w_v) = (subclaim.w_u, subclaim.w_v);
 
                 let mut wiring_res = F::ZERO;

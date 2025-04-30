@@ -108,8 +108,9 @@ impl<F: Field> IPForMLSumcheck<F> {
             let p0 = evaluations[0];
             let p1 = evaluations[1];
             if p0 + p1 != expected {
+                println!("evaluations {:?}", verifier_state.polynomials_received);
                 return Err(crate::Error::Reject(Some(format!(
-                    "Prover message is not consistent with the claim. Expected {expected} got {}",
+                    "Prover message is not consistent with the claim. Round {i}. Expected {expected} got {}",
                     p0 + p1
                 ))));
             }

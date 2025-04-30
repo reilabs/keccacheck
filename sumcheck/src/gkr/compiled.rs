@@ -2,7 +2,7 @@ use ark_ff::Field;
 use ark_poly::SparseMultilinearExtension;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
-use super::{circuit::Circuit, Gate, Instance};
+use super::{circuit::Circuit, graph::EvaluationEdge, util::ilog2_ceil, Gate, Instance};
 
 #[derive(Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct CompiledCircuit<F: Field> {
@@ -21,12 +21,21 @@ pub struct CompiledLayer<F: Field> {
 #[derive(Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct CompiledLayerGate<F: Field> {
     pub gate: Gate,
-    pub graph: Vec<Option<(usize, usize)>>,
+    /// compiled for a single circuit instance
+    pub graph: Vec<Option<EvaluationEdge>>,
+    /// compiled for all instances
     pub sum_of_sparse_mle: Vec<SparseMultilinearExtension<F>>,
 }
 
 impl<F: Field> CompiledCircuit<F> {
     pub fn from_circuit(circuit: &Circuit) -> Self {
+        Self::from_circuit_batched(circuit, 1)
+    }
+
+    pub fn from_circuit_batched(circuit: &Circuit, instances: usize) -> Self {
+        let instance_bits = ilog2_ceil(instances);
+        assert_eq!(instances, 1 << instance_bits, "must be a power of 2");
+
         let mut input_bits = circuit.input_bits;
 
         let mut layers = Vec::with_capacity(circuit.layers.len());
@@ -39,7 +48,7 @@ impl<F: Field> CompiledCircuit<F> {
                     let wiring = &gate.wiring;
                     let dnf = wiring.to_dnf();
                     let graph = dnf.to_evaluation_graph(layer_bits, input_bits);
-                    let sum_of_sparse_mle = dnf.to_sum_of_sparse_mle(layer_bits, input_bits);
+                    let sum_of_sparse_mle = dnf.to_sum_of_sparse_mle(layer_bits, input_bits, instance_bits);
 
                     CompiledLayerGate {
                         gate: gate.gate,
@@ -82,9 +91,10 @@ impl<F: Field> CompiledCircuit<F> {
 
             for gate in &layer.gates {
                 for (out_gate, maybe_gates) in gate.graph.iter().enumerate() {
-                    if let Some((left_gate, right_gate)) = maybe_gates {
-                        let input_left = previous_layer[*left_gate];
-                        let input_right = previous_layer[*right_gate];
+                    if let Some(EvaluationEdge { instance, left, right }) = maybe_gates {
+                        assert_eq!(*instance, 0, "no instances when evaluating circuit");
+                        let input_left = previous_layer[*left];
+                        let input_right = previous_layer[*right];
                         evaluations[out_gate] += gate.gate.evaluate(input_left, input_right);
                     }
                 }

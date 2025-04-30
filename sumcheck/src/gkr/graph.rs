@@ -1,14 +1,23 @@
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use tracing::warn;
 
 use crate::gkr::predicate::VarMaskIterator;
 
 use super::predicate::BasePredicate;
 
+#[derive(Copy, Clone, Debug, CanonicalSerialize, CanonicalDeserialize)]
+pub struct EvaluationEdge {
+    pub instance: usize,
+    pub left: usize,
+    pub right: usize,
+}
+
 pub fn to_evaluation_graph(
     predicate_product: &[BasePredicate],
     outputs: usize,
     inputs: usize,
-) -> Vec<Option<(usize, usize)>> {
+    instance_bits: usize,
+) -> Vec<Option<EvaluationEdge>> {
     fn set_vars(
         vars: usize,
         is_on: bool,
@@ -30,12 +39,14 @@ pub fn to_evaluation_graph(
     }
     let num_vars = outputs + 2 * inputs;
 
-    (0..(1 << outputs))
+    (0..(1 << (outputs + instance_bits)))
         .map(|output| {
+            let instance = output >> outputs;
+
             let mut output = output;
             let mut constraints = vec![None; num_vars];
 
-            for i in 0..outputs {
+            for i in 0..(outputs) {
                 constraints[i] = Some(output % 2 == 1);
                 output >>= 1;
             }
@@ -134,7 +145,7 @@ pub fn to_evaluation_graph(
                 }
             }
 
-            Some((in1, in2))
+            Some(EvaluationEdge { instance, left: in1, right: in2 })
         })
         .collect()
 }
