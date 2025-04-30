@@ -14,6 +14,19 @@ pub struct Circuit {
     pub layers: Vec<Layer>,
 }
 
+impl Circuit {
+    /// Takes a GKR circuit definition and returns value assignments
+    /// in all intermediate layers
+    pub fn layer_sizes(&self) -> Vec<usize> {
+        let mut result = Vec::with_capacity(self.layers.len() + 1);
+        for layer in &self.layers {
+            result.push(layer.layer_bits);
+        }
+        result.push(self.input_bits);
+        result
+    }
+}
+
 /// Single GKR layer (round)
 pub struct Layer {
     /// number of variables in the layer
