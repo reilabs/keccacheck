@@ -14,8 +14,8 @@ fn gkr_theta(input: &[u64], output: &[u64]) {
     let state_length = 25 * 64;
     let row_length = 5 * 64;
     let circuit = Circuit {
-        inputs: 11,
-        outputs: 11,
+        input_bits: 11,
+        output_bits: 11,
         layers: vec![
             Layer::with_builder(11, 11, |out| {
                 if out < 25 * 64 {

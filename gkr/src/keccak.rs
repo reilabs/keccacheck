@@ -20,12 +20,12 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
     let b = |i: u8| i + outputs as u8 + inputs as u8;
 
     let circuit = Circuit {
-        inputs,
-        outputs,
+        input_bits: inputs,
+        output_bits: outputs,
         layers: vec![
             // keccak_f theta, xor state columns with aux array
             Layer {
-                label_size: 12,
+                layer_bits: 12,
                 gates: {
                     vec![LayerGate {
                         gate: Gate::Xor,
@@ -48,7 +48,7 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
             },
             // aux array = xor(prev, next.rotate_left(1))
             Layer {
-                label_size: 12,
+                layer_bits: 12,
                 gates: {
                     vec![
                         LayerGate {
@@ -90,7 +90,7 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
             },
             // Xor the entire column (4 xors, 3 layers) into aux array
             Layer {
-                label_size: 12,
+                layer_bits: 12,
                 gates: {
                     vec![
                         LayerGate {
@@ -124,7 +124,7 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                 },
             },
             Layer {
-                label_size: 12,
+                layer_bits: 12,
                 gates: {
                     vec![
                         LayerGate {
@@ -158,7 +158,7 @@ pub fn gkr_pred_theta(input: &[u64], output: &[u64]) {
                 },
             },
             Layer {
-                label_size: 12,
+                layer_bits: 12,
                 gates: vec![
                     LayerGate {
                         gate: Gate::Left,
