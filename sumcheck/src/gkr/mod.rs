@@ -10,7 +10,7 @@ use ark_poly::{
     DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
 };
 use predicate::{BasePredicate, PredicateExpr, SparseEvaluationPredicate};
-use util::{bits_to_u64, ilog2_ceil};
+use util::bits_to_u64;
 
 use crate::{
     gkr_round_sumcheck::{data_structures::GKRRoundProof, GKRFunction, GKRRound, GKRRoundSumcheck},
@@ -39,16 +39,53 @@ pub struct Circuit {
     pub layers: Vec<Layer>,
 }
 
+impl Circuit {
+    pub fn to_evaluation_graph(&self) -> EvaluationGraph {
+        let mut input_bits = self.input_bits;
+
+        let mut layers = Vec::with_capacity(self.layers.len());
+        for layer in self.layers.iter().rev() {
+            let layer_bits = layer.layer_bits;
+            let gates = layer
+                .gates
+                .iter()
+                .map(|gate| {
+                    let wiring = &gate.wiring;
+                    let graph = wiring.to_dnf().to_evaluation_graph(layer_bits, input_bits);
+
+                    EvaluationGate {
+                        gate: gate.gate,
+                        graph,
+                    }
+                })
+                .collect();
+
+            input_bits = layer_bits;
+
+            layers.push(EvaluationLayer { layer_bits, gates });
+        }
+        layers.reverse();
+        EvaluationGraph { layers }
+    }
+}
+
+#[derive(Debug)]
 pub struct EvaluationGraph {
     pub layers: Vec<EvaluationLayer>,
 }
 
+#[derive(Debug)]
 pub struct EvaluationLayer {
+    /// number of variables in the layer
+    pub layer_bits: usize,
+    /// all gate types in a layer    
     pub gates: Vec<EvaluationGate>,
 }
 
+#[derive(Debug)]
 pub struct EvaluationGate {
-    pub graph: Vec<(usize, usize)>,
+    pub gate: Gate,
+    pub graph: Vec<Option<(usize, usize)>>,
 }
 
 /// Single GKR layer (round)
@@ -91,6 +128,7 @@ impl Layer {
             })
             .collect::<Vec<_>>();
 
+        println!("layer with bits {output_bits}");
         Self {
             layer_bits: output_bits,
             gates,
@@ -98,7 +136,7 @@ impl Layer {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 /// Supported gate types
 pub enum Gate {
     /// Add gate
@@ -325,11 +363,16 @@ pub struct GKRProof<F: Field> {
 
 impl<F: Field> GKR<F> {
     /// Takes a GKR Circuit and proves the output.
-    pub fn prove<R: FeedableRNG>(rng: &mut R, circuit: &Circuit, instances: &[&Instance<F>]) -> GKRProof<F> {
+    pub fn prove<R: FeedableRNG>(
+        rng: &mut R,
+        circuit: &Circuit,
+        instances: &[&Instance<F>],
+    ) -> GKRProof<F> {
         assert_eq!(instances.len(), 1, "currently only one instance supported");
         let instance = &instances[0];
 
-        let evaluations = Self::evaluate(circuit, instance);
+        let eval_graph = circuit.to_evaluation_graph();
+        let evaluations = Self::evaluate(&eval_graph, instance);
         let num_vars = Self::layer_sizes(circuit);
 
         if evaluations[0] != instance.outputs {
@@ -413,7 +456,12 @@ impl<F: Field> GKR<F> {
     }
 
     /// Verifies a proof of a GKR circuit execution.
-    pub fn verify<R: FeedableRNG>(rng: &mut R, circuit: &Circuit, instances: &[&Instance<F>], gkr_proof: &GKRProof<F>) {
+    pub fn verify<R: FeedableRNG>(
+        rng: &mut R,
+        circuit: &Circuit,
+        instances: &[&Instance<F>],
+        gkr_proof: &GKRProof<F>,
+    ) {
         assert_eq!(instances.len(), 1, "currently only one instance supported");
         let instance = instances[0];
 
@@ -513,33 +561,25 @@ impl<F: Field> GKR<F> {
 
     /// Takes a GKR circuit definition and returns value assignments
     /// in all intermediate layers
-    pub fn evaluate(circuit: &Circuit, instance: &Instance<F>) -> Vec<Vec<F>> {
-        let mut result = Vec::with_capacity(circuit.layers.len());
+    pub fn evaluate(graph: &EvaluationGraph, instance: &Instance<F>) -> Vec<Vec<F>> {
+        let mut result = Vec::with_capacity(graph.layers.len() + 1);
         let mut previous_layer = &instance.inputs;
-        let mut input_vars = ilog2_ceil(previous_layer.len() as u64) as usize;
         result.push(previous_layer.clone());
-        for layer in circuit.layers.iter().rev() {
+        for layer in graph.layers.iter().rev() {
             let output_vars = layer.layer_bits;
             let mut evaluations = vec![F::ZERO; 1 << output_vars];
 
             for gate in &layer.gates {
-                let wiring = &gate.wiring;
-                for (out_gate, maybe_gates) in wiring
-                    .to_dnf()
-                    .to_evaluation_graph(output_vars, input_vars)
-                    .into_iter()
-                    .enumerate()
-                {
+                for (out_gate, maybe_gates) in gate.graph.iter().enumerate() {
                     if let Some((left_gate, right_gate)) = maybe_gates {
-                        let input_left = previous_layer[left_gate];
-                        let input_right = previous_layer[right_gate];
+                        let input_left = previous_layer[*left_gate];
+                        let input_right = previous_layer[*right_gate];
                         evaluations[out_gate] += gate.gate.evaluate(input_left, input_right);
                     }
                 }
             }
             result.push(evaluations);
             previous_layer = result.last().unwrap();
-            input_vars = output_vars;
         }
         result.reverse();
         result
