@@ -1,6 +1,6 @@
 use ark_bn254::Fr;
 use ark_sumcheck::{
-    gkr::{Circuit, Gate, Instance, Layer, LayerGate, GKR},
+    gkr::{Circuit, GKR, Gate, Instance, Layer, LayerGate},
     rng::{Blake2b512Rng, FeedableRNG},
 };
 

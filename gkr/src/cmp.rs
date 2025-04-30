@@ -1,7 +1,8 @@
 use ark_bn254::Fr;
 use ark_sumcheck::{
     gkr::{
-        predicate::{eq, eq_const}, Circuit, Gate, Instance, Layer, LayerGate, GKR
+        Circuit, GKR, Gate, Instance, Layer, LayerGate,
+        predicate::{eq, eq_const},
     },
     rng::{Blake2b512Rng, FeedableRNG},
 };
