@@ -1,9 +1,7 @@
 use ark_ff::Field;
-use ark_poly::{DenseMultilinearExtension, SparseMultilinearExtension};
+use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
 
 use crate::gkr_round_sumcheck::GKRFunction;
-
-use super::EvaluateSparseSum;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 /// Supported gate types
@@ -198,4 +196,16 @@ pub fn scale<F: Field>(
         .map(|(i, v)| (*i, *v * scalar))
         .collect::<Vec<_>>();
     SparseMultilinearExtension::from_evaluations(mle.num_vars, &evaluations)
+}
+
+trait EvaluateSparseSum<F: Field> {
+    fn fix_variables(&self, partial_point: &[F]) -> Vec<SparseMultilinearExtension<F>>;
+}
+
+impl<F: Field> EvaluateSparseSum<F> for [SparseMultilinearExtension<F>] {
+    fn fix_variables(&self, partial_point: &[F]) -> Vec<SparseMultilinearExtension<F>> {
+        self.iter()
+            .map(|x| x.fix_variables(partial_point))
+            .collect()
+    }
 }
