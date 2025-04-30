@@ -116,7 +116,7 @@ impl<F: Field> GKR<F> {
         assert_eq!(instances.len(), 1, "currently only one instance supported");
         let instance = instances[0];
 
-        let num_vars = Self::layer_sizes(circuit);
+        let num_vars = circuit.layer_sizes();
 
         let (mut u, mut v) = Default::default();
         let (mut w_u, mut w_v) = Default::default();
@@ -197,16 +197,5 @@ impl<F: Field> GKR<F> {
                 (u, v) = (subclaim.u, subclaim.v);
             }
         }
-    }
-
-    /// Takes a GKR circuit definition and returns value assignments
-    /// in all intermediate layers
-    pub fn layer_sizes(circuit: &Circuit) -> Vec<usize> {
-        let mut result = Vec::with_capacity(circuit.layers.len() + 1);
-        for layer in &circuit.layers {
-            result.push(layer.layer_bits);
-        }
-        result.push(circuit.input_bits);
-        result
     }
 }
