@@ -389,67 +389,44 @@ impl<F: Field> GKR<F> {
 
         let mut u = Vec::new();
         let mut v = Vec::new();
+        let r_1 = (0..num_vars[0]).map(|_| F::rand(rng)).collect::<Vec<_>>();
 
         for (i, layer) in circuit.layers.iter().enumerate() {
-            if i == 0 {
-                let r_1 = (0..num_vars[0]).map(|_| F::rand(rng)).collect::<Vec<_>>();
-                let w_i = DenseMultilinearExtension::from_evaluations_slice(
-                    num_vars[i + 1],
-                    &evaluations[i + 1],
-                );
-                let functions = layer
-                    .gates
-                    .iter()
-                    .flat_map(|gate_type| {
-                        gate_type.gate.to_gkr_combination(
-                            &gate_type
-                                .wiring
-                                .to_dnf()
-                                .to_sum_of_sparse_mle(num_vars[i], num_vars[i + 1]),
-                            &w_i,
-                            &[(F::ONE, &r_1)],
-                        )
-                    })
-                    .collect();
-
-                let round = GKRRound {
-                    functions,
-                    layer: w_i,
-                };
-                let (proof, rand) = GKRRoundSumcheck::prove(rng, &round);
-                (u, v) = rand;
-                gkr_proof.rounds.push(proof);
+            let combination: &[(F, &[F])] = if i == 0 {
+                &[(F::ONE, &r_1)]
             } else {
                 let alpha = F::rand(rng);
                 let beta = F::rand(rng);
-                let w_i = DenseMultilinearExtension::from_evaluations_slice(
-                    num_vars[i + 1],
-                    &evaluations[i + 1],
-                );
+                &[(alpha, &u), (beta, &v)]
+            };
 
-                let functions = layer
-                    .gates
-                    .iter()
-                    .flat_map(|gate_type| {
-                        gate_type.gate.to_gkr_combination(
-                            &gate_type
-                                .wiring
-                                .to_dnf()
-                                .to_sum_of_sparse_mle(num_vars[i], num_vars[i + 1]),
-                            &w_i,
-                            &[(alpha, &u), (beta, &v)],
-                        )
-                    })
-                    .collect();
+            let w_i = DenseMultilinearExtension::from_evaluations_slice(
+                num_vars[i + 1],
+                &evaluations[i + 1],
+            );
 
-                let round = GKRRound {
-                    functions,
-                    layer: w_i,
-                };
-                let (proof, rand) = GKRRoundSumcheck::prove(rng, &round);
-                (u, v) = rand;
-                gkr_proof.rounds.push(proof);
-            }
+            let functions = layer
+                .gates
+                .iter()
+                .flat_map(|gate_type| {
+                    gate_type.gate.to_gkr_combination(
+                        &gate_type
+                            .wiring
+                            .to_dnf()
+                            .to_sum_of_sparse_mle(num_vars[i], num_vars[i + 1]),
+                        &w_i,
+                        combination,
+                    )
+                })
+                .collect();
+
+            let round = GKRRound {
+                functions,
+                layer: w_i,
+            };
+            let (proof, rand) = GKRRoundSumcheck::prove(rng, &round);
+            (u, v) = rand;
+            gkr_proof.rounds.push(proof);
         }
 
         gkr_proof
