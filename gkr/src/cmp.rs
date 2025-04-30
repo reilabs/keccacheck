@@ -16,10 +16,10 @@ use ark_sumcheck::{
 fn test_cmp() {
     let circuit = Circuit {
         //000 001 010 011 101
-        inputs: 3,
-        outputs: 3,
+        input_bits: 3,
+        output_bits: 3,
         layers: vec![Layer {
-            label_size: 3,
+            layer_bits: 3,
             gates: vec![LayerGate {
                 gate: Gate::Left,
                 // get all positions <= 5; so x2, x1, x0 <= 1 0 1

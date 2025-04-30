@@ -14,12 +14,12 @@ use ark_sumcheck::{
 fn test_gkr_basic_mul() {
     // TODO: make it data-parallel
     let circuit = Circuit {
-        inputs: 2,
-        outputs: 1,
+        input_bits: 2,
+        output_bits: 1,
         layers: vec![
             Layer::with_builder(1, 2, |out| (Gate::Mul, 2 * out, 2 * out + 1)),
             Layer {
-                label_size: 2,
+                layer_bits: 2,
                 gates: vec![LayerGate::new(
                     2,
                     2,
@@ -53,18 +53,18 @@ fn test_gkr_basic_mul() {
 fn test_gkr_basic_add() {
     // TODO: make it data-parallel
     let circuit = Circuit {
-        inputs: 1,
-        outputs: 1,
+        input_bits: 1,
+        output_bits: 1,
         layers: vec![
             Layer {
-                label_size: 1,
+                layer_bits: 1,
                 gates: vec![
                     LayerGate::new(1, 2, Gate::Mul, vec![(0, 0, 1)]),
                     LayerGate::new(1, 2, Gate::Add, vec![(1, 2, 3)]),
                 ],
             },
             Layer {
-                label_size: 2,
+                layer_bits: 2,
                 gates: vec![LayerGate::new(
                     2,
                     2,
@@ -73,7 +73,7 @@ fn test_gkr_basic_add() {
                 )],
             },
             Layer {
-                label_size: 2,
+                layer_bits: 2,
                 gates: vec![LayerGate::new(
                     2,
                     1,
@@ -105,15 +105,15 @@ fn test_gkr_basic_add() {
 fn test_gkr_basic_id_xor() {
     // TODO: make it data-parallel
     let circuit = Circuit {
-        inputs: 2,
-        outputs: 1,
+        input_bits: 2,
+        output_bits: 1,
         layers: vec![
             Layer {
-                label_size: 1,
+                layer_bits: 1,
                 gates: vec![LayerGate::new(1, 2, Gate::Xor, vec![(0, 0, 1), (1, 2, 3)])],
             },
             Layer {
-                label_size: 2,
+                layer_bits: 2,
                 gates: vec![LayerGate::new(
                     2,
                     2,

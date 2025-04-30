@@ -32,9 +32,9 @@ pub struct Instance<F: Field> {
 /// GKR circuit definition
 pub struct Circuit {
     /// GKR input size
-    pub inputs: usize,
+    pub input_bits: usize,
     /// GKR output size
-    pub outputs: usize,
+    pub output_bits: usize,
     /// GKR circuit layers
     pub layers: Vec<Layer>,
 }
@@ -54,22 +54,22 @@ pub struct EvaluationGate {
 /// Single GKR layer (round)
 pub struct Layer {
     /// number of variables in the layer
-    pub label_size: usize,
+    pub layer_bits: usize,
     /// all gate types in a layer
     pub gates: Vec<LayerGate>,
 }
 
 impl Layer {
     /// Create a layer
-    pub fn with_builder<B>(output_vars: usize, input_vars: usize, builder: B) -> Self
+    pub fn with_builder<B>(output_bits: usize, input_bits: usize, builder: B) -> Self
     where
         B: Fn(usize) -> (Gate, usize, usize),
     {
         let mut result = HashMap::<Gate, HashMap<usize, usize>>::new();
 
-        for out in 0..(1 << output_vars) {
+        for out in 0..(1 << output_bits) {
             let (gate, left, right) = builder(out);
-            let input = (right << input_vars) + left;
+            let input = (right << input_bits) + left;
             if let Some(entry) = result.get_mut(&gate) {
                 entry.insert(out, input);
             } else {
@@ -83,8 +83,8 @@ impl Layer {
             .into_iter()
             .map(|(k, v)| LayerGate {
                 wiring: PredicateExpr::Base(BasePredicate::Sparse(SparseEvaluationPredicate {
-                    var_mask: (1 << (output_vars + 2 * input_vars)) - 1,
-                    out_len: output_vars,
+                    var_mask: (1 << (output_bits + 2 * input_bits)) - 1,
+                    out_len: output_bits,
                     mle: v,
                 })),
                 gate: k,
@@ -92,7 +92,7 @@ impl Layer {
             .collect::<Vec<_>>();
 
         Self {
-            label_size: output_vars,
+            layer_bits: output_bits,
             gates,
         }
     }
@@ -426,7 +426,7 @@ impl<F: Field> GKR<F> {
             if i == 0 {
                 let r_1 = (0..num_vars[0]).map(|_| F::rand(rng)).collect::<Vec<_>>();
                 let w_0 = DenseMultilinearExtension::from_evaluations_slice(
-                    circuit.outputs,
+                    circuit.output_bits,
                     &instance.outputs,
                 );
                 let expected_sum = w_0.evaluate(&r_1);
@@ -459,7 +459,7 @@ impl<F: Field> GKR<F> {
 
                 // verify last round matches actual inputs
                 let w_n = DenseMultilinearExtension::from_evaluations_slice(
-                    circuit.inputs,
+                    circuit.input_bits,
                     &instance.inputs,
                 );
                 assert_eq!(w_n.evaluate(&subclaim.u), subclaim.w_u);
@@ -505,9 +505,9 @@ impl<F: Field> GKR<F> {
     pub fn layer_sizes(circuit: &Circuit) -> Vec<usize> {
         let mut result = Vec::with_capacity(circuit.layers.len() + 1);
         for layer in &circuit.layers {
-            result.push(layer.label_size);
+            result.push(layer.layer_bits);
         }
-        result.push(circuit.inputs);
+        result.push(circuit.input_bits);
         result
     }
 
@@ -519,7 +519,7 @@ impl<F: Field> GKR<F> {
         let mut input_vars = ilog2_ceil(previous_layer.len() as u64) as usize;
         result.push(previous_layer.clone());
         for layer in circuit.layers.iter().rev() {
-            let output_vars = layer.label_size;
+            let output_vars = layer.layer_bits;
             let mut evaluations = vec![F::ZERO; 1 << output_vars];
 
             for gate in &layer.gates {
