@@ -208,11 +208,13 @@ fn test_keccak_f() {
 
     let instance_size = 25;
 
-    let input = (0..(instances * instance_size)).map(|x| x as u64).collect::<Vec<_>>();
+    let input = (0..(instances * instance_size))
+        .map(|x| x as u64)
+        .collect::<Vec<_>>();
     let mut output = input.clone();
 
     for i in 0..instances {
-        let output_slice = &mut output[(i*instance_size)..((i+1)*instance_size)];
+        let output_slice = &mut output[(i * instance_size)..((i + 1) * instance_size)];
         keccak_round(output_slice, ROUND_CONSTANTS[0]);
         println!("keccak_round {output_slice:x?}");
     }
@@ -225,8 +227,8 @@ fn test_keccak_f() {
     let mut gkr_instances = Vec::with_capacity(instances);
 
     for i in 0..instances {
-        let gkr_input = &mut gkr_input[(i * gkr_instance_size)..((i+1) * gkr_instance_size)];
-        let gkr_output = &mut gkr_output[(i * gkr_instance_size)..((i+1) * gkr_instance_size)];
+        let gkr_input = &mut gkr_input[(i * gkr_instance_size)..((i + 1) * gkr_instance_size)];
+        let gkr_output = &mut gkr_output[(i * gkr_instance_size)..((i + 1) * gkr_instance_size)];
 
         for row in 0..8 {
             for col in 0..8 {
@@ -245,7 +247,7 @@ fn test_keccak_f() {
 
         gkr_instances.push(Instance::<Fr> {
             inputs: u64_to_bits(gkr_input),
-            outputs: u64_to_bits(gkr_output),    
+            outputs: u64_to_bits(gkr_output),
         });
     }
     gkr_pred_theta(&gkr_instances);

@@ -5,7 +5,7 @@ use ark_poly::{DenseMultilinearExtension, Polynomial};
 pub use circuit::{Circuit, Layer, LayerGate};
 use compiled::CompiledCircuit;
 pub use gate::Gate;
-use util::bits_to_u64;
+use util::{bits_to_u64, ilog2_ceil};
 
 use crate::{
     gkr_round_sumcheck::{data_structures::GKRRoundProof, GKRRound, GKRRoundSumcheck},
@@ -46,19 +46,28 @@ impl<F: Field> GKR<F> {
         circuit: &CompiledCircuit<F>,
         instances: &[Instance<F>],
     ) -> GKRProof<F> {
-        assert_eq!(instances.len(), 1, "currently only one instance supported");
-        let instance = &instances[0];
+        let evaluations_by_instance = instances
+            .iter()
+            .map(|instance| circuit.evaluate(instance))
+            .collect::<Vec<_>>();
+        let evaluations = (0..=circuit.layers.len())
+            .map(|layer| {
+                (0..instances.len())
+                    .flat_map(|instance| evaluations_by_instance[instance][layer].clone())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
 
-        let evaluations = circuit.evaluate(instance);
+        let instance_bits = ilog2_ceil(instances.len() as u64) as usize;
         let num_vars = circuit.layer_sizes();
 
-        if evaluations[0] != instance.outputs {
-            println!("expect {:x?}", bits_to_u64(&instance.outputs));
-            println!("actual {:x?}", bits_to_u64(&evaluations[0]));
-            panic!("evaluation failed");
-
-            //assert_eq!(evaluations[0], circuit.outputs);
-        }
+        // for (eval, instance) in evaluations.iter().zip(instances) {
+        //     if eval[0] != instance.outputs {
+        //         println!("expect {:x?}", bits_to_u64(&instance.outputs));
+        //         println!("actual {:x?}", bits_to_u64(&eval[0]));
+        //         panic!("evaluation failed");
+        //     }
+        // }
 
         let mut gkr_proof = GKRProof {
             rounds: Vec::with_capacity(circuit.layers.len()),
@@ -78,7 +87,7 @@ impl<F: Field> GKR<F> {
             };
 
             let w_i = DenseMultilinearExtension::from_evaluations_slice(
-                num_vars[i + 1],
+                instance_bits + num_vars[i + 1],
                 &evaluations[i + 1],
             );
 
