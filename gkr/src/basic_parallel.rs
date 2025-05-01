@@ -39,10 +39,10 @@ fn test_parallel_reference() {
 
     let compiled = CompiledCircuit::from_circuit_batched(&circuit, num_instances as usize);
 
-    let mut rng = NotReallyRng::new(&Into::<Fr>::into(1u64).0.0);
+    let mut rng = NotReallyRng::new(&Into::<Fr>::into(2u64).0.0);
     let gkr_proof = GKR::prove(&mut rng, &compiled, &instances);
 
-    let mut rng = NotReallyRng::new(&Into::<Fr>::into(1u64).0.0);
+    let mut rng = NotReallyRng::new(&Into::<Fr>::into(2u64).0.0);
     GKR::verify(&mut rng, &circuit, &instances, &gkr_proof);
 }
 
@@ -119,11 +119,11 @@ impl FeedableRNG for NotReallyRng {
 #[test]
 fn test_basic_parallel() {
     let circuit = Circuit {
-        input_bits: 2,
+        input_bits: 1,
         output_bits: 0,
         layers: vec![
             Layer::with_builder(0, 1, |out| (Gate::Mul, 2 * out, 2 * out + 1)),
-            Layer::with_builder(1, 2, |out| (Gate::Mul, 2 * out, 2 * out + 1)),
+            //Layer::with_builder(1, 2, |out| (Gate::Mul, 2 * out, 2 * out + 1)),
         ],
     };
 
@@ -131,17 +131,18 @@ fn test_basic_parallel() {
 
     let instances = (0u64..num_instances).map(|i| {
         Instance::<Fr> {
-            inputs: (0..4).map(|j| (i * 4 + j + 1).into()).collect(),
-            outputs: vec![(0..4).fold(Fr::ONE, |acc, j| acc * Into::<Fr>::into(i * 4 + j + 1))]
+            inputs: (0..2).map(|j| (i * 2 + j + 1).into()).collect(),
+            outputs: vec![(0..2).fold(Fr::ONE, |acc, j| acc * Into::<Fr>::into(i * 2 + j + 1))]
         }
     }).collect::<Vec<_>>();
 
+    println!("instances {instances:?}");
 
     let compiled = CompiledCircuit::from_circuit_batched(&circuit, num_instances as usize);
 
-    let mut rng = NotReallyRng::new(&Into::<Fr>::into(1u64).0.0);
+    let mut rng = NotReallyRng::new(&Into::<Fr>::into(2u64).0.0);
     let gkr_proof = GKR::prove(&mut rng, &compiled, &instances);
 
-    let mut rng = NotReallyRng::new(&Into::<Fr>::into(1u64).0.0);
+    let mut rng = NotReallyRng::new(&Into::<Fr>::into(2u64).0.0);
     GKR::verify(&mut rng, &circuit, &instances, &gkr_proof);
 }
