@@ -96,6 +96,8 @@ impl<F: Field> IPForMLSumcheck<F> {
             panic!("Verifier has not finished.");
         }
 
+        println!("check point {:?}", verifier_state.randomness);
+
         let mut expected = asserted_sum;
         if verifier_state.polynomials_received.len() != verifier_state.nv {
             panic!("insufficient rounds");
