@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod basic_sparse;
 #[cfg(test)]
+mod basic_parallel;
+#[cfg(test)]
 mod cmp;
 #[cfg(test)]
 mod keccak;
