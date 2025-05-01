@@ -81,7 +81,7 @@ impl<F: Field> GKR<F> {
 
         let mut u = Vec::new();
         let mut v = Vec::new();
-        let r_1 = (0..(instance_bits + num_vars[0])).map(|_| 11.into()).collect::<Vec<_>>();
+        let r_1 = (0..(instance_bits + num_vars[0])).map(|_| F::rand(rng)).collect::<Vec<_>>();
 
         for (i, layer) in circuit.layers.iter().enumerate() {
             let combination: &[(F, &[F])] = if i == 0 {
@@ -153,7 +153,7 @@ impl<F: Field> GKR<F> {
         for (i, layer) in circuit.layers.iter().enumerate() {
             println!("\nVERIFYING LAYER {i}");
             if i == 0 {
-                let r_1 = (0..(instance_bits + num_vars[0])).map(|_| 11.into()).collect::<Vec<_>>();
+                let r_1 = (0..(instance_bits + num_vars[0])).map(|_| F::rand(rng)).collect::<Vec<_>>();
                 let w_0 = DenseMultilinearExtension::from_evaluations_slice(
                     instance_bits + circuit.output_bits,
                     &outputs,

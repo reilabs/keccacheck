@@ -1,8 +1,10 @@
 use ark_bn254::Fr;
-use ark_ff::{AdditiveGroup, Field};
+use ark_ff::{AdditiveGroup, Field, UniformRand};
+use ark_serialize::CanonicalSerialize;
+use ark_std::rand::RngCore;
 use ark_sumcheck::{
-    gkr::{Circuit, GKR, Gate, Instance, Layer, LayerGate, compiled::CompiledCircuit},
-    rng::{Blake2b512Rng, FeedableRNG},
+    gkr::{compiled::CompiledCircuit, Circuit, Gate, Instance, Layer, LayerGate, GKR},
+    rng::{Blake2b512Rng, FeedableRNG}, Error as RngError,
 };
 
 // all gates are multiplications
@@ -44,6 +46,69 @@ fn test_parallel_reference() {
     GKR::verify(&mut fs_rng, &circuit, &instances, &gkr_proof);
 }
 
+#[test]
+fn not_rand() {
+    let mut rng = NotReallyRng::setup();
+    let result = Fr::rand(&mut rng);
+
+    let one = Fr::ONE;
+    println!("result = {result}, one {} {:?}", one, one.0.0);
+
+    let result = Fr::rand(&mut rng);
+
+    let one = Fr::ONE;
+    println!("result = {result}, one {} {:?}", one, one.0.0);
+
+
+    let result = Fr::rand(&mut rng);
+
+    let one = Fr::ONE;
+    println!("result = {result}, one {} {:?}", one, one.0.0);
+
+}
+
+struct NotReallyRng {
+    iter: usize,
+}
+
+impl RngCore for NotReallyRng {
+    fn next_u32(&mut self) -> u32 {
+        todo!()
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        //println!("call next_u64");
+        let result = match self.iter {
+            0 => 12436184717236109307,
+            1 => 3962172157175319849,
+            2 => 7381016538464732718,
+            3 => 1011752739694698287,
+            _ => panic!()
+        };
+        self.iter = (self.iter + 1) % 4;
+        result
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        todo!()
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), ark_std::rand::Error> {
+        todo!()
+    }
+}
+
+impl FeedableRNG for NotReallyRng {
+    type Error = RngError;
+
+    fn setup() -> Self {
+        Self { iter: 0, }
+    }
+
+    fn feed<M: CanonicalSerialize>(&mut self, msg: &M) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
 
 // all gates are multiplications
 // w0:          24
@@ -74,9 +139,9 @@ fn test_basic_parallel() {
 
     let compiled = CompiledCircuit::from_circuit_batched(&circuit, num_instances as usize);
 
-    let mut fs_rng = Blake2b512Rng::setup();
+    let mut fs_rng = NotReallyRng::setup();
     let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &instances);
 
-    let mut fs_rng = Blake2b512Rng::setup();
+    let mut fs_rng = NotReallyRng::setup();
     GKR::verify(&mut fs_rng, &circuit, &instances, &gkr_proof);
 }
