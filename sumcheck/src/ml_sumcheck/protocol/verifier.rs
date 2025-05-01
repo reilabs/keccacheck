@@ -107,7 +107,7 @@ impl<F: Field> IPForMLSumcheck<F> {
             }
             let p0 = evaluations[0];
             let p1 = evaluations[1];
-            println!("evaluations {:?}", verifier_state.polynomials_received);
+            println!("evaluations {:?}", evaluations);
 
             if p0 + p1 != expected {
                 return Err(crate::Error::Reject(Some(format!(

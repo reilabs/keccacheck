@@ -150,6 +150,7 @@ impl<F: Field> GKR<F> {
         println!("OUTPUTS {outputs:?}");
 
         for (i, layer) in circuit.layers.iter().enumerate() {
+            println!("\nverifying layer {i}");
             if i == 0 {
                 let r_1 = (0..(instance_bits + num_vars[0])).map(|_| 11.into()).collect::<Vec<_>>();
                 let w_0 = DenseMultilinearExtension::from_evaluations_slice(
@@ -157,7 +158,6 @@ impl<F: Field> GKR<F> {
                     &outputs,
                 );
                 let expected_sum = w_0.evaluate(&r_1);
-
                 println!("EXPECTED {expected_sum:?}");
 
                 let proof = &gkr_proof.rounds[i];
@@ -183,6 +183,8 @@ impl<F: Field> GKR<F> {
                 let alpha = F::rand(rng);
                 let beta = F::rand(rng);
                 let expected_sum = alpha * w_u + beta * w_v;
+                println!("EXPECTED {expected_sum:?}");
+
                 let proof = &gkr_proof.rounds[i];
                 let subclaim =
                     GKRRoundSumcheck::verify(rng, instance_bits, num_vars[i + 1], proof, expected_sum).unwrap();
@@ -198,6 +200,8 @@ impl<F: Field> GKR<F> {
                 let alpha = F::rand(rng);
                 let beta = F::rand(rng);
                 let expected_sum = alpha * w_u + beta * w_v;
+                println!("EXPECTED {expected_sum:?}");
+
                 let proof = &gkr_proof.rounds[i];
                 let subclaim =
                     GKRRoundSumcheck::verify(rng, instance_bits, num_vars[i + 1], proof, expected_sum).unwrap();

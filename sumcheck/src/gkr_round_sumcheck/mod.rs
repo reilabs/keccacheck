@@ -18,7 +18,7 @@ use ark_std::marker::PhantomData;
 use ark_std::rc::Rc;
 use ark_std::vec::Vec;
 
-/// Takes multilinear f1, f3, and input g = g1,...,gl. Returns h_g, and f1 fixed at g.
+/// Takes multilinear f1 fixed at g (output), and f3. Returns h_g.
 pub fn initialize_phase_one<F: Field>(
     f1_at_g: &SparseMultilinearExtension<F>,
     f3: &DenseMultilinearExtension<F>,
