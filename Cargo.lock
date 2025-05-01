@@ -329,6 +329,8 @@ dependencies = [
  "ark-bn254",
  "ark-ff",
  "ark-poly",
+ "ark-serialize",
+ "ark-std",
  "ark-sumcheck",
 ]
 
