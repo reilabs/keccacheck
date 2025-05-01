@@ -298,8 +298,6 @@ impl PredicateDnf {
                     })
                     .collect::<Vec<_>>();
 
-                println!("num_vars {num_vars} evaluations len {}", evaluations.len());
-
                 SparseMultilinearExtension::from_evaluations(num_vars, &evaluations)
             })
             .collect()

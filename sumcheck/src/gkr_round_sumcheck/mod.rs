@@ -28,36 +28,46 @@ pub fn initialize_phase_one<F: Field>(
     let instance_dim = f3.num_vars; // 'l` in paper
     let base_dim = instance_dim - instance_bits;
 
-    println!("f1_at_g vars {}, f3 b {}", f1_at_g.num_vars, f3.num_vars);
-
     assert_eq!(f1_at_g.num_vars + instance_bits, 2 * instance_dim);
     let mut a_hg: Vec<_> = (0..(1 << instance_dim)).map(|_| F::zero()).collect();
 
-    println!("f1_at_g evaluations {}", f1_at_g.evaluations.len());
-
-
+    // cxy - c uses the least significant bits (low variable names), y the most sig bits
     for (cxy, v) in f1_at_g.evaluations.iter() {
-        // println!("v {v:?}");
+        println!("cxy {cxy:b} v {v:?}");
 
         if v != &F::zero() {
+            // in f3 evaluations, instance id (c) is the most significant bit
+            // so we need to swap things around
             let cx = cxy & ((1 << base_dim) - 1);
             let c = cxy & ((1 << instance_bits) - 1);
             let xy = cxy >> instance_bits;
             let y = xy >> base_dim;
+            let x = cx >> instance_bits;
+
+
+            let yc = (c << base_dim) + y;
+            let xc = (c << base_dim) + x;
+
             let cy = c + (y << instance_bits);
             // let c = yc >> dim;
             // let xc = (c << instance_bits) + x;
-            //println!("xyc {xyc:b} x {x:b} yc {yc:b} c {c:b} xc {xc:b}");
 
-            a_hg[cx] += *v * f3[cy];
+            
+            println!("c {c:b} x {x:b} y {y:b}");
+            println!("a_hg[{xc:b}] += {} * f3[{yc:b}] = {} * {}", *v, *v, f3[yc]);
+
+            a_hg[xc] += *v * f3[yc];
         }
     }
 
     let hg = DenseMultilinearExtension::from_evaluations_vec(instance_dim, a_hg);
+
+    println!("returning hg {hg:?}");
+
     hg
 }
 
-/// Takes h_g and returns a sumcheck state
+/// Takes h_g and f2, returns a sumcheck state
 pub fn start_phase1_sumcheck<F: Field>(
     instances: &[(&DenseMultilinearExtension<F>, &DenseMultilinearExtension<F>)],
 ) -> ProverState<F> {
@@ -65,9 +75,6 @@ pub fn start_phase1_sumcheck<F: Field>(
     //assert_eq!(f2.num_vars, dim);
     let mut poly = ListOfProductsOfPolynomials::new(dim);
     for (h_g, f2) in instances {
-        println!("phase1 add product {h_g:?} {f2:?}");
-        //assert_ne!(h_g[0] + h_g[1] + h_g[2], F::zero());
-
         poly.add_product(
             vec![Rc::new((*h_g).clone()), Rc::new((*f2).clone())],
             F::one(),
@@ -96,7 +103,6 @@ pub fn start_phase2_sumcheck<F: Field>(
     instance_bits: usize,
 ) -> ProverState<F> {
     let first = &instances[0];
-    println!("start_phase2_sumcheck f1_gu {} f3 {}", first.0.num_vars, first.1.num_vars);
     let dim = first.0.num_vars;
     // assert_eq!(f3.num_vars, dim);
     let mut poly = ListOfProductsOfPolynomials::new(dim);
@@ -112,6 +118,7 @@ pub fn start_phase2_sumcheck<F: Field>(
     IPForMLSumcheck::prover_init(&poly)
 }
 
+#[derive(Debug)]
 /// GKR function in a form of f1(r, u, v) * f2(u) * f3(v) where r is const.
 pub struct GKRFunction<F: Field> {
     /// sparse wiring polynomial evaluated at random output r
@@ -122,6 +129,7 @@ pub struct GKRFunction<F: Field> {
     pub f3: DenseMultilinearExtension<F>,
 }
 
+#[derive(Debug)]
 /// A sum of multiple GKR functions
 pub struct GKRRound<F: Field> {
     /// List of functions under sum
@@ -160,7 +168,6 @@ impl<F: Field> GKRRoundSumcheck<F> {
         // assert_eq!(f2.num_vars, f3.num_vars);
 
         let dim = round.num_variables(0);
-        println!("first round dim {dim}");
 
         let mut h_g_vec = Vec::with_capacity(round.functions.len());
         let mut f1_g_vec = Vec::with_capacity(round.functions.len());
@@ -180,13 +187,18 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .map(|(a, b)| (a, b))
             .collect::<Vec<_>>();
 
+        println!("sumcheck instances {instances:?}");
+
         let mut phase1_ps = start_phase1_sumcheck(instances.as_slice());
         let mut phase1_vm = None;
         let mut phase1_prover_msgs = Vec::with_capacity(dim);
         let mut u = Vec::with_capacity(dim);
-        for _ in 0..dim {
+        for i in 0..dim {
             let pm = IPForMLSumcheck::prove_round(&mut phase1_ps, &phase1_vm);
 
+            if i == 0 {
+                println!("prover sum {:?}", pm.evaluations[0] + pm.evaluations[1]);
+            }
             rng.feed(&pm).unwrap();
             phase1_prover_msgs.push(pm);
             let vm = IPForMLSumcheck::sample_round(rng);
@@ -195,7 +207,6 @@ impl<F: Field> GKRRoundSumcheck<F> {
         }
 
         let dim = round.num_variables(1);
-        println!("second round dim {dim}");
 
         let mut f1_gu_vec = Vec::with_capacity(round.functions.len());
         for f1_g in f1_g_vec {
@@ -206,7 +217,6 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let f3 = round.functions.iter().map(|func| &func.f3);
 
         let u_instance_bits = u[u.len()-round.instance_bits..].to_vec();
-        println!("instance number len {} {}", u_instance_bits.len(), round.instance_bits);
 
         let instances = f1_gu_vec
             .iter()
@@ -229,7 +239,6 @@ impl<F: Field> GKRRoundSumcheck<F> {
             v.push(vm.randomness);
         }
 
-        println!("round layer vars {} point a {} b {}", round.layer.num_vars, u.len(), v.len());
         (
             GKRRoundProof {
                 phase1_sumcheck_msgs: phase1_prover_msgs,
@@ -249,34 +258,39 @@ impl<F: Field> GKRRoundSumcheck<F> {
     /// * `f2_num_vars`: represents number of variables of f2
     pub fn verify<R: FeedableRNG>(
         rng: &mut R,
+        instance_bits: usize,
         f2_num_vars: usize,
         proof: &GKRRoundProof<F>,
         claimed_sum: F,
     ) -> Result<GKRRoundSumcheckSubClaim<F>, crate::Error> {
         // verify first sumcheck
-        let dim = f2_num_vars;
+        let dim1 = instance_bits + f2_num_vars;
 
         let mut phase1_vs = IPForMLSumcheck::verifier_init(&PolynomialInfo {
             max_multiplicands: 2,
-            num_variables: dim,
+            num_variables: dim1,
         });
 
-        for i in 0..dim {
+        println!("phase 1 verification dim {}", dim1);
+        for i in 0..dim1 {
             let pm = &proof.phase1_sumcheck_msgs[i];
             rng.feed(pm).unwrap();
             let _result = IPForMLSumcheck::verify_round((*pm).clone(), &mut phase1_vs, rng);
         }
-        println!("phase 1 verification dim {}", dim);
         let phase1_subclaim = IPForMLSumcheck::check_and_generate_subclaim(phase1_vs, claimed_sum)?;
         println!("phase 1 verified");
 
         let u = phase1_subclaim.point;
 
+        let dim2 = f2_num_vars;
+
         let mut phase2_vs = IPForMLSumcheck::verifier_init(&PolynomialInfo {
             max_multiplicands: 2,
-            num_variables: dim,
+            num_variables: dim2,
         });
-        for i in 0..dim {
+
+        println!("phase 2 verification dim {}", dim2);
+        for i in 0..dim2 {
             let pm = &proof.phase2_sumcheck_msgs[i];
             rng.feed(pm).unwrap();
             let _result = IPForMLSumcheck::verify_round((*pm).clone(), &mut phase2_vs, rng);
