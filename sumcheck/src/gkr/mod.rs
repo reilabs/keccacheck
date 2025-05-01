@@ -120,8 +120,9 @@ impl<F: Field> GKR<F> {
 
             println!("polynomials {round:?}");
 
-            let (proof, rand) = GKRRoundSumcheck::prove(rng, &round);
+            let (proof, rand) = GKRRoundSumcheck::prove(rng, &round);            
             (u, v) = rand;
+            println!("proof points {u:?}, {v:?}");
             gkr_proof.rounds.push(proof);
         }
 
@@ -150,7 +151,7 @@ impl<F: Field> GKR<F> {
         println!("OUTPUTS {outputs:?}");
 
         for (i, layer) in circuit.layers.iter().enumerate() {
-            println!("\nverifying layer {i}");
+            println!("\nVERIFYING LAYER {i}");
             if i == 0 {
                 let r_1 = (0..(instance_bits + num_vars[0])).map(|_| 11.into()).collect::<Vec<_>>();
                 let w_0 = DenseMultilinearExtension::from_evaluations_slice(
