@@ -104,11 +104,13 @@ impl<F: Field> GKR<F> {
                 .iter()
                 .flat_map(|gate_type| {
                     println!("mle {:?}", gate_type.sum_of_sparse_mle);
-                    gate_type.gate.to_gkr_combination(
+                    let result = gate_type.gate.to_gkr_combination(
                         &gate_type.sum_of_sparse_mle,
                         &w_i,
                         combination,
-                    )
+                    );
+                    println!("gkr_combination {:?}", result);
+                    result
                 })
                 .collect();
 
@@ -195,6 +197,7 @@ impl<F: Field> GKR<F> {
                     instance_bits + circuit.input_bits,
                     &inputs,
                 );
+                println!("vars {} {} {}", w_n.num_vars, subclaim.u.len(), subclaim.v.len());
                 assert_eq!(w_n.evaluate(&subclaim.u), subclaim.w_u);
                 assert_eq!(w_n.evaluate(&subclaim.v), subclaim.w_v);
             } else {

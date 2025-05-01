@@ -294,6 +294,8 @@ impl PredicateDnf {
                             + (left << (outputs + instance_bits + instance_bits))
                             + (right << (outputs + instance_bits + instance_bits + inputs));
 
+                        println!("key {key} ({key:b}), out_instance {out_and_instance:b} instance {instance:b} left {left:b} right {right:b}");
+                        
                         Some((key, F::ONE))
                     })
                     .collect::<Vec<_>>();

@@ -32,13 +32,14 @@ pub fn initialize_phase_one<F: Field>(
     let mut a_hg: Vec<_> = (0..(1 << instance_dim)).map(|_| F::zero()).collect();
 
     // cxy - c uses the least significant bits (low variable names), y the most sig bits
+    println!("initialize phase one, ins dim {instance_dim} base dim {base_dim}");
     for (cxy, v) in f1_at_g.evaluations.iter() {
         println!("cxy {cxy:b} v {v:?}");
 
         if v != &F::zero() {
             // in f3 evaluations, instance id (c) is the most significant bit
             // so we need to swap things around
-            let cx = cxy & ((1 << base_dim) - 1);
+            let cx = cxy & ((1 << instance_dim) - 1);
             let c = cxy & ((1 << instance_bits) - 1);
             let xy = cxy >> instance_bits;
             let y = xy >> base_dim;
@@ -75,6 +76,9 @@ pub fn start_phase1_sumcheck<F: Field>(
     //assert_eq!(f2.num_vars, dim);
     let mut poly = ListOfProductsOfPolynomials::new(dim);
     for (h_g, f2) in instances {
+        println!("\nproduct");
+        println!("h_g {:?}", h_g.evaluations);
+        println!("f2 {:?}", h_g.evaluations);
         poly.add_product(
             vec![Rc::new((*h_g).clone()), Rc::new((*f2).clone())],
             F::one(),
@@ -322,7 +326,8 @@ impl<F: Field> GKRRoundSumcheck<F> {
         )?;
         println!("phase 2 verified");
 
-        let v = phase2_subclaim.point;
+        let mut v = phase2_subclaim.point;
+        v.extend(&u[u.len()-instance_bits..]);
 
         let expected_evaluation = phase2_subclaim.expected_evaluation;
 

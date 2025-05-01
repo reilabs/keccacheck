@@ -50,6 +50,8 @@ impl<F: Field> CompiledCircuit<F> {
                     let graph = dnf.to_evaluation_graph(layer_bits, input_bits);
                     let sum_of_sparse_mle = dnf.to_sum_of_sparse_mle(layer_bits, input_bits, instance_bits);
 
+                    println!("layer vars {layer_bits} {input_bits} {instance_bits} - expected {}", layer_bits + 2 * input_bits + 2 * instance_bits);
+
                     CompiledLayerGate {
                         gate: gate.gate,
                         graph,
