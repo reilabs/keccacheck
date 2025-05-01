@@ -39,16 +39,16 @@ fn test_parallel_reference() {
 
     let compiled = CompiledCircuit::from_circuit_batched(&circuit, num_instances as usize);
 
-    let mut fs_rng = Blake2b512Rng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &instances);
+    let mut rng = NotReallyRng::new(&Into::<Fr>::into(1u64).0.0);
+    let gkr_proof = GKR::prove(&mut rng, &compiled, &instances);
 
-    let mut fs_rng = Blake2b512Rng::setup();
-    GKR::verify(&mut fs_rng, &circuit, &instances, &gkr_proof);
+    let mut rng = NotReallyRng::new(&Into::<Fr>::into(1u64).0.0);
+    GKR::verify(&mut rng, &circuit, &instances, &gkr_proof);
 }
 
 #[test]
 fn not_rand() {
-    let mut rng = NotReallyRng::setup();
+    let mut rng = NotReallyRng::new(&Into::<Fr>::into(2u64).0.0);
     let result = Fr::rand(&mut rng);
 
     let one = Fr::ONE;
@@ -69,6 +69,13 @@ fn not_rand() {
 
 struct NotReallyRng {
     iter: usize,
+    source: Vec<u64>,
+}
+
+impl NotReallyRng {
+    fn new(source: &[u64]) -> Self {
+        Self { source: source.to_vec(), iter: 0}
+    }
 }
 
 impl RngCore for NotReallyRng {
@@ -77,14 +84,7 @@ impl RngCore for NotReallyRng {
     }
 
     fn next_u64(&mut self) -> u64 {
-        //println!("call next_u64");
-        let result = match self.iter {
-            0 => 12436184717236109307,
-            1 => 3962172157175319849,
-            2 => 7381016538464732718,
-            3 => 1011752739694698287,
-            _ => panic!()
-        };
+        let result = self.source[self.iter];
         self.iter = (self.iter + 1) % 4;
         result
     }
@@ -102,7 +102,7 @@ impl FeedableRNG for NotReallyRng {
     type Error = RngError;
 
     fn setup() -> Self {
-        Self { iter: 0, }
+        Self::new(&Fr::ONE.0.0)
     }
 
     fn feed<M: CanonicalSerialize>(&mut self, msg: &M) -> Result<(), Self::Error> {
@@ -139,9 +139,9 @@ fn test_basic_parallel() {
 
     let compiled = CompiledCircuit::from_circuit_batched(&circuit, num_instances as usize);
 
-    let mut fs_rng = NotReallyRng::setup();
-    let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &instances);
+    let mut rng = NotReallyRng::new(&Into::<Fr>::into(1u64).0.0);
+    let gkr_proof = GKR::prove(&mut rng, &compiled, &instances);
 
-    let mut fs_rng = NotReallyRng::setup();
-    GKR::verify(&mut fs_rng, &circuit, &instances, &gkr_proof);
+    let mut rng = NotReallyRng::new(&Into::<Fr>::into(1u64).0.0);
+    GKR::verify(&mut rng, &circuit, &instances, &gkr_proof);
 }
