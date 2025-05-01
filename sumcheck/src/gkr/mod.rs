@@ -104,16 +104,26 @@ impl<F: Field> GKR<F> {
                 .gates
                 .iter()
                 .flat_map(|gate_type| {
-                    println!("mle {:?}", gate_type.sum_of_sparse_mle);
+                    // TODO: remove, for debugging only
+                    assert_eq!(gate_type.sum_of_sparse_mle.len(), 1);
+                    println!("f1 (dim {}): {:?}", gate_type.sum_of_sparse_mle[0].num_vars, gate_type.sum_of_sparse_mle[0].evaluations);
                     let result = gate_type.gate.to_gkr_combination(
                         &gate_type.sum_of_sparse_mle,
                         &w_i,
                         combination,
                     );
-                    println!("gkr_combination {:?}", result);
+                    // TODO: remove
+                    assert_eq!(result.len(), 1);
+                    println!("gkr_combination");
+                    println!("  f1_g (dim {}): {:?}", result[0].f1_g.num_vars, result[0].f1_g.evaluations);
+                    println!("  f2 (dim {}): {:?}", result[0].f2.num_vars, result[0].f2.evaluations);
+                    println!("  f3 (dim {}): {:?}", result[0].f3.num_vars, result[0].f3.evaluations);
+                    
                     result
                 })
                 .collect();
+            
+            println!("  layer (dim {}): {:?}", w_i.num_vars, w_i.evaluations);
 
             let round = GKRRound {
                 functions,
@@ -121,11 +131,8 @@ impl<F: Field> GKR<F> {
                 instance_bits
             };
 
-            println!("polynomials {round:?}");
-
             let (proof, rand) = GKRRoundSumcheck::prove(rng, &round);            
             (u, v) = rand;
-            println!("proof points {u:?}, {v:?}");
             gkr_proof.rounds.push(proof);
         }
 

@@ -67,7 +67,6 @@ impl Layer {
             })
             .collect::<Vec<_>>();
 
-        println!("layer with bits {output_bits}");
         Self {
             layer_bits: output_bits,
             gates,
