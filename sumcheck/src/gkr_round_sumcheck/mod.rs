@@ -17,6 +17,7 @@ use ark_poly::{
 use ark_std::marker::PhantomData;
 use ark_std::rc::Rc;
 use ark_std::vec::Vec;
+use tracing::Instrument;
 
 /// Takes multilinear f1 fixed at g (output), and f3. Returns h_g.
 pub fn initialize_phase_one<F: Field>(
@@ -76,9 +77,9 @@ pub fn start_phase1_sumcheck<F: Field>(
     //assert_eq!(f2.num_vars, dim);
     let mut poly = ListOfProductsOfPolynomials::new(dim);
     for (h_g, f2) in instances {
-        println!("\nproduct");
-        println!("h_g {:?}", h_g.evaluations);
-        println!("f2 {:?}", h_g.evaluations);
+        // println!("\nproduct");
+        // println!("h_g {:?}", h_g.evaluations);
+        // println!("f2 {:?}", h_g.evaluations);
         poly.add_product(
             vec![Rc::new((*h_g).clone()), Rc::new((*f2).clone())],
             F::one(),
@@ -168,13 +169,6 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let mut h_g_vec = Vec::with_capacity(round.functions.len());
         let mut f1_g_vec = Vec::with_capacity(round.functions.len());
         for function in &round.functions {
-            println!("SANITY CHECK START");
-            let f2_c = function.f2.fix_variables(&[F::ONE]);
-            let f3_c = function.f2.fix_variables(&[F::ZERO]);
-            println!("f2, right child {f2_c:?}");
-            println!("f3, left child {f3_c:?}");
-            println!("SANITY CHECK END");
-
             let f1_g = &function.f1_g;
             let f3 = &function.f3;
             let h_g = initialize_phase_one(f1_g, f3, round.instance_bits);
@@ -218,7 +212,14 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let mut f1_gu_vec = Vec::with_capacity(round.functions.len());
         for f1_g in f1_g_vec {
             assert_eq!(u_x.len() * 2 + u_instance_bits.len(), f1_g.num_vars);
-            let f1_gu = f1_g.fix_variables(&u_instance_bits).fix_variables(&u_x).to_dense_multilinear_extension();
+
+            println!("f1_g {f1_g:?}");
+            let f1_gc = f1_g.fix_variables(&u_instance_bits);
+            println!("f1_gc {f1_gc:?}");
+            let f1_gcu = f1_gc.fix_variables(&u_x);
+            println!("f1_gcu {f1_gcu:?}");
+            let f1_gu = f1_gcu.to_dense_multilinear_extension();
+            println!("f1_gu {f1_gu:?}");
             f1_gu_vec.push(f1_gu);
         }
 
@@ -226,14 +227,29 @@ impl<F: Field> GKRRoundSumcheck<F> {
             // f3(y, c) has wrong endianness. we fixed c in the previous phase of sumcheck
             // now need to iterate over y. we'll relabel f3(y, c) to f3(c, y) and set c to a const
             // so we're left with f3(y) required for this phase of sumcheck
-            let before = &func.f3;
-            let after = before.relabel(0, dim, round.instance_bits);
 
-            println!("relabel before {before:?}");
-            println!("relabel after {after:?}");
+            println!("relabel f3 vars {} var_dim {} instance_dim {}", func.f3.num_vars, dim, round.instance_bits);
+
+            println!("f3 {:?}", func.f3.evaluations);
+
+            let mut evaluations = vec![F::ZERO; func.f3.evaluations.len()];
+            // currently y is in least significant bits, c in the most significant bits.
+            for (yc, val) in func.f3.evaluations.iter().enumerate() {
+                let y = yc & ((1 << dim) - 1);
+                let c = yc >> dim;
+                let cy = (y << round.instance_bits) + c;
+                println!("relabel {yc:b} to {cy:b}");
+                evaluations[cy] = *val;
+            }
+            let f3_r = DenseMultilinearExtension::from_evaluations_vec(func.f3.num_vars, evaluations);
 
 
-            after.fix_variables(&u_instance_bits)
+            // let after = before.relabel(0, dim, round.instance_bits);
+
+            println!("f3_r {:?}", f3_r.evaluations);
+            let f3_c = f3_r.fix_variables(&u_instance_bits);
+            println!("f3_c {f3_c:?}");
+            f3_c
         });
 
 

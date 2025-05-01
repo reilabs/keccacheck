@@ -19,6 +19,7 @@ pub mod graph;
 pub mod predicate;
 pub mod util;
 
+#[derive(Debug)]
 /// GKR problem instance
 pub struct Instance<F: Field> {
     /// GKR input data
