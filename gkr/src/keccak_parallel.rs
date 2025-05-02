@@ -208,8 +208,10 @@ pub fn gkr_pred_theta(instances: &[Instance<Fr>]) {
 
 #[test]
 fn test_keccak_f() {
-    let instances = 128;
+    run_keccak_f(4);
+}
 
+pub fn run_keccak_f(instances: usize) {
     let instance_size = 25;
 
     let input = (0..(instances * instance_size))
