@@ -241,21 +241,15 @@ impl<F: Field> GKR<F> {
                     &inputs,
                 );
 
-                let sub_uc: Vec<_> = subclaim.u.iter()
+                let sub_uc: Vec<_> = subclaim
+                    .u
+                    .iter()
                     .chain(subclaim.c.iter())
                     .copied()
                     .collect();
-                let sub_vc: Vec<_> = subclaim.v.iter()
-                    .chain(&subclaim.c)
-                    .copied()
-                    .collect();
+                let sub_vc: Vec<_> = subclaim.v.iter().chain(&subclaim.c).copied().collect();
 
-                println!(
-                    "vars {} {} {}",
-                    w_n.num_vars,
-                    sub_uc.len(),
-                    sub_vc.len()
-                );
+                println!("vars {} {} {}", w_n.num_vars, sub_uc.len(), sub_vc.len());
                 assert_eq!(w_n.evaluate(&sub_uc), subclaim.w_uc);
                 assert_eq!(w_n.evaluate(&sub_vc), subclaim.w_vc);
             } else {
