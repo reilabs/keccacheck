@@ -10,9 +10,9 @@ use super::GKRRound;
 #[derive(Debug)]
 /// Proof for GKR Round Function
 pub struct GKRRoundProof<F: Field> {
-    /// first half of sumcheck messages
-    pub phase1_sumcheck_msgs: Vec<ProverMsg<F>>,
-    /// second half of sumcheck messages
+    /// sumcheck messages for the first gate input
+    pub phase0_sumcheck_msgs: Vec<ProverMsg<F>>,
+    /// sumcheck messages for the second gate input
     pub phase2_sumcheck_msgs: Vec<ProverMsg<F>>,
     /// w(u)
     pub w_u: F,
@@ -23,7 +23,7 @@ pub struct GKRRoundProof<F: Field> {
 impl<F: Field> GKRRoundProof<F> {
     /// Extract the witness (i.e. the sum of GKR)
     pub fn extract_sum(&self) -> F {
-        self.phase1_sumcheck_msgs[0].evaluations[0] + self.phase1_sumcheck_msgs[0].evaluations[1]
+        self.phase0_sumcheck_msgs[0].evaluations[0] + self.phase0_sumcheck_msgs[0].evaluations[1]
     }
 
     /// Extract the last message of sumcheck

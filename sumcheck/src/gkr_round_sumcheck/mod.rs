@@ -143,8 +143,9 @@ impl<F: Field> GKRRound<F> {
     /// Number of variables in each GKR function
     pub fn num_variables(&self, phase: usize) -> usize {
         match phase {
-            0 => self.functions[0].f2.num_vars,
-            1 => self.functions[0].f3.num_vars - self.instance_bits,
+            0 => self.functions[0].f2.num_vars - self.instance_bits,
+            1 => self.instance_bits,
+            2 => self.functions[0].f3.num_vars - self.instance_bits,
             _ => panic!("only functions in the form of f1(...)f2(...)f3(...) supported"),
         }
     }
@@ -172,9 +173,9 @@ impl<F: Field> GKRRoundSumcheck<F> {
         // f1_g(c', a, b), f2(a, c') f3(b, c') - each is exactly 1 bit
         let GKRFunction { f1_g, f2, f3 } =  &round_bf.functions[0];
         let c_dim = round_bf.instance_bits;
-        let ab_dim = round_bf.num_variables(1);
+        let ab_dim = round_bf.num_variables(0);
 
-        let dim = round.num_variables(0);
+        let dim = ab_dim + c_dim;
 
         println!("sumcheck phase 1 prep (dim {dim})");
 
@@ -313,7 +314,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let u_instance_bits = u[u.len()-round.instance_bits..].to_vec();
 
 
-        let dim = round.num_variables(1);
+        let dim = round.num_variables(2);
         println!("sumcheck phase 2 (dim {dim})");
 
         let mut f1_gu_vec = Vec::with_capacity(round.functions.len());
@@ -391,7 +392,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
 
         (
             GKRRoundProof {
-                phase1_sumcheck_msgs: phase1_prover_msgs,
+                phase0_sumcheck_msgs: phase1_prover_msgs,
                 phase2_sumcheck_msgs: phase2_prover_msgs,
                 w_u: round.layer.evaluate(&u),
                 w_v: round.layer.evaluate(&v),
@@ -423,7 +424,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
 
         println!("phase 1 verification dim {}", dim1);
         for i in 0..dim1 {
-            let pm = &proof.phase1_sumcheck_msgs[i];
+            let pm = &proof.phase0_sumcheck_msgs[i];
             rng.feed(pm).unwrap();
             let _result = IPForMLSumcheck::verify_round((*pm).clone(), &mut phase1_vs, rng);
         }
