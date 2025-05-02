@@ -41,7 +41,7 @@ impl<F: Field> IPForMLSumcheck<F> {
             round: 1,
             nv: index_info.num_variables,
             max_multiplicands: index_info.max_multiplicands,
-            finished: false,
+            finished: index_info.num_variables == 0,
             polynomials_received: Vec::with_capacity(index_info.num_variables),
             randomness: Vec::with_capacity(index_info.num_variables),
         }

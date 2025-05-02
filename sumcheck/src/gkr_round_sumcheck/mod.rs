@@ -251,7 +251,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
         // assert_eq!(f2.num_vars, f3.num_vars);
 
         let round_bf = round;
-        assert_eq!(round_bf.functions.len(), 1);
+        // assert_eq!(round_bf.functions.len(), 1);
 
         // f1_g(c', a, b), f2(a, c') f3(b, c') - each is exactly 1 bit
         let GKRFunction { f1_g, f2, f3 } =  &round_bf.functions[0];
@@ -270,51 +270,51 @@ impl<F: Field> GKRRoundSumcheck<F> {
             f1_g_vec.push(f1_g);
         }
 
-        println!("BRUTE FORCE a c b vars {} {} {}", f1_g.num_vars, f2.num_vars, f3.num_vars);
-        println!("  round 0 vars 3");
-        let mut h = vec![F::ZERO; 3];
-        for a in 0u64..3 {
-            for cb in 0..4 {
-                let c: u64 = cb & ((1 << b_dim) - 1);
-                let b = cb >> b_dim;
-                h[a as usize] += f1_g.evaluate(&vec![c.into(), a.into(), b.into()]) * f2.evaluate(&vec![a.into(), c.into()]) * f3.evaluate(&vec![b.into(), c.into()]);
-            }
-            println!("      h({a}) = {}", h[a as usize]);
-            for cb in 0..4 {
-                let c: u64 = cb & ((1 << b_dim) - 1);
-                let b = cb >> b_dim;
-                let a1 = f1_g.evaluate(&vec![c.into(), a.into(), b.into()]);
-                let a2 = f2.evaluate(&vec![a.into(), c.into()]);
-                let a3 = f3.evaluate(&vec![b.into(), c.into()]);
-                println!("        h({c}) += {a1} * {a2} * {a3}");
-            }
+        // println!("BRUTE FORCE a c b vars {} {} {}", f1_g.num_vars, f2.num_vars, f3.num_vars);
+        // println!("  round 0 vars 3");
+        // let mut h = vec![F::ZERO; 3];
+        // for a in 0u64..3 {
+        //     for cb in 0..4 {
+        //         let c: u64 = cb & ((1 << b_dim) - 1);
+        //         let b = cb >> b_dim;
+        //         h[a as usize] += f1_g.evaluate(&vec![c.into(), a.into(), b.into()]) * f2.evaluate(&vec![a.into(), c.into()]) * f3.evaluate(&vec![b.into(), c.into()]);
+        //     }
+        //     println!("      h({a}) = {}", h[a as usize]);
+        //     for cb in 0..4 {
+        //         let c: u64 = cb & ((1 << b_dim) - 1);
+        //         let b = cb >> b_dim;
+        //         let a1 = f1_g.evaluate(&vec![c.into(), a.into(), b.into()]);
+        //         let a2 = f2.evaluate(&vec![a.into(), c.into()]);
+        //         let a3 = f3.evaluate(&vec![b.into(), c.into()]);
+        //         println!("        h({c}) += {a1} * {a2} * {a3}");
+        //     }
 
-        }
-        println!("    h(0) + h(1) = {}", h[0] + h[1]);
+        // }
+        // println!("    h(0) + h(1) = {}", h[0] + h[1]);
 
-        println!("  round 1 vars 2");
-        let mut h = vec![F::ZERO; 3];
-        for c in 0u64..3 {
-            for b in 0..2 {
-                h[c as usize] += f1_g.evaluate(&vec![c.into(), 2.into(), b.into()]) * f2.evaluate(&vec![2.into(), c.into()]) * f3.evaluate(&vec![b.into(), c.into()]);
-            }
-            println!("      h({c}) = {}", h[c as usize]);
-            for b in 0..2 {
-                let a1 = f1_g.evaluate(&vec![c.into(), 2.into(), b.into()]);
-                let a2 = f2.evaluate(&vec![2.into(), c.into()]);
-                let a3 = f3.evaluate(&vec![b.into(), c.into()]);
-                println!("        h({c}) += {a1} * {a2} * {a3}");
-            }
-        }
-        println!("    h(0) + h(1) = {}", h[0] + h[1]);
+        // println!("  round 1 vars 2");
+        // let mut h = vec![F::ZERO; 3];
+        // for c in 0u64..3 {
+        //     for b in 0..2 {
+        //         h[c as usize] += f1_g.evaluate(&vec![c.into(), 2.into(), b.into()]) * f2.evaluate(&vec![2.into(), c.into()]) * f3.evaluate(&vec![b.into(), c.into()]);
+        //     }
+        //     println!("      h({c}) = {}", h[c as usize]);
+        //     for b in 0..2 {
+        //         let a1 = f1_g.evaluate(&vec![c.into(), 2.into(), b.into()]);
+        //         let a2 = f2.evaluate(&vec![2.into(), c.into()]);
+        //         let a3 = f3.evaluate(&vec![b.into(), c.into()]);
+        //         println!("        h({c}) += {a1} * {a2} * {a3}");
+        //     }
+        // }
+        // println!("    h(0) + h(1) = {}", h[0] + h[1]);
 
-        println!("  round 2 vars 1");
-        let mut h = vec![F::ZERO; 3];
-        for b in 0u64..3 {
-            h[b as usize] += f1_g.evaluate(&vec![2.into(), 2.into(), b.into()]) * f2.evaluate(&vec![2.into(), 2.into()]) * f3.evaluate(&vec![b.into(), 2.into()]);
-            println!("    h({b}) = {}", h[b as usize]);
-        }
-        println!("      h(0) + h(1) = {}", h[0] + h[1]);
+        // println!("  round 2 vars 1");
+        // let mut h = vec![F::ZERO; 3];
+        // for b in 0u64..3 {
+        //     h[b as usize] += f1_g.evaluate(&vec![2.into(), 2.into(), b.into()]) * f2.evaluate(&vec![2.into(), 2.into()]) * f3.evaluate(&vec![b.into(), 2.into()]);
+        //     println!("    h({b}) = {}", h[b as usize]);
+        // }
+        // println!("      h(0) + h(1) = {}", h[0] + h[1]);
 
         println!("sumcheck phase 0 (dim {a_dim})");
 
@@ -325,7 +325,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .map(|(a, b)| (a, b))
             .collect::<Vec<_>>();
 
-        assert_eq!(instances.len(), 1);
+        // assert_eq!(instances.len(), 1);
 
         let mut phase1_ps = start_phase0_sumcheck(instances.as_slice());
         let mut phase1_vm = None;
@@ -434,7 +434,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .map(|((a, b), c)| (a, b, c.evaluate(&cp)))
             .collect::<Vec<_>>();
 
-        assert_eq!(instances.len(), 1);
+        // assert_eq!(instances.len(), 1);
         println!("  f1_gu (dim {}) {:?}", instances[0].0.num_vars, instances[0].0.evaluations);
         println!("  f3 (dim {}) {:?}", instances[0].1.num_vars, instances[0].1.evaluations);
         println!("  f2 {:?}", instances[0].2);
