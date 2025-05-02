@@ -3,8 +3,9 @@ use ark_ff::{AdditiveGroup, Field, UniformRand};
 use ark_serialize::CanonicalSerialize;
 use ark_std::rand::RngCore;
 use ark_sumcheck::{
-    gkr::{compiled::CompiledCircuit, Circuit, Gate, Instance, Layer, LayerGate, GKR},
-    rng::{Blake2b512Rng, FeedableRNG}, Error as RngError,
+    Error as RngError,
+    gkr::{Circuit, GKR, Gate, Instance, Layer, LayerGate, compiled::CompiledCircuit},
+    rng::{Blake2b512Rng, FeedableRNG},
 };
 
 // all gates are multiplications
@@ -26,16 +27,15 @@ fn test_parallel_reference() {
 
     let num_instances = 1;
 
-    let instances = (0u64..num_instances).map(|i| {
-        Instance::<Fr> {
+    let instances = (0u64..num_instances)
+        .map(|i| Instance::<Fr> {
             inputs: (0..8).map(|j| (i * 8 + j + 1).into()).collect(),
             outputs: vec![
                 (0..4).fold(Fr::ONE, |acc, j| acc * Into::<Fr>::into(i * 8 + j + 1)),
                 (4..8).fold(Fr::ONE, |acc, j| acc * Into::<Fr>::into(i * 8 + j + 1)),
-            ]
-        }
-    }).collect::<Vec<_>>();
-
+            ],
+        })
+        .collect::<Vec<_>>();
 
     let compiled = CompiledCircuit::from_circuit_batched(&circuit, num_instances as usize);
 
@@ -59,12 +59,10 @@ fn not_rand() {
     let one = Fr::ONE;
     println!("result = {result}, one {} {:?}", one, one.0.0);
 
-
     let result = Fr::rand(&mut rng);
 
     let one = Fr::ONE;
     println!("result = {result}, one {} {:?}", one, one.0.0);
-
 }
 
 struct NotReallyRng {
@@ -74,7 +72,10 @@ struct NotReallyRng {
 
 impl NotReallyRng {
     fn new(source: &[u64]) -> Self {
-        Self { source: source.to_vec(), iter: 0}
+        Self {
+            source: source.to_vec(),
+            iter: 0,
+        }
     }
 }
 
@@ -129,14 +130,12 @@ fn test_basic_parallel() {
 
     let num_instances = 2;
 
-    let instances = (0u64..num_instances).map(|i| {
-        Instance::<Fr> {
+    let instances = (0u64..num_instances)
+        .map(|i| Instance::<Fr> {
             inputs: (0..2).map(|j| (i * 2 + j + 1).into()).collect(),
-            outputs: vec![(0..2).fold(Fr::ONE, |acc, j| acc * Into::<Fr>::into(i * 2 + j + 1))]
-        }
-    }).collect::<Vec<_>>();
-
-    println!("instances {instances:?}");
+            outputs: vec![(0..2).fold(Fr::ONE, |acc, j| acc * Into::<Fr>::into(i * 2 + j + 1))],
+        })
+        .collect::<Vec<_>>();
 
     let compiled = CompiledCircuit::from_circuit_batched(&circuit, num_instances as usize);
 

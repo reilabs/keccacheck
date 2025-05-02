@@ -64,7 +64,10 @@ impl<F: Field> GKR<F> {
 
         for i in 0..instances.len() {
             for j in 0..instances[i].outputs.len() {
-                assert_eq!(evaluations[0][i * instances[i].outputs.len() + j], instances[i].outputs[j]);
+                assert_eq!(
+                    evaluations[0][i * instances[i].outputs.len() + j],
+                    instances[i].outputs[j]
+                );
             }
         }
 
@@ -82,7 +85,9 @@ impl<F: Field> GKR<F> {
 
         let mut u = Vec::new();
         let mut v = Vec::new();
-        let r_1 = (0..(instance_bits + num_vars[0])).map(|_| F::rand(rng)).collect::<Vec<_>>();
+        let r_1 = (0..(instance_bits + num_vars[0]))
+            .map(|_| F::rand(rng))
+            .collect::<Vec<_>>();
 
         for (i, layer) in circuit.layers.iter().enumerate() {
             let combination: &[(F, &[F])] = if i == 0 {
@@ -93,7 +98,7 @@ impl<F: Field> GKR<F> {
                 &[(alpha, &u), (beta, &v)]
             };
 
-            println!("\nproving layer {i}: {combination:?}");
+            // println!("\nproving layer {i}: {combination:?}");
 
             let w_i = DenseMultilinearExtension::from_evaluations_slice(
                 instance_bits + num_vars[i + 1],
@@ -104,9 +109,6 @@ impl<F: Field> GKR<F> {
                 .gates
                 .iter()
                 .flat_map(|gate_type| {
-                    // TODO: remove, for debugging only
-                    // assert_eq!(gate_type.sum_of_sparse_mle.len(), 1);
-                    println!("f1 (dim {}): {:?}", gate_type.sum_of_sparse_mle[0].num_vars, gate_type.sum_of_sparse_mle[0].evaluations);
                     let result = gate_type.gate.to_gkr_combination(
                         &gate_type.sum_of_sparse_mle,
                         &w_i,
@@ -118,20 +120,20 @@ impl<F: Field> GKR<F> {
                     // println!("  f1_g (dim {}): {:?}", result[0].f1_g.num_vars, result[0].f1_g.evaluations);
                     // println!("  f2 (dim {}): {:?}", result[0].f2.num_vars, result[0].f2.evaluations);
                     // println!("  f3 (dim {}): {:?}", result[0].f3.num_vars, result[0].f3.evaluations);
-                    
+
                     result
                 })
                 .collect();
-            
-            println!("  layer (dim {}): {:?}", w_i.num_vars, w_i.evaluations);
+
+            // println!("  layer (dim {}): {:?}", w_i.num_vars, w_i.evaluations);
 
             let round = GKRRound {
                 functions,
                 layer: w_i,
-                instance_bits
+                instance_bits,
             };
 
-            let (proof, rand) = GKRRoundSumcheck::prove(rng, &round);            
+            let (proof, rand) = GKRRoundSumcheck::prove(rng, &round);
             (u, v) = rand;
             gkr_proof.rounds.push(proof);
         }
@@ -154,8 +156,14 @@ impl<F: Field> GKR<F> {
         let (mut w_uc, mut w_vc) = Default::default();
 
         // TODO: this allocates too much
-        let inputs = instances.iter().flat_map(|instance| instance.inputs.clone()).collect::<Vec<_>>();
-        let outputs = instances.iter().flat_map(|instance| instance.outputs.clone()).collect::<Vec<_>>();
+        let inputs = instances
+            .iter()
+            .flat_map(|instance| instance.inputs.clone())
+            .collect::<Vec<_>>();
+        let outputs = instances
+            .iter()
+            .flat_map(|instance| instance.outputs.clone())
+            .collect::<Vec<_>>();
 
         println!("INPUTS {inputs:?}");
         println!("OUTPUTS {outputs:?}");
@@ -163,7 +171,9 @@ impl<F: Field> GKR<F> {
         for (i, layer) in circuit.layers.iter().enumerate() {
             println!("\nVERIFYING LAYER {i}");
             if i == 0 {
-                let r_1 = (0..(instance_bits + num_vars[0])).map(|_| F::rand(rng)).collect::<Vec<_>>();
+                let r_1 = (0..(instance_bits + num_vars[0]))
+                    .map(|_| F::rand(rng))
+                    .collect::<Vec<_>>();
                 let w_0 = DenseMultilinearExtension::from_evaluations_slice(
                     instance_bits + circuit.output_bits,
                     &outputs,
@@ -172,20 +182,39 @@ impl<F: Field> GKR<F> {
                 println!("EXPECTED {expected_sum:?}");
 
                 let proof = &gkr_proof.rounds[i];
-                let subclaim =
-                    GKRRoundSumcheck::verify(rng, instance_bits, num_vars[i + 1], proof, expected_sum).unwrap();
+                let subclaim = GKRRoundSumcheck::verify(
+                    rng,
+                    instance_bits,
+                    num_vars[i + 1],
+                    proof,
+                    expected_sum,
+                )
+                .unwrap();
                 (w_uc, w_vc) = (subclaim.w_uc, subclaim.w_vc);
 
                 let mut wiring_res = F::ZERO;
                 for gate_type in &layer.gates {
-                    let ruv: Vec<_> = r_1
+                    let rcuv: Vec<_> = r_1
                         .iter()
+                        .chain(subclaim.c.iter())
                         .chain(subclaim.u.iter())
                         .chain(subclaim.v.iter())
                         .copied()
                         .collect();
 
-                    let wiring = gate_type.wiring.evaluate(&ruv);
+                    // TODO: don't rewire within the verifier!
+                    let instance_wiring = gate_type.wiring.rewire_with_instances(
+                        instance_bits,
+                        num_vars[i],
+                        num_vars[i + 1],
+                    );
+                    println!(
+                        "wiring mask {:b} then {:b}",
+                        gate_type.wiring.mask(),
+                        instance_wiring.mask()
+                    );
+
+                    let wiring = instance_wiring.evaluate(&rcuv);
                     wiring_res += wiring * gate_type.gate.evaluate(w_uc, w_vc)
                 }
                 assert_eq!(wiring_res, proof.check_sum(subclaim.v.last().unwrap()));
@@ -197,15 +226,26 @@ impl<F: Field> GKR<F> {
                 println!("EXPECTED {expected_sum:?}");
 
                 let proof = &gkr_proof.rounds[i];
-                let subclaim =
-                    GKRRoundSumcheck::verify(rng, instance_bits, num_vars[i + 1], proof, expected_sum).unwrap();
+                let subclaim = GKRRoundSumcheck::verify(
+                    rng,
+                    instance_bits,
+                    num_vars[i + 1],
+                    proof,
+                    expected_sum,
+                )
+                .unwrap();
 
                 // verify last round matches actual inputs
                 let w_n = DenseMultilinearExtension::from_evaluations_slice(
                     instance_bits + circuit.input_bits,
                     &inputs,
                 );
-                println!("vars {} {} {}", w_n.num_vars, subclaim.u.len(), subclaim.v.len());
+                println!(
+                    "vars {} {} {}",
+                    w_n.num_vars,
+                    subclaim.u.len(),
+                    subclaim.v.len()
+                );
                 assert_eq!(w_n.evaluate(&subclaim.u), subclaim.w_uc);
                 assert_eq!(w_n.evaluate(&subclaim.v), subclaim.w_vc);
             } else {
@@ -215,8 +255,14 @@ impl<F: Field> GKR<F> {
                 println!("EXPECTED {expected_sum:?}");
 
                 let proof = &gkr_proof.rounds[i];
-                let subclaim =
-                    GKRRoundSumcheck::verify(rng, instance_bits, num_vars[i + 1], proof, expected_sum).unwrap();
+                let subclaim = GKRRoundSumcheck::verify(
+                    rng,
+                    instance_bits,
+                    num_vars[i + 1],
+                    proof,
+                    expected_sum,
+                )
+                .unwrap();
                 (w_uc, w_vc) = (subclaim.w_uc, subclaim.w_vc);
 
                 let mut wiring_res = F::ZERO;

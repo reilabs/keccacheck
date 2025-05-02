@@ -48,7 +48,8 @@ impl<F: Field> CompiledCircuit<F> {
                     let wiring = &gate.wiring;
                     let dnf = wiring.to_dnf();
                     let graph = dnf.to_evaluation_graph(layer_bits, input_bits);
-                    let sum_of_sparse_mle = dnf.to_sum_of_sparse_mle(layer_bits, input_bits, instance_bits);
+                    let sum_of_sparse_mle =
+                        dnf.to_sum_of_sparse_mle(layer_bits, input_bits, instance_bits);
 
                     CompiledLayerGate {
                         gate: gate.gate,
@@ -91,7 +92,12 @@ impl<F: Field> CompiledCircuit<F> {
 
             for gate in &layer.gates {
                 for (out_gate, maybe_gates) in gate.graph.iter().enumerate() {
-                    if let Some(EvaluationEdge { instance, left, right }) = maybe_gates {
+                    if let Some(EvaluationEdge {
+                        instance,
+                        left,
+                        right,
+                    }) = maybe_gates
+                    {
                         assert_eq!(*instance, 0, "no instances when evaluating circuit");
                         let input_left = previous_layer[*left];
                         let input_right = previous_layer[*right];
