@@ -74,7 +74,7 @@ pub fn initialize_f1_gu<F: Field>(
             let x = xy & ((1 << a_dim) - 1);
             let xcy = (((y << c_dim) + c) << a_dim) + x;
 
-            //let xcy2 = x + (c << a_dim) + 
+            //let xcy2 = x + (c << a_dim) +
 
             // println!("  cxy {cxy:b} -> xcy {xcy:b}\t xy {xy:b} c {c:b} x {x:b} y {y:b}");
 
@@ -278,7 +278,6 @@ impl<F: Field> GKRRoundSumcheck<F> {
         rng: &mut R,
         round: &GKRRound<F>,
     ) -> (GKRRoundProof<F>, (Vec<F>, Vec<F>)) {
-
         let a_dim = round.num_variables(0);
         let c_dim = round.num_variables(1);
         let b_dim = round.num_variables(2);

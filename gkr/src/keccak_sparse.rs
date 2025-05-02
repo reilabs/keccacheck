@@ -101,7 +101,7 @@ fn gkr_theta(input: &[u64], output: &[u64]) {
 
     let compiled = CompiledCircuit::from_circuit(&circuit);
 
-    println!("proving...");
+    // println!("proving...");
     let mut fs_rng = Blake2b512Rng::setup();
     let gkr_proof = GKR::prove(&mut fs_rng, &compiled, &instances);
 
@@ -123,11 +123,11 @@ fn gkr_theta(input: &[u64], output: &[u64]) {
     // 5 layers, 22 inputs each (except for the layer with 2 xors)
     assert_eq!(rounds, vec![22, 22, 22, 24, 22]);
 
-    println!("verifying...");
+    // println!("verifying...");
     let mut fs_rng = Blake2b512Rng::setup();
     GKR::verify(&mut fs_rng, &circuit, &instances, &gkr_proof);
 
-    println!("done.");
+    // println!("done.");
 }
 
 #[test]
@@ -139,8 +139,8 @@ fn test_keccak_sparse() {
     let mut output = input.clone();
     keccak_round(&mut output, ROUND_CONSTANTS[0]);
 
-    println!("input  {input:x?}");
-    println!("output {output:x?}");
+    // println!("input  {input:x?}");
+    // println!("output {output:x?}");
 
     gkr_theta(&input, &output);
 }

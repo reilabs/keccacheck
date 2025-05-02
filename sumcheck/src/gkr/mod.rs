@@ -98,7 +98,7 @@ impl<F: Field> GKR<F> {
                 &[(alpha, &uc), (beta, &vc)]
             };
 
-            println!("\nproving layer {i}: {combination:?}");
+            // println!("\nproving layer {i}: {combination:?}");
 
             let w_i = DenseMultilinearExtension::from_evaluations_slice(
                 instance_bits + num_vars[i + 1],
@@ -148,11 +148,11 @@ impl<F: Field> GKR<F> {
         instances: &[Instance<F>],
         gkr_proof: &GKRProof<F>,
     ) {
-        println!("\nVERIFIACTION");
+        // println!("\nVERIFIACTION");
         let instance_bits = ilog2_ceil(instances.len());
         let num_vars = circuit.layer_sizes();
 
-        let (mut u, mut v) = Default::default();
+        let (mut c, mut u, mut v) = Default::default();
         let (mut w_uc, mut w_vc) = Default::default();
 
         // TODO: this allocates too much
@@ -169,7 +169,7 @@ impl<F: Field> GKR<F> {
         // println!("OUTPUTS {outputs:?}");
 
         for (i, layer) in circuit.layers.iter().enumerate() {
-            println!("verifying layer {i}");
+            // println!("verifying layer {i}");
             if i == 0 {
                 let r_1 = (0..(instance_bits + num_vars[0]))
                     .map(|_| F::rand(rng))
@@ -202,6 +202,7 @@ impl<F: Field> GKR<F> {
                         .copied()
                         .collect();
 
+                    // println!("evaluate len {}", rcuv.len());
                     // TODO: don't rewire within the verifier!
                     let instance_wiring = gate_type.wiring.rewire_with_instances(
                         instance_bits,
@@ -218,7 +219,7 @@ impl<F: Field> GKR<F> {
                     wiring_res += wiring * gate_type.gate.evaluate(w_uc, w_vc)
                 }
                 assert_eq!(wiring_res, proof.check_sum(subclaim.v.last().unwrap()));
-                (u, v) = (subclaim.u, subclaim.v);
+                (c, u, v) = (subclaim.c, subclaim.u, subclaim.v);
             } else if i == circuit.layers.len() - 1 {
                 let alpha = F::rand(rng);
                 let beta = F::rand(rng);
@@ -249,7 +250,7 @@ impl<F: Field> GKR<F> {
                     .collect();
                 let sub_vc: Vec<_> = subclaim.v.iter().chain(&subclaim.c).copied().collect();
 
-                println!("vars {} {} {}", w_n.num_vars, sub_uc.len(), sub_vc.len());
+                // println!("vars {} {} {}", w_n.num_vars, sub_uc.len(), sub_vc.len());
                 assert_eq!(w_n.evaluate(&sub_uc), subclaim.w_uc);
                 assert_eq!(w_n.evaluate(&sub_vc), subclaim.w_vc);
             } else {
@@ -273,16 +274,22 @@ impl<F: Field> GKR<F> {
                 for gate_type in &layer.gates {
                     let uuv: Vec<_> = u
                         .iter()
+                        .chain(c.iter())
+                        .chain(subclaim.c.iter())
                         .chain(subclaim.u.iter())
                         .chain(subclaim.v.iter())
                         .copied()
                         .collect();
                     let vuv: Vec<_> = v
                         .iter()
+                        .chain(c.iter())
+                        .chain(subclaim.c.iter())
                         .chain(subclaim.u.iter())
                         .chain(subclaim.v.iter())
                         .copied()
                         .collect();
+
+                    // println!("evaluate len {} {}", uuv.len(), vuv.len());
 
                     // TODO: don't rewire within the verifier!
                     let wiring = gate_type.wiring.rewire_with_instances(
@@ -302,7 +309,7 @@ impl<F: Field> GKR<F> {
                         (alpha * wiring_u + beta * wiring_v) * gate_type.gate.evaluate(w_uc, w_vc);
                 }
                 assert_eq!(wiring_res, proof.check_sum(subclaim.v.last().unwrap()));
-                (u, v) = (subclaim.u, subclaim.v);
+                (c, u, v) = (subclaim.c, subclaim.u, subclaim.v);
             }
         }
     }
