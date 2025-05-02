@@ -96,8 +96,6 @@ impl<F: Field> IPForMLSumcheck<F> {
             panic!("Verifier has not finished.");
         }
 
-        // println!("check point {:?}", verifier_state.randomness);
-
         let mut expected = asserted_sum;
         if verifier_state.polynomials_received.len() != verifier_state.nv {
             panic!("insufficient rounds");
@@ -109,8 +107,6 @@ impl<F: Field> IPForMLSumcheck<F> {
             }
             let p0 = evaluations[0];
             let p1 = evaluations[1];
-            // println!("evaluations {:?}", evaluations);
-
             if p0 + p1 != expected {
                 return Err(crate::Error::Reject(Some(format!(
                     "Prover message is not consistent with the claim. Round {i}. Expected {expected} got {}",

@@ -442,7 +442,6 @@ impl PredicateExpr {
             let c = out + i;
             let cp = out + instance + i;
             expr *= eq(&[c as u8, cp as u8]);
-            // println!("wire instance {c} with {cp}");
         }
         expr
     }

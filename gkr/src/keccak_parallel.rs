@@ -222,7 +222,6 @@ pub fn run_keccak_f(instances: usize) {
     for i in 0..instances {
         let output_slice = &mut output[(i * instance_size)..((i + 1) * instance_size)];
         keccak_round(output_slice, ROUND_CONSTANTS[0]);
-        // println!("keccak_round {output_slice:x?}");
     }
 
     let gkr_instance_size = 64;
@@ -247,9 +246,6 @@ pub fn run_keccak_f(instances: usize) {
                 }
             }
         }
-
-        // println!("gkr_input  {gkr_input:x?}");
-        // println!("gkr_output {gkr_output:x?}");
 
         gkr_instances.push(Instance::<Fr> {
             inputs: u64_to_bits(gkr_input),

@@ -12,7 +12,6 @@ use ark_sumcheck::{
 // w2: 3     2     3     1
 #[test]
 fn test_gkr_basic_mul() {
-    // TODO: make it data-parallel
     let circuit = Circuit {
         input_bits: 2,
         output_bits: 1,
@@ -53,7 +52,6 @@ fn test_gkr_basic_mul() {
 // w3:           1        2
 #[test]
 fn test_gkr_basic_add() {
-    // TODO: make it data-parallel
     let circuit = Circuit {
         input_bits: 1,
         output_bits: 1,
@@ -107,7 +105,6 @@ fn test_gkr_basic_add() {
 // w2:         1     0     1     0
 #[test]
 fn test_gkr_basic_id_xor() {
-    // TODO: make it data-parallel
     let circuit = Circuit {
         input_bits: 2,
         output_bits: 1,
