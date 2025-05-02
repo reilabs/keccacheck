@@ -105,7 +105,7 @@ impl<F: Field> GKR<F> {
                 .iter()
                 .flat_map(|gate_type| {
                     // TODO: remove, for debugging only
-                    assert_eq!(gate_type.sum_of_sparse_mle.len(), 1);
+                    // assert_eq!(gate_type.sum_of_sparse_mle.len(), 1);
                     println!("f1 (dim {}): {:?}", gate_type.sum_of_sparse_mle[0].num_vars, gate_type.sum_of_sparse_mle[0].evaluations);
                     let result = gate_type.gate.to_gkr_combination(
                         &gate_type.sum_of_sparse_mle,
@@ -113,11 +113,11 @@ impl<F: Field> GKR<F> {
                         combination,
                     );
                     // TODO: remove
-                    assert_eq!(result.len(), 1);
-                    println!("gkr_combination");
-                    println!("  f1_g (dim {}): {:?}", result[0].f1_g.num_vars, result[0].f1_g.evaluations);
-                    println!("  f2 (dim {}): {:?}", result[0].f2.num_vars, result[0].f2.evaluations);
-                    println!("  f3 (dim {}): {:?}", result[0].f3.num_vars, result[0].f3.evaluations);
+                    // assert_eq!(result.len(), 1);
+                    // println!("gkr_combination");
+                    // println!("  f1_g (dim {}): {:?}", result[0].f1_g.num_vars, result[0].f1_g.evaluations);
+                    // println!("  f2 (dim {}): {:?}", result[0].f2.num_vars, result[0].f2.evaluations);
+                    // println!("  f3 (dim {}): {:?}", result[0].f3.num_vars, result[0].f3.evaluations);
                     
                     result
                 })
