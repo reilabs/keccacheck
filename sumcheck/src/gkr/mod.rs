@@ -151,7 +151,7 @@ impl<F: Field> GKR<F> {
         let num_vars = circuit.layer_sizes();
 
         let (mut u, mut v) = Default::default();
-        let (mut w_u, mut w_v) = Default::default();
+        let (mut w_uc, mut w_vc) = Default::default();
 
         // TODO: this allocates too much
         let inputs = instances.iter().flat_map(|instance| instance.inputs.clone()).collect::<Vec<_>>();
@@ -174,7 +174,7 @@ impl<F: Field> GKR<F> {
                 let proof = &gkr_proof.rounds[i];
                 let subclaim =
                     GKRRoundSumcheck::verify(rng, instance_bits, num_vars[i + 1], proof, expected_sum).unwrap();
-                (w_u, w_v) = (subclaim.w_u, subclaim.w_v);
+                (w_uc, w_vc) = (subclaim.w_uc, subclaim.w_vc);
 
                 let mut wiring_res = F::ZERO;
                 for gate_type in &layer.gates {
@@ -186,14 +186,14 @@ impl<F: Field> GKR<F> {
                         .collect();
 
                     let wiring = gate_type.wiring.evaluate(&ruv);
-                    wiring_res += wiring * gate_type.gate.evaluate(w_u, w_v)
+                    wiring_res += wiring * gate_type.gate.evaluate(w_uc, w_vc)
                 }
                 assert_eq!(wiring_res, proof.check_sum(subclaim.v.last().unwrap()));
                 (u, v) = (subclaim.u, subclaim.v);
             } else if i == circuit.layers.len() - 1 {
                 let alpha = F::rand(rng);
                 let beta = F::rand(rng);
-                let expected_sum = alpha * w_u + beta * w_v;
+                let expected_sum = alpha * w_uc + beta * w_vc;
                 println!("EXPECTED {expected_sum:?}");
 
                 let proof = &gkr_proof.rounds[i];
@@ -206,18 +206,18 @@ impl<F: Field> GKR<F> {
                     &inputs,
                 );
                 println!("vars {} {} {}", w_n.num_vars, subclaim.u.len(), subclaim.v.len());
-                assert_eq!(w_n.evaluate(&subclaim.u), subclaim.w_u);
-                assert_eq!(w_n.evaluate(&subclaim.v), subclaim.w_v);
+                assert_eq!(w_n.evaluate(&subclaim.u), subclaim.w_uc);
+                assert_eq!(w_n.evaluate(&subclaim.v), subclaim.w_vc);
             } else {
                 let alpha = F::rand(rng);
                 let beta = F::rand(rng);
-                let expected_sum = alpha * w_u + beta * w_v;
+                let expected_sum = alpha * w_uc + beta * w_vc;
                 println!("EXPECTED {expected_sum:?}");
 
                 let proof = &gkr_proof.rounds[i];
                 let subclaim =
                     GKRRoundSumcheck::verify(rng, instance_bits, num_vars[i + 1], proof, expected_sum).unwrap();
-                (w_u, w_v) = (subclaim.w_u, subclaim.w_v);
+                (w_uc, w_vc) = (subclaim.w_uc, subclaim.w_vc);
 
                 let mut wiring_res = F::ZERO;
                 for gate_type in &layer.gates {
@@ -238,7 +238,7 @@ impl<F: Field> GKR<F> {
                     let wiring_u = wiring.evaluate(&uuv);
                     let wiring_v = wiring.evaluate(&vuv);
                     wiring_res +=
-                        (alpha * wiring_u + beta * wiring_v) * gate_type.gate.evaluate(w_u, w_v);
+                        (alpha * wiring_u + beta * wiring_v) * gate_type.gate.evaluate(w_uc, w_vc);
                 }
                 assert_eq!(wiring_res, proof.check_sum(subclaim.v.last().unwrap()));
                 (u, v) = (subclaim.u, subclaim.v);
