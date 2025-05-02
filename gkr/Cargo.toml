@@ -3,6 +3,9 @@ name = "gkr"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+parallel = ["ark-ff/parallel", "ark-poly/parallel", "ark-std/parallel", "ark-sumcheck/parallel"]
+
 [dependencies]
 ark-bn254 = "0.5.0"
 ark-ff = "0.5.0"
