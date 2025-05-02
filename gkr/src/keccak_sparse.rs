@@ -110,13 +110,13 @@ fn gkr_theta(input: &[u64], output: &[u64]) {
         .rounds
         .iter()
         .map(|round| {
-            for msg in &round.phase1_sumcheck_msgs {
+            for msg in &round.phase0_sumcheck_msgs {
                 assert_eq!(msg.evaluations.len(), 3);
             }
             for msg in &round.phase2_sumcheck_msgs {
                 assert_eq!(msg.evaluations.len(), 3);
             }
-            round.phase1_sumcheck_msgs.len() + round.phase1_sumcheck_msgs.len()
+            round.phase0_sumcheck_msgs.len() + round.phase0_sumcheck_msgs.len()
         })
         .collect::<Vec<_>>();
 
