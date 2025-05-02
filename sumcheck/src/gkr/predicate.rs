@@ -56,6 +56,21 @@ impl SparseEvaluationPredicate {
         )
         .evaluate(&point)
     }
+
+    pub fn rewire(&self, instance: usize, out: usize, inp: usize) -> Self {
+        let zab = self.var_mask;
+
+        let z = zab & ((1 << out) - 1);
+        let ab = zab >> out;
+
+        let ccab = ab << (2 * instance);
+        let zccab = (ccab << out) + z;
+        Self {
+            var_mask: zccab,
+            out_len: self.out_len,
+            mle: self.mle.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -80,6 +95,21 @@ impl EqPredicate {
             let a = var_values.iter().fold(F::ONE, |acc, e| acc * *e);
             let b = neg_values.iter().fold(F::ONE, |acc, e| acc * *e);
             a + b
+        }
+    }
+
+    pub fn rewire(&self, instance: usize, out: usize, inp: usize) -> Self {
+        let zab = self.var_mask;
+
+        let z = zab & ((1 << out) - 1);
+        let ab = zab >> out;
+
+        let ccab = ab << (2 * instance);
+        let zccab = (ccab << out) + z;
+
+        Self {
+            var_mask: zccab,
+            is_on: self.is_on,
         }
     }
 }
@@ -265,6 +295,15 @@ impl BasePredicate {
             BasePredicate::Sparse(sparse) => sparse.var_mask,
         }
     }
+
+    pub fn rewire(&self, instance: usize, out: usize, inp: usize) -> Self {
+        match self {
+            BasePredicate::Eq(eq) => BasePredicate::Eq(eq.rewire(instance, out, inp)),
+            BasePredicate::Sparse(sparse) => {
+                BasePredicate::Sparse(sparse.rewire(instance, out, inp))
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -286,17 +325,20 @@ impl PredicateDnf {
                     .into_iter()
                     .enumerate()
                     .filter_map(|(out_and_instance, pred)| {
-                        let Some(EvaluationEdge { instance, left, right }) = pred else {
+                        let Some(EvaluationEdge {
+                            instance,
+                            left,
+                            right,
+                        }) = pred
+                        else {
                             return None;
                         };
-                        let key = out_and_instance
+                        let zccab = out_and_instance
                             + (instance << (outputs + instance_bits))
                             + (left << (outputs + instance_bits + instance_bits))
                             + (right << (outputs + instance_bits + instance_bits + inputs));
 
-                        println!("key {key} ({key:b}), out_instance {out_and_instance:b} instance {instance:b} left {left:b} right {right:b}");
-                        
-                        Some((key, F::ONE))
+                        Some((zccab, F::ONE))
                     })
                     .collect::<Vec<_>>();
 
@@ -379,6 +421,30 @@ impl PredicateExpr {
             PredicateExpr::Add(left, right) => left.mask() | right.mask(),
             PredicateExpr::Base(base_predicate) => base_predicate.mask(),
         }
+    }
+
+    pub fn rewire(&self, instance: usize, out: usize, inp: usize) -> Self {
+        match self {
+            PredicateExpr::Mul(left, right) => PredicateExpr::Mul(
+                Box::new(left.rewire(instance, out, inp)),
+                Box::new(right.rewire(instance, out, inp)),
+            ),
+            PredicateExpr::Add(left, right) => PredicateExpr::Add(
+                Box::new(left.rewire(instance, out, inp)),
+                Box::new(right.rewire(instance, out, inp)),
+            ),
+            PredicateExpr::Base(base) => PredicateExpr::Base(base.rewire(instance, out, inp)),
+        }
+    }
+    pub fn rewire_with_instances(&self, instance: usize, out: usize, inp: usize) -> Self {
+        let mut expr = self.rewire(instance, out, inp);
+        for i in 0..instance {
+            let c = out + i;
+            let cp = out + instance + i;
+            expr *= eq(&[c as u8, cp as u8]);
+            println!("wire instance {c} with {cp}");
+        }
+        expr
     }
 }
 

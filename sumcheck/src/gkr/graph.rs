@@ -145,7 +145,11 @@ pub fn to_evaluation_graph(
                 }
             }
 
-            Some(EvaluationEdge { instance, left: in1, right: in2 })
+            Some(EvaluationEdge {
+                instance,
+                left: in1,
+                right: in2,
+            })
         })
         .collect()
 }
