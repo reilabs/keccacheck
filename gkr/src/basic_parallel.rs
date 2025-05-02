@@ -1,11 +1,11 @@
 use ark_bn254::Fr;
-use ark_ff::{AdditiveGroup, Field, UniformRand};
+use ark_ff::Field;
 use ark_serialize::CanonicalSerialize;
 use ark_std::rand::RngCore;
 use ark_sumcheck::{
     Error as RngError,
-    gkr::{Circuit, GKR, Gate, Instance, Layer, LayerGate, compiled::CompiledCircuit},
-    rng::{Blake2b512Rng, FeedableRNG},
+    gkr::{Circuit, GKR, Gate, Instance, Layer, compiled::CompiledCircuit},
+    rng::FeedableRNG,
 };
 
 // all gates are multiplications
@@ -71,11 +71,11 @@ impl RngCore for NotReallyRng {
         result
     }
 
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
+    fn fill_bytes(&mut self, _dest: &mut [u8]) {
         todo!()
     }
 
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), ark_std::rand::Error> {
+    fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> Result<(), ark_std::rand::Error> {
         todo!()
     }
 }
@@ -87,7 +87,7 @@ impl FeedableRNG for NotReallyRng {
         Self::new(&Fr::ONE.0.0)
     }
 
-    fn feed<M: CanonicalSerialize>(&mut self, msg: &M) -> Result<(), Self::Error> {
+    fn feed<M: CanonicalSerialize>(&mut self, _msg: &M) -> Result<(), Self::Error> {
         Ok(())
     }
 }
@@ -123,8 +123,6 @@ fn test_basic_parallel() {
                 .collect(),
         })
         .collect::<Vec<_>>();
-
-    // println!("instances {instances:?}");
 
     let compiled = CompiledCircuit::from_circuit_batched(&circuit, num_instances as usize);
 
