@@ -12,6 +12,8 @@ use super::GKRRound;
 pub struct GKRRoundProof<F: Field> {
     /// sumcheck messages for the first gate input
     pub phase0_sumcheck_msgs: Vec<ProverMsg<F>>,
+    /// sumcheck messages for the instance number (higher degree)
+    pub phase1_sumcheck_msgs: Vec<ProverMsg<F>>,
     /// sumcheck messages for the second gate input
     pub phase2_sumcheck_msgs: Vec<ProverMsg<F>>,
     /// w(u)
@@ -35,14 +37,16 @@ impl<F: Field> GKRRoundProof<F> {
 #[derive(Debug)]
 /// Subclaim for GKR Round Function
 pub struct GKRRoundSumcheckSubClaim<F: Field> {
+    /// c
+    pub c: Vec<F>,
     /// u
     pub u: Vec<F>,
-    /// w(u)
-    pub w_u: F,
+    /// w(uc)
+    pub w_uc: F,
     /// v
     pub v: Vec<F>,
-    /// w(u)
-    pub w_v: F,
+    /// w(vc)
+    pub w_vc: F,
     /// expected evaluation at f(g,u,v)
     pub expected_evaluation: F,
 }
