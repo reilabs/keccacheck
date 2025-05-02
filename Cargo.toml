@@ -26,3 +26,8 @@ lto = "thin"
 incremental = true
 debug-assertions = true
 debug = true
+
+[profile.optimized]
+inherits = "release"
+codegen-units = 1
+lto = true

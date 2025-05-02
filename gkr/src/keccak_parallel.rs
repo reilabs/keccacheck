@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use ark_bn254::Fr;
 use ark_sumcheck::{
     gkr::{
@@ -191,20 +193,22 @@ pub fn gkr_pred_theta(instances: &[Instance<Fr>]) {
         ],
     };
 
+    let now = Instant::now();
     let compiled = CompiledCircuit::from_circuit_batched(&circuit, instances.len());
+    println!("  compiled in {:?}", now.elapsed());
 
-    // println!("proving...");
     let mut fs_rng = Blake2b512Rng::setup();
     let gkr_proof = GKR::prove(&mut fs_rng, &compiled, instances);
 
-    // println!("verifying...");
+    let now = Instant::now();
     let mut fs_rng = Blake2b512Rng::setup();
     GKR::verify(&mut fs_rng, &circuit, instances, &gkr_proof);
+    println!("  verified in {:?}", now.elapsed());
 }
 
 #[test]
 fn test_keccak_f() {
-    let instances = 4;
+    let instances = 128;
 
     let instance_size = 25;
 
@@ -250,5 +254,7 @@ fn test_keccak_f() {
             outputs: u64_to_bits(gkr_output),
         });
     }
+    let now = Instant::now();
     gkr_pred_theta(&gkr_instances);
+    println!("GKR finished in {:?}", now.elapsed());
 }
