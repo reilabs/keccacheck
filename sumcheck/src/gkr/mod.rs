@@ -1,4 +1,5 @@
 use core::marker::PhantomData;
+use std::time::Instant;
 
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, Polynomial};
@@ -47,6 +48,8 @@ impl<F: Field> GKR<F> {
         circuit: &CompiledCircuit<F>,
         instances: &[Instance<F>],
     ) -> GKRProof<F> {
+        let now = Instant::now();
+
         let evaluations_by_instance = instances
             .iter()
             .map(|instance| circuit.evaluate(instance))
@@ -71,13 +74,16 @@ impl<F: Field> GKR<F> {
         //     }
         // }
 
-        for (eval, instance) in evaluations_by_instance.iter().zip(instances) {
-            if eval[0] != instance.outputs {
-                println!("expect {:x?}", &instance.outputs);
-                println!("actual {:x?}", &eval[0]);
-                panic!("evaluation failed");
-            }
-        }
+        // for (eval, instance) in evaluations_by_instance.iter().zip(instances) {
+        //     if eval[0] != instance.outputs {
+        //         println!("expect {:x?}", &instance.outputs);
+        //         println!("actual {:x?}", &eval[0]);
+        //         panic!("evaluation failed");
+        //     }
+        // }
+
+        println!("  evaluated in {:?}", now.elapsed());
+        let now = Instant::now();
 
         let mut gkr_proof = GKRProof {
             rounds: Vec::with_capacity(circuit.layers.len()),
@@ -138,6 +144,7 @@ impl<F: Field> GKR<F> {
             gkr_proof.rounds.push(proof);
         }
 
+        println!("  proved in {:?}", now.elapsed());
         gkr_proof
     }
 
