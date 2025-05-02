@@ -345,7 +345,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
         // }
         // println!("      h(0) + h(1) = {}", h[0] + h[1]);
 
-        // println!("sumcheck phase 0 (dim {a_dim})");
+        println!("sumcheck phase 0 - a (dim {a_dim})");
 
         let f2 = round.functions.iter().map(|func| &func.f2);
         let instances = h_g_vec
@@ -362,10 +362,10 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let mut u = Vec::with_capacity(a_dim);
         for _ in 0..a_dim {
             let pm = IPForMLSumcheck::prove_round(&mut phase1_ps, &phase1_vm);
-            // println!("  eval sum {:?}", pm.evaluations[0] + pm.evaluations[1]);
-            // println!("    h(0) = {:?}", pm.evaluations[0]);
-            // println!("    h(1) = {:?}", pm.evaluations[1]);
-            // println!("    h(2) = {:?}", pm.evaluations[2]);
+            println!("  eval sum {:?}", pm.evaluations[0] + pm.evaluations[1]);
+            println!("    h(0) = {:?}", pm.evaluations[0]);
+            println!("    h(1) = {:?}", pm.evaluations[1]);
+            println!("    h(2) = {:?}", pm.evaluations[2]);
 
             rng.feed(&pm).unwrap();
             phase0_prover_msgs.push(pm);
@@ -374,7 +374,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
             u.push(vm.randomness);
         }
 
-        // println!("sumcheck phase 1 (dim {c_dim})");
+        println!("sumcheck phase 1 - c (dim {c_dim})");
 
         let mut f1_gu_vec = Vec::with_capacity(round.functions.len());
 
@@ -404,10 +404,10 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let mut cp = Vec::with_capacity(c_dim);
         for _ in 0..c_dim {
             let pm = IPForMLSumcheck::prove_round(&mut phase1_ps, &phase1_vm);
-            // println!("  eval sum {:?}", pm.evaluations[0] + pm.evaluations[1]);
-            // println!("    h(0) = {:?}", pm.evaluations[0]);
-            // println!("    h(1) = {:?}", pm.evaluations[1]);
-            // println!("    h(2) = {:?}", pm.evaluations[2]);
+            println!("  eval sum {:?}", pm.evaluations[0] + pm.evaluations[1]);
+            println!("    h(0) = {:?}", pm.evaluations[0]);
+            println!("    h(1) = {:?}", pm.evaluations[1]);
+            println!("    h(2) = {:?}", pm.evaluations[2]);
             rng.feed(&pm).unwrap();
             phase1_prover_msgs.push(pm);
             let vm = IPForMLSumcheck::sample_round(rng);
@@ -415,7 +415,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
             cp.push(vm.randomness);
         }
 
-        // println!("sumcheck phase 2 (dim {b_dim})");
+        println!("sumcheck phase 2 - b (dim {b_dim})");
 
         let mut f1_guc_vec = Vec::with_capacity(round.functions.len());
         for f1_gu in f1_gu_vec {
@@ -476,10 +476,10 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let mut v = Vec::with_capacity(b_dim);
         for _ in 0..b_dim {
             let pm = IPForMLSumcheck::prove_round(&mut phase2_ps, &phase2_vm);
-            // println!("  eval sum {:?}", pm.evaluations[0] + pm.evaluations[1]);
-            // println!("    h(0) = {:?}", pm.evaluations[0]);
-            // println!("    h(1) = {:?}", pm.evaluations[1]);
-            // println!("    h(2) = {:?}", pm.evaluations[2]);
+            println!("  eval sum {:?}", pm.evaluations[0] + pm.evaluations[1]);
+            println!("    h(0) = {:?}", pm.evaluations[0]);
+            println!("    h(1) = {:?}", pm.evaluations[1]);
+            println!("    h(2) = {:?}", pm.evaluations[2]);
             rng.feed(&pm).unwrap();
             phase2_prover_msgs.push(pm);
             let vm = IPForMLSumcheck::sample_round(rng);

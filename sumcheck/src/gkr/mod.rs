@@ -83,8 +83,8 @@ impl<F: Field> GKR<F> {
             rounds: Vec::with_capacity(circuit.layers.len()),
         };
 
-        let mut u = Vec::new();
-        let mut v = Vec::new();
+        let mut uc = Vec::new();
+        let mut vc = Vec::new();
         let r_1 = (0..(instance_bits + num_vars[0]))
             .map(|_| F::rand(rng))
             .collect::<Vec<_>>();
@@ -95,10 +95,10 @@ impl<F: Field> GKR<F> {
             } else {
                 let alpha = F::rand(rng);
                 let beta = F::rand(rng);
-                &[(alpha, &u), (beta, &v)]
+                &[(alpha, &uc), (beta, &vc)]
             };
 
-            // println!("\nproving layer {i}: {combination:?}");
+            println!("\nproving layer {i}: {combination:?}");
 
             let w_i = DenseMultilinearExtension::from_evaluations_slice(
                 instance_bits + num_vars[i + 1],
@@ -134,7 +134,7 @@ impl<F: Field> GKR<F> {
             };
 
             let (proof, rand) = GKRRoundSumcheck::prove(rng, &round);
-            (u, v) = rand;
+            (uc, vc) = rand;
             gkr_proof.rounds.push(proof);
         }
 
@@ -179,7 +179,7 @@ impl<F: Field> GKR<F> {
                     &outputs,
                 );
                 let expected_sum = w_0.evaluate(&r_1);
-                println!("EXPECTED {expected_sum:?}");
+                println!("EXPECTED 0 {expected_sum:?}");
 
                 let proof = &gkr_proof.rounds[i];
                 let subclaim = GKRRoundSumcheck::verify(
@@ -223,7 +223,7 @@ impl<F: Field> GKR<F> {
                 let alpha = F::rand(rng);
                 let beta = F::rand(rng);
                 let expected_sum = alpha * w_uc + beta * w_vc;
-                println!("EXPECTED {expected_sum:?}");
+                println!("EXPECTED n-1 {expected_sum:?}");
 
                 let proof = &gkr_proof.rounds[i];
                 let subclaim = GKRRoundSumcheck::verify(
@@ -240,19 +240,29 @@ impl<F: Field> GKR<F> {
                     instance_bits + circuit.input_bits,
                     &inputs,
                 );
+
+                let sub_uc: Vec<_> = subclaim.u.iter()
+                    .chain(subclaim.c.iter())
+                    .copied()
+                    .collect();
+                let sub_vc: Vec<_> = subclaim.v.iter()
+                    .chain(&subclaim.c)
+                    .copied()
+                    .collect();
+
                 println!(
                     "vars {} {} {}",
                     w_n.num_vars,
-                    subclaim.u.len(),
-                    subclaim.v.len()
+                    sub_uc.len(),
+                    sub_vc.len()
                 );
-                assert_eq!(w_n.evaluate(&subclaim.u), subclaim.w_uc);
-                assert_eq!(w_n.evaluate(&subclaim.v), subclaim.w_vc);
+                assert_eq!(w_n.evaluate(&sub_uc), subclaim.w_uc);
+                assert_eq!(w_n.evaluate(&sub_vc), subclaim.w_vc);
             } else {
                 let alpha = F::rand(rng);
                 let beta = F::rand(rng);
                 let expected_sum = alpha * w_uc + beta * w_vc;
-                println!("EXPECTED {expected_sum:?}");
+                println!("EXPECTED {i} {expected_sum:?}");
 
                 let proof = &gkr_proof.rounds[i];
                 let subclaim = GKRRoundSumcheck::verify(
@@ -280,7 +290,18 @@ impl<F: Field> GKR<F> {
                         .copied()
                         .collect();
 
-                    let wiring = &gate_type.wiring;
+                    // TODO: don't rewire within the verifier!
+                    let wiring = gate_type.wiring.rewire_with_instances(
+                        instance_bits,
+                        num_vars[i],
+                        num_vars[i + 1],
+                    );
+                    println!(
+                        "wiring mask {:b} then {:b}",
+                        gate_type.wiring.mask(),
+                        wiring.mask()
+                    );
+
                     let wiring_u = wiring.evaluate(&uuv);
                     let wiring_v = wiring.evaluate(&vuv);
                     wiring_res +=
