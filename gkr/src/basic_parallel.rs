@@ -46,25 +46,6 @@ fn test_parallel_reference() {
     GKR::verify(&mut rng, &circuit, &instances, &gkr_proof);
 }
 
-#[test]
-fn not_rand() {
-    let mut rng = NotReallyRng::new(&Into::<Fr>::into(2u64).0.0);
-    let result = Fr::rand(&mut rng);
-
-    let one = Fr::ONE;
-    println!("result = {result}, one {} {:?}", one, one.0.0);
-
-    let result = Fr::rand(&mut rng);
-
-    let one = Fr::ONE;
-    println!("result = {result}, one {} {:?}", one, one.0.0);
-
-    let result = Fr::rand(&mut rng);
-
-    let one = Fr::ONE;
-    println!("result = {result}, one {} {:?}", one, one.0.0);
-}
-
 struct NotReallyRng {
     iter: usize,
     source: Vec<u64>,
@@ -133,11 +114,17 @@ fn test_basic_parallel() {
     let instances = (0u64..num_instances)
         .map(|i| Instance::<Fr> {
             inputs: (0..4).map(|j| (i * 4 + j + 1).into()).collect(),
-            outputs: (0..2).map(|k| { (0..2).fold(Fr::ONE, |acc, j| acc * Into::<Fr>::into(i * 4 + k * 2 + j + 1)) }).collect(),
+            outputs: (0..2)
+                .map(|k| {
+                    (0..2).fold(Fr::ONE, |acc, j| {
+                        acc * Into::<Fr>::into(i * 4 + k * 2 + j + 1)
+                    })
+                })
+                .collect(),
         })
         .collect::<Vec<_>>();
 
-        println!("instances {instances:?}");
+    // println!("instances {instances:?}");
 
     let compiled = CompiledCircuit::from_circuit_batched(&circuit, num_instances as usize);
 

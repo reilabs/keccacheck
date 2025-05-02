@@ -193,11 +193,11 @@ pub fn gkr_pred_theta(instances: &[Instance<Fr>]) {
 
     let compiled = CompiledCircuit::from_circuit_batched(&circuit, instances.len());
 
-    println!("proving...");
+    // println!("proving...");
     let mut fs_rng = Blake2b512Rng::setup();
     let gkr_proof = GKR::prove(&mut fs_rng, &compiled, instances);
 
-    println!("verifying...");
+    // println!("verifying...");
     let mut fs_rng = Blake2b512Rng::setup();
     GKR::verify(&mut fs_rng, &circuit, instances, &gkr_proof);
 }
@@ -216,7 +216,7 @@ fn test_keccak_f() {
     for i in 0..instances {
         let output_slice = &mut output[(i * instance_size)..((i + 1) * instance_size)];
         keccak_round(output_slice, ROUND_CONSTANTS[0]);
-        println!("keccak_round {output_slice:x?}");
+        // println!("keccak_round {output_slice:x?}");
     }
 
     let gkr_instance_size = 64;
@@ -242,8 +242,8 @@ fn test_keccak_f() {
             }
         }
 
-        println!("gkr_input  {gkr_input:x?}");
-        println!("gkr_output {gkr_output:x?}");
+        // println!("gkr_input  {gkr_input:x?}");
+        // println!("gkr_output {gkr_output:x?}");
 
         gkr_instances.push(Instance::<Fr> {
             inputs: u64_to_bits(gkr_input),
