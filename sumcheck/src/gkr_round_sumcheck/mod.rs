@@ -72,9 +72,11 @@ pub fn initialize_f1_gu<F: Field>(
             let y = xy >> a_dim;
             let c = cxy & ((1 << c_dim) - 1);
             let x = xy & ((1 << a_dim) - 1);
-            let xcy = (((y << a_dim) + c) << c_dim) + x;
+            let xcy = (((y << c_dim) + c) << a_dim) + x;
 
-            // println!("  cxy {cxy:b} -> xcy {xcy:b}");
+            //let xcy2 = x + (c << a_dim) + 
+
+            // println!("  cxy {cxy:b} -> xcy {xcy:b}\t xy {xy:b} c {c:b} x {x:b} y {y:b}");
 
             Some((xcy, *v))
         })
@@ -276,18 +278,20 @@ impl<F: Field> GKRRoundSumcheck<F> {
         rng: &mut R,
         round: &GKRRound<F>,
     ) -> (GKRRoundProof<F>, (Vec<F>, Vec<F>)) {
+
+        let a_dim = round.num_variables(0);
+        let c_dim = round.num_variables(1);
+        let b_dim = round.num_variables(2);
+        assert_eq!(a_dim, b_dim, "inputs should have the same length");
+
         // assert_eq!(f1.num_vars - g.len(), 2 * f2.num_vars);
         // assert_eq!(f2.num_vars, f3.num_vars);
 
-        let round_bf = round;
+        // let round_bf = round;
         // assert_eq!(round_bf.functions.len(), 1);
 
-        // f1_g(c', a, b), f2(a, c') f3(b, c') - each is exactly 1 bit
-        let GKRFunction { f1_g, f2, f3 } = &round_bf.functions[0];
-        let c_dim = round_bf.instance_bits;
-        let a_dim = round_bf.num_variables(0);
-        let b_dim = round.num_variables(2);
-        assert_eq!(a_dim, b_dim, "inputs should have the same length");
+        // // f1_g(c', a, b), f2(a, c') f3(b, c') - each is exactly 1 bit
+        // let GKRFunction { f1_g, f2, f3 } = &round_bf.functions[0];
 
         let mut h_g_vec = Vec::with_capacity(round.functions.len());
         let mut f1_g_vec = Vec::with_capacity(round.functions.len());
@@ -303,7 +307,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
         // println!("  round 0 vars 3");
         // let mut h = vec![F::ZERO; 3];
         // for a in 0u64..3 {
-        //     for cb in 0..4 {
+        //     for cb in 0..(1 << (c_dim + b_dim)) {
         //         let c: u64 = cb & ((1 << b_dim) - 1);
         //         let b = cb >> b_dim;
         //         h[a as usize] += f1_g.evaluate(&vec![c.into(), a.into(), b.into()]) * f2.evaluate(&vec![a.into(), c.into()]) * f3.evaluate(&vec![b.into(), c.into()]);
@@ -345,7 +349,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
         // }
         // println!("      h(0) + h(1) = {}", h[0] + h[1]);
 
-        println!("sumcheck phase 0 - a (dim {a_dim})");
+        // println!("sumcheck phase 0 - a (dim {a_dim})");
 
         let f2 = round.functions.iter().map(|func| &func.f2);
         let instances = h_g_vec
@@ -362,10 +366,10 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let mut u = Vec::with_capacity(a_dim);
         for _ in 0..a_dim {
             let pm = IPForMLSumcheck::prove_round(&mut phase1_ps, &phase1_vm);
-            println!("  eval sum {:?}", pm.evaluations[0] + pm.evaluations[1]);
-            println!("    h(0) = {:?}", pm.evaluations[0]);
-            println!("    h(1) = {:?}", pm.evaluations[1]);
-            println!("    h(2) = {:?}", pm.evaluations[2]);
+            // println!("  eval sum {:?}", pm.evaluations[0] + pm.evaluations[1]);
+            // println!("    h(0) = {:?}", pm.evaluations[0]);
+            // println!("    h(1) = {:?}", pm.evaluations[1]);
+            // println!("    h(2) = {:?}", pm.evaluations[2]);
 
             rng.feed(&pm).unwrap();
             phase0_prover_msgs.push(pm);
@@ -374,7 +378,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
             u.push(vm.randomness);
         }
 
-        println!("sumcheck phase 1 - c (dim {c_dim})");
+        // println!("sumcheck phase 1 - c (dim {c_dim})");
 
         let mut f1_gu_vec = Vec::with_capacity(round.functions.len());
 
@@ -404,10 +408,10 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let mut cp = Vec::with_capacity(c_dim);
         for _ in 0..c_dim {
             let pm = IPForMLSumcheck::prove_round(&mut phase1_ps, &phase1_vm);
-            println!("  eval sum {:?}", pm.evaluations[0] + pm.evaluations[1]);
-            println!("    h(0) = {:?}", pm.evaluations[0]);
-            println!("    h(1) = {:?}", pm.evaluations[1]);
-            println!("    h(2) = {:?}", pm.evaluations[2]);
+            // println!("  eval sum {:?}", pm.evaluations[0] + pm.evaluations[1]);
+            // println!("    h(0) = {:?}", pm.evaluations[0]);
+            // println!("    h(1) = {:?}", pm.evaluations[1]);
+            // println!("    h(2) = {:?}", pm.evaluations[2]);
             rng.feed(&pm).unwrap();
             phase1_prover_msgs.push(pm);
             let vm = IPForMLSumcheck::sample_round(rng);
@@ -415,7 +419,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
             cp.push(vm.randomness);
         }
 
-        println!("sumcheck phase 2 - b (dim {b_dim})");
+        // println!("sumcheck phase 2 - b (dim {b_dim})");
 
         let mut f1_guc_vec = Vec::with_capacity(round.functions.len());
         for f1_gu in f1_gu_vec {
@@ -476,10 +480,10 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let mut v = Vec::with_capacity(b_dim);
         for _ in 0..b_dim {
             let pm = IPForMLSumcheck::prove_round(&mut phase2_ps, &phase2_vm);
-            println!("  eval sum {:?}", pm.evaluations[0] + pm.evaluations[1]);
-            println!("    h(0) = {:?}", pm.evaluations[0]);
-            println!("    h(1) = {:?}", pm.evaluations[1]);
-            println!("    h(2) = {:?}", pm.evaluations[2]);
+            // println!("  eval sum {:?}", pm.evaluations[0] + pm.evaluations[1]);
+            // println!("    h(0) = {:?}", pm.evaluations[0]);
+            // println!("    h(1) = {:?}", pm.evaluations[1]);
+            // println!("    h(2) = {:?}", pm.evaluations[2]);
             rng.feed(&pm).unwrap();
             phase2_prover_msgs.push(pm);
             let vm = IPForMLSumcheck::sample_round(rng);
@@ -523,7 +527,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
             num_variables: dim0,
         });
 
-        println!("phase 0 verification dim {}", dim0);
+        // println!("phase 0 verification dim {}", dim0);
         for i in 0..dim0 {
             let pm = &proof.phase0_sumcheck_msgs[i];
             rng.feed(pm).unwrap();
@@ -531,7 +535,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
         }
         let phase0_subclaim = IPForMLSumcheck::check_and_generate_subclaim(phase0_vs, claimed_sum)?;
         let u = phase0_subclaim.point;
-        println!("phase 0 verified, point {u:?}");
+        // println!("phase 0 verified, point {u:?}");
 
         let dim1 = instance_bits;
 
@@ -540,19 +544,19 @@ impl<F: Field> GKRRoundSumcheck<F> {
             num_variables: dim1,
         });
 
-        println!("phase 1 verification dim {}", dim1);
+        // println!("phase 1 verification dim {}", dim1);
         for i in 0..dim1 {
             let pm = &proof.phase1_sumcheck_msgs[i];
             rng.feed(pm).unwrap();
             let _result = IPForMLSumcheck::verify_round((*pm).clone(), &mut phase1_vs, rng);
         }
-        println!("phase 1 verification");
+        // println!("phase 1 verification");
         let phase1_subclaim = IPForMLSumcheck::check_and_generate_subclaim(
             phase1_vs,
             phase0_subclaim.expected_evaluation,
         )?;
         let c = phase1_subclaim.point;
-        println!("phase 1 verified, point {c:?}");
+        // println!("phase 1 verified, point {c:?}");
 
         let dim2 = input_bits;
 
@@ -561,19 +565,19 @@ impl<F: Field> GKRRoundSumcheck<F> {
             num_variables: dim2,
         });
 
-        println!("phase 2 verification dim {}", dim2);
+        // println!("phase 2 verification dim {}", dim2);
         for i in 0..dim2 {
             let pm = &proof.phase2_sumcheck_msgs[i];
             rng.feed(pm).unwrap();
             let _result = IPForMLSumcheck::verify_round((*pm).clone(), &mut phase2_vs, rng);
         }
-        println!("phase 2 verification");
+        // println!("phase 2 verification");
         let phase2_subclaim = IPForMLSumcheck::check_and_generate_subclaim(
             phase2_vs,
             phase1_subclaim.expected_evaluation,
         )?;
         let v = phase2_subclaim.point;
-        println!("phase 2 verified, point {v:?}");
+        // println!("phase 2 verified, point {v:?}");
 
         let expected_evaluation = phase2_subclaim.expected_evaluation;
 

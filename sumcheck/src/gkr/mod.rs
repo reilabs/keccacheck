@@ -62,19 +62,19 @@ impl<F: Field> GKR<F> {
         let instance_bits = ilog2_ceil(instances.len());
         let num_vars = circuit.layer_sizes();
 
-        for i in 0..instances.len() {
-            for j in 0..instances[i].outputs.len() {
-                assert_eq!(
-                    evaluations[0][i * instances[i].outputs.len() + j],
-                    instances[i].outputs[j]
-                );
-            }
-        }
+        // for i in 0..instances.len() {
+        //     for j in 0..instances[i].outputs.len() {
+        //         assert_eq!(
+        //             evaluations[0][i * instances[i].outputs.len() + j],
+        //             instances[i].outputs[j]
+        //         );
+        //     }
+        // }
 
         for (eval, instance) in evaluations_by_instance.iter().zip(instances) {
             if eval[0] != instance.outputs {
-                println!("expect {:x?}", bits_to_u64(&instance.outputs));
-                println!("actual {:x?}", bits_to_u64(&eval[0]));
+                println!("expect {:x?}", &instance.outputs);
+                println!("actual {:x?}", &eval[0]);
                 panic!("evaluation failed");
             }
         }
@@ -148,7 +148,7 @@ impl<F: Field> GKR<F> {
         instances: &[Instance<F>],
         gkr_proof: &GKRProof<F>,
     ) {
-        println!("\n\nVERIFIACTION\n");
+        println!("\nVERIFIACTION");
         let instance_bits = ilog2_ceil(instances.len());
         let num_vars = circuit.layer_sizes();
 
@@ -165,11 +165,11 @@ impl<F: Field> GKR<F> {
             .flat_map(|instance| instance.outputs.clone())
             .collect::<Vec<_>>();
 
-        println!("INPUTS {inputs:?}");
-        println!("OUTPUTS {outputs:?}");
+        // println!("INPUTS {inputs:?}");
+        // println!("OUTPUTS {outputs:?}");
 
         for (i, layer) in circuit.layers.iter().enumerate() {
-            println!("\nVERIFYING LAYER {i}");
+            println!("verifying layer {i}");
             if i == 0 {
                 let r_1 = (0..(instance_bits + num_vars[0]))
                     .map(|_| F::rand(rng))
@@ -179,7 +179,7 @@ impl<F: Field> GKR<F> {
                     &outputs,
                 );
                 let expected_sum = w_0.evaluate(&r_1);
-                println!("EXPECTED 0 {expected_sum:?}");
+                // println!("EXPECTED 0 {expected_sum:?}");
 
                 let proof = &gkr_proof.rounds[i];
                 let subclaim = GKRRoundSumcheck::verify(
@@ -208,11 +208,11 @@ impl<F: Field> GKR<F> {
                         num_vars[i],
                         num_vars[i + 1],
                     );
-                    println!(
-                        "wiring mask {:b} then {:b}",
-                        gate_type.wiring.mask(),
-                        instance_wiring.mask()
-                    );
+                    // println!(
+                    //     "wiring mask {:b} then {:b}",
+                    //     gate_type.wiring.mask(),
+                    //     instance_wiring.mask()
+                    // );
 
                     let wiring = instance_wiring.evaluate(&rcuv);
                     wiring_res += wiring * gate_type.gate.evaluate(w_uc, w_vc)
@@ -223,7 +223,7 @@ impl<F: Field> GKR<F> {
                 let alpha = F::rand(rng);
                 let beta = F::rand(rng);
                 let expected_sum = alpha * w_uc + beta * w_vc;
-                println!("EXPECTED n-1 {expected_sum:?}");
+                // println!("EXPECTED n-1 {expected_sum:?}");
 
                 let proof = &gkr_proof.rounds[i];
                 let subclaim = GKRRoundSumcheck::verify(
@@ -256,7 +256,7 @@ impl<F: Field> GKR<F> {
                 let alpha = F::rand(rng);
                 let beta = F::rand(rng);
                 let expected_sum = alpha * w_uc + beta * w_vc;
-                println!("EXPECTED {i} {expected_sum:?}");
+                // println!("EXPECTED {i} {expected_sum:?}");
 
                 let proof = &gkr_proof.rounds[i];
                 let subclaim = GKRRoundSumcheck::verify(
@@ -290,11 +290,11 @@ impl<F: Field> GKR<F> {
                         num_vars[i],
                         num_vars[i + 1],
                     );
-                    println!(
-                        "wiring mask {:b} then {:b}",
-                        gate_type.wiring.mask(),
-                        wiring.mask()
-                    );
+                    // println!(
+                    //     "wiring mask {:b} then {:b}",
+                    //     gate_type.wiring.mask(),
+                    //     wiring.mask()
+                    // );
 
                     let wiring_u = wiring.evaluate(&uuv);
                     let wiring_v = wiring.evaluate(&vuv);

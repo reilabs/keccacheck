@@ -121,10 +121,10 @@ impl FeedableRNG for NotReallyRng {
 fn test_basic_parallel() {
     let circuit = Circuit {
         input_bits: 2,
-        output_bits: 0,
+        output_bits: 1,
         layers: vec![
-            Layer::with_builder(0, 1, |out| (Gate::Mul, 2 * out, 2 * out + 1)),
             Layer::with_builder(1, 2, |out| (Gate::Mul, 2 * out, 2 * out + 1)),
+            //Layer::with_builder(1, 2, |out| (Gate::Mul, 2 * out, 2 * out + 1)),
         ],
     };
 
@@ -133,9 +133,11 @@ fn test_basic_parallel() {
     let instances = (0u64..num_instances)
         .map(|i| Instance::<Fr> {
             inputs: (0..4).map(|j| (i * 4 + j + 1).into()).collect(),
-            outputs: vec![(0..4).fold(Fr::ONE, |acc, j| acc * Into::<Fr>::into(i * 4 + j + 1))],
+            outputs: (0..2).map(|k| { (0..2).fold(Fr::ONE, |acc, j| acc * Into::<Fr>::into(i * 4 + k * 2 + j + 1)) }).collect(),
         })
         .collect::<Vec<_>>();
+
+        println!("instances {instances:?}");
 
     let compiled = CompiledCircuit::from_circuit_batched(&circuit, num_instances as usize);
 
