@@ -73,25 +73,47 @@ We need two copies of the same thing (`c` and `c'`) because for GKR correctness 
 
 The only issue is that now the variable `c'` can appear in degree 3 (everything else will be degree 2), but it is a small price to pay for the reduction  of the total number of variables (see https://github.com/reilabs/keccacheck/issues/4 for a more detailed analysis and ideas how to further leverage this technique).
 
-## Prover - proof format
+## Proof format
 
 GKR proofs are a vector of proofs for each round. A single GKR round proof consists of:
 - $|a|$ sumcheck messages for left input variables. Each one is exactly 3 points (since `a` has deg 2)
 - $|c|$ sumcheck messages for `c'` variables. Each one is exactly 4 points (since `c'` has deg 3)
 - $|b|$ sumcheck messages for right input variables. Each one is exactly 3 points (since `b` has deg 2)
-- two field elements: $W_n(u, c"), W_n(v, c")$ where `u, v, c"` are pseudo-random challenges issues during the sumcheck protocol
-
-## Prover - GKR recursion
-
-Todo.
+- two field elements: $W_n(u, c"), W_n(v, c")$ where `u, v, c"` are pseudo-random challenges issued during the sumcheck protocol
 
 ## Prover - GKRFunction
 
-Todo.
+We remember from the previous section, that circuits are processed by the prover using a sum of `SparseMultilinearExtension`s that represent wiring of different gate types in our circuit.
+
+At this point, it's important to mention that gates are represented as a sum of what we call `GKRFunction`s. They all have the following form:
+$f1_g(c', a, b) \cdot f2(a, c') \cdot f3(b, c')$. $f1_g$ is the wiring polynomial fixed at random `z, c` at the beginning of the GKR round (so that we can use the sumcheck protocol). $f1_g$ is still represented as a `SparseMultilinearExtension` - the number of non-zero points didn't change, but we stipped `z` and `c` variables.
+
+`f2` and `f3` are `DenseMultilinearExtension`s required to implement the gate functionality. `DenseMultilinearExtension` is an evaluation form that keeps all possible evaluations in an array (so `f2(a, c')` keeps an array of $2^{|a| + |c'|}$ elements.
+
+Let's take a look how gates can be implemented using the above formula:
+* `mul`: $f1_g(c', a, b) \cdot w_{n+1}(a, c') \cdot w_{n+1}(b, c')$
+* `add`: $f1_g(c', a, b) \cdot w_{n+1}(a, c') \cdot constOne(b, c') + f1_g(c', a, b) \cdot constOne(a, c') \cdot w_{n+1}(b, c')$
+* `xor`: $f1_g(c', a, b) \cdot w_{n+1}(a, c') \cdot constOne(b, c') + f1_g(c', a, b) \cdot constOne(a, c') \cdot w_{n+1}(b, c') - 2 \cdot f1_g(c', a, b) \cdot w_{n+1}(a, c') \cdot w_{n+1}(b, c')$
+
+## GKR recursion
+
+Verifier doesn't have access to intermediate layer values. As such, it is unable to fully verify the sumcheck proof at the end of round 0 (and also any other round that is not the last round). Instead, it combines $W_n(u, c")$ and $W_n(v, c")$ claims using a random linear combination. The original GKR formulation used restriction to a line, but this project uses random linear combination since it composes nicely with other prover operations.
+
+In the future, we could use the restriction to the line for the final round of GKR so that the verifier only needs to evaluate inputs once (instead of twice).
+
+Using a random linear combination with the definition of a `GKRFunction` from the section above, we can see that all GKR rounds will perform a sumcheck on this data structure:
+
+$$\sum_i f1_g(c', a, b) \cdot f2(a, c') \cdot f3(b, c')$$
+
+`f1_g` is a sparse multilinear polynomial, `f2` and `f3` are dense multilinear polynomials.
 
 ## Prover - linear sumcheck
 
-Todo.
+In order to keep the sumcheck linear, we extend the technique described in the Libra paper (https://eprint.iacr.org/2019/317.pdf#subsection.3.3). We will write down our polynomials as and perform the first `a` steps of sumcheck (creating the `u` point from random challenges).
+
+$$\sum_{a, c'} f2(a, c') \cdot \sum_b f1_g(c', a, b) \cdot f3(b, c')$$
+
+In order to do so, we precompute a new polynomial $h_g(a, c') = \sum_b f1_g(c', a, b) \cdot f3(b, c')$ and pass the product of $f2 \cdot h_g$ to the sumcheck subroutine. We call this phase 0 of the sumcheck.
 
 ## Verifier
 
