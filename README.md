@@ -44,6 +44,24 @@ Note that with the definition above, each $outputLabel \times gateType$ contains
 * $cmpLeq([x_0, x_1, x_2, ...], [y_0, y_1, y_2, ...], ... , [const_0, const_1, const_2, ...])$ returns if all vectors $[x_0, x_1, ...], [y_0, y_1, ...]$ are equal and also that they are all $\leq [const_0, const_1, const_2, ...]$ (consts are also provided with the least significant bit first).
 * For anything else, use multilinear polynomials of at most 3 * 6 variables expressed in a sparse evaluation form. At most 64 ($2^6$) values can be non-zero. In other words, these values represent how each output gate (of which there are at most 64 if represented by 6 variables) is connected to two input gates (each is 6 variables)
 
+Warning: when writing predicates, make sure that each input variable a, b is connected to some output variable z. Otherwise the circuit will return incorrect results.
+
+## Wiring predicate representations
+
+Keccacheck provides a small DSL for defining circuits: `eq`, `cmp` and `sparse` functions that can be added and multiplied together. These allow you to compose predicates in a relatively human-friendly way, while at the same time ensuring the entire expression stays multilinear.
+
+There are three main ways predicates are represented:
+- `PredicateExpr` - an AST of smaller predicates. Created manually to define the circuit.
+- `SparseMultilinearPolynomial` - an evaluation representation of a sparse multilinear polynomial (sparse because at most $|z|$ points are non-zero) that is used throughout the GKR protocol.
+- `EvaluationGraph` - a list of graph edges to quickly calculate values on each GKR layer before proving starts.
+
+When composing predicates, you build an abstract syntax tree (AST) of add, mul and base operations (represented by `PredicateExpr` type). This predicate expression form is human and verifier friendly. The verifier needs to walk the tree once, perform a small calculation for each variable (of which we have only $log_2(circuitSize)$ and done.
+
+However, arbitrary ASTs are difficult for the prover, so it converts `PredicateExpr` to **a sum** of `SparseMultilinearPolynomial`s. In order to do so, it calculates a DNF (disjunctive normal form) of the entire predicate. Each DNF term constraints all variables, but now you have $2^{numberOfAdditions}$ terms. Because of this, avoid doing things like $[eq(a, b) + eq(c, d)] \cdot [eq(e, f) + eq(g, h)] \cdot [eq(e, f) + eq(g, h)]$ if possible. It makes prover perform 8 times more work than if the addition wasn't present.
+
+Finally, using these sparse polynomials is not convenient to quickly traverse the GKR graph and assign values, so the prover is also provided an `EvaluationGraph` to effortlessly assign values on each layer before proving.
+
+Both `SparseMultilinearPolynomial` and `EvaluationGraph` representations are automatically compiled from the `PredicateExpr` representation and can be stored in a serialized form (so we don't need to perform the compilation step before proving).
 
 ## Patterns in layers
 
