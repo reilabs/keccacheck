@@ -73,10 +73,13 @@ We need two copies of the same thing (`c` and `c'`) because for GKR correctness 
 
 The only issue is that now the variable `c'` can appear in degree 3 (everything else will be degree 2), but it is a small price to pay for the reduction  of the total number of variables (see https://github.com/reilabs/keccacheck/issues/4 for a more detailed analysis and ideas how to further leverage this technique).
 
-
 ## Prover - proof format
 
-Todo.
+GKR proofs are a vector of proofs for each round. A single GKR round proof consists of:
+- $|a|$ sumcheck messages for left input variables. Each one is exactly 3 points (since `a` has deg 2)
+- $|c|$ sumcheck messages for `c'` variables. Each one is exactly 4 points (since `c'` has deg 3)
+- $|b|$ sumcheck messages for right input variables. Each one is exactly 3 points (since `b` has deg 2)
+- two field elements: $W_n(u, c"), W_n(v, c")$ where `u, v, c"` are pseudo-random challenges issues during the sumcheck protocol
 
 ## Prover - GKR recursion
 
