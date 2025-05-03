@@ -109,15 +109,23 @@ $$\sum_i f1_g(c', a, b) \cdot f2(a, c') \cdot f3(b, c')$$
 
 ## Prover - linear sumcheck
 
-In order to keep the sumcheck linear, we extend the technique described in the Libra paper (https://eprint.iacr.org/2019/317.pdf#subsection.3.3). We will write down our polynomials as and perform the first `a` steps of sumcheck (creating the `u` point from random challenges).
+In order to keep the sumcheck linear, we extend the technique described in the Libra paper (https://eprint.iacr.org/2019/317.pdf#subsection.3.3). We will write down our polynomials as and perform the first `|a|` steps of sumcheck (creating the `u` point from random challenges).
 
 $$\sum_{a, c'} f2(a, c') \cdot \sum_b f1_g(c', a, b) \cdot f3(b, c')$$
 
 In order to do so, we precompute a new polynomial $h_g(a, c') = \sum_b f1_g(c', a, b) \cdot f3(b, c')$ and pass the product of $f2 \cdot h_g$ to the sumcheck subroutine. We call this phase 0 of the sumcheck.
 
+In the next step, we fix `a` at random challenge point `u` and continue for `|c'|` steps with the sumcheck protocol. We call this phase 1 of the sumcheck. It operates of the product of $f2_u \cdot f1_gu \cdot f3$. **Note that we cannot use the h_g calculated earlier since `c'` is higher degree than everything else.**
+
+Finally, we fix `c'` at random challenge point `c"` and continue for `|b|` steps to finish the sumcheck protocol. This is phase 2.
+
+Note that in the process we need to relabel some inputs since they appear in the middle of the argument list. It's still a linear process.
+
 ## Verifier
 
-Todo.
+Verifier implements a typical GKR/sumcheck verifier with the insight (which is the core insight of this research project), that the wiring predicate can be calculated very cheaply using `PredicateExpr` and random challenge points.
+
+The most expensive part of `PredicateExpr` is interpolating sparse multilinear extensions. However, we keep these limited to a small number of variables and in the future can amortize calculations further due to the repetetive nature of Keccak.
 
 ## Benchmarking
 
