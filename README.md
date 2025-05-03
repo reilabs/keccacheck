@@ -65,7 +65,14 @@ Both `SparseMultilinearPolynomial` and `EvaluationGraph` representations are aut
 
 ## Patterns in layers
 
-Todo.
+Wiring for each Keccak instance is exactly the same, they are just shifted by the size of each Keccak. In other words, we define the circuit for a single instance of Keccak, and circuits for multiple instances of Keccaks are compiled automatically.
+
+In order to do so, two additional vectors `c` and `c'` are inserted between `z` and `a`. Together `(z, c)` uniquely represent the output label (instance `c`, label `z` within that instance), and `(a, c')` and `(b, c')` uniquely represent input labels (instance `c'`, label `a` or `b` within that instance).
+
+We need two copies of the same thing (`c` and `c'`) because for GKR correctness `c` must stay multilinear (it's the output), and we will want to multiply $wiring_{zc}(c', a, b) \cdot W_n(a, c') \cdot W_n(b, c')$. We can do this legally, because all `c', a, b` appear under the sum, and so from the protocol perspective they are just constants.
+
+The only issue is that now the variable `c'` can appear in degree 3 (everything else will be degree 2), but it is a small price to pay for the reduction  of the total number of variables (see https://github.com/reilabs/keccacheck/issues/4 for a more detailed analysis and ideas how to further leverage this technique).
+
 
 ## Prover - proof format
 
