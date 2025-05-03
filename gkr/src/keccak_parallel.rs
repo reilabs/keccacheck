@@ -193,17 +193,13 @@ pub fn gkr_pred_theta(instances: &[Instance<Fr>]) {
         ],
     };
 
-    let now = Instant::now();
     let compiled = CompiledCircuit::from_circuit_batched(&circuit, instances.len());
-    println!("  compiled in {:?}", now.elapsed());
 
     let mut fs_rng = Blake2b512Rng::setup();
     let gkr_proof = GKR::prove(&mut fs_rng, &compiled, instances);
 
-    let now = Instant::now();
     let mut fs_rng = Blake2b512Rng::setup();
     GKR::verify(&mut fs_rng, &circuit, instances, &gkr_proof);
-    println!("  verified in {:?}", now.elapsed());
 }
 
 #[test]

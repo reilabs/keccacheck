@@ -1,6 +1,7 @@
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
+use tracing::info;
 
 use crate::gkr_round_sumcheck::GKRFunction;
 
@@ -44,6 +45,7 @@ impl Gate {
         values: &DenseMultilinearExtension<F>,
         combination: &[(F, &[F])],
     ) -> Vec<GKRFunction<F>> {
+        info!("gate {self:?} combination {} wiring len {}", combination.len(), wiring.len());
         match self {
             Gate::Add => {
                 let const_one = DenseMultilinearExtension::from_evaluations_vec(

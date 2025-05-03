@@ -17,6 +17,7 @@ use ark_poly::{
 use ark_std::marker::PhantomData;
 use ark_std::rc::Rc;
 use ark_std::vec::Vec;
+use tracing::{info, instrument, Level};
 
 pub fn add_empty_variables<F: Field>(
     f2: &DenseMultilinearExtension<F>,
@@ -224,6 +225,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
     /// Takes a GKR Round Function and input, prove the sum.
     /// * `f1`,`f2`,`f3`: represents the GKR round function
     /// * `g`: represents the fixed input.
+    #[instrument(skip_all, name="prove layer")]
     pub fn prove<R: FeedableRNG>(
         rng: &mut R,
         round: &GKRRound<F>,
@@ -250,18 +252,21 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .map(|(a, b)| (a, b))
             .collect::<Vec<_>>();
 
-        let mut phase1_ps = start_phase0_sumcheck(instances.as_slice());
-        let mut phase1_vm = None;
+        let evaluation_span = tracing::span!(Level::INFO, "sumcheck phase 0", dim = a_dim, addends = instances.len()).entered();
+        let mut phase0_ps = start_phase0_sumcheck(instances.as_slice());
+        phase0_ps.print_debug();
+        let mut phase0_vm = None;
         let mut phase0_prover_msgs = Vec::with_capacity(a_dim);
         let mut u = Vec::with_capacity(a_dim);
         for _ in 0..a_dim {
-            let pm = IPForMLSumcheck::prove_round(&mut phase1_ps, &phase1_vm);
+            let pm = IPForMLSumcheck::prove_round(&mut phase0_ps, &phase0_vm);
             rng.feed(&pm).unwrap();
             phase0_prover_msgs.push(pm);
             let vm = IPForMLSumcheck::sample_round(rng);
-            phase1_vm = Some(vm.clone());
+            phase0_vm = Some(vm.clone());
             u.push(vm.randomness);
         }
+        evaluation_span.exit();
 
         let mut f1_gu_vec = Vec::with_capacity(round.functions.len());
 
@@ -285,7 +290,9 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .map(|((a, b), c)| (a, b, c))
             .collect::<Vec<_>>();
 
+        let evaluation_span = tracing::span!(Level::INFO, "sumcheck phase 1", dim = c_dim, addends = instances.len()).entered();
         let mut phase1_ps = start_phase1_sumcheck(&instances);
+        phase1_ps.print_debug();
         let mut phase1_vm = None;
         let mut phase1_prover_msgs = Vec::with_capacity(c_dim);
         let mut cp = Vec::with_capacity(c_dim);
@@ -297,6 +304,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
             phase1_vm = Some(vm.clone());
             cp.push(vm.randomness);
         }
+        evaluation_span.exit();
 
         let mut f1_guc_vec = Vec::with_capacity(round.functions.len());
         for f1_gu in f1_gu_vec {
@@ -330,7 +338,9 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .map(|((a, b), c)| (a, b, c.evaluate(&cp)))
             .collect::<Vec<_>>();
 
+        let evaluation_span = tracing::span!(Level::INFO, "sumcheck phase 2", dim = b_dim, addends = instances.len()).entered();
         let mut phase2_ps = start_phase2_sumcheck(&instances);
+        phase2_ps.print_debug();
         let mut phase2_vm = None;
         let mut phase2_prover_msgs = Vec::with_capacity(b_dim);
         let mut v = Vec::with_capacity(b_dim);
@@ -342,7 +352,8 @@ impl<F: Field> GKRRoundSumcheck<F> {
             phase2_vm = Some(vm.clone());
             v.push(vm.randomness);
         }
-
+        evaluation_span.exit();
+        
         u.extend(&cp);
         v.extend(&cp);
 
@@ -364,6 +375,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
     /// Otherwise, it is very likely that `subclaim.verify_subclaim` will return false.
     /// Larger field size guarantees smaller soundness error.
     /// * `f2_num_vars`: represents number of variables of f2
+    #[instrument(skip_all)]
     pub fn verify<R: FeedableRNG>(
         rng: &mut R,
         instance_bits: usize,

@@ -16,6 +16,8 @@ mod keccak_parallel;
 mod keccak_sparse;
 
 fn main() {
+    tracing_forest::init();
+
     let args: Vec<String> = env::args().collect();
 
     if args.len() != 2 {

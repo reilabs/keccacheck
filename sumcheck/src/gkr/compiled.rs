@@ -1,6 +1,7 @@
 use ark_ff::Field;
 use ark_poly::SparseMultilinearExtension;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use tracing::{info, instrument};
 
 use super::{circuit::Circuit, graph::EvaluationEdge, util::ilog2_ceil, Gate, Instance};
 
@@ -32,6 +33,7 @@ impl<F: Field> CompiledCircuit<F> {
         Self::from_circuit_batched(circuit, 1)
     }
 
+    #[instrument(skip_all, name="circuit compilation")]
     pub fn from_circuit_batched(circuit: &Circuit, instances: usize) -> Self {
         let instance_bits = ilog2_ceil(instances);
         assert_eq!(instances, 1 << instance_bits, "must be a power of 2");

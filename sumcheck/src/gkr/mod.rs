@@ -6,6 +6,7 @@ use ark_poly::{DenseMultilinearExtension, Polynomial};
 pub use circuit::{Circuit, Layer, LayerGate};
 use compiled::CompiledCircuit;
 pub use gate::Gate;
+use tracing::{info, instrument, Level};
 use util::{bits_to_u64, ilog2_ceil};
 
 use crate::{
@@ -43,12 +44,13 @@ pub struct GKRProof<F: Field> {
 
 impl<F: Field> GKR<F> {
     /// Takes a GKR Circuit and proves the output.
+    #[instrument(skip_all)]
     pub fn prove<R: FeedableRNG>(
         rng: &mut R,
         circuit: &CompiledCircuit<F>,
         instances: &[Instance<F>],
     ) -> GKRProof<F> {
-        let now = Instant::now();
+        let evaluation_span = tracing::span!(Level::INFO, "evaluate").entered();
 
         let evaluations_by_instance = instances
             .iter()
@@ -73,9 +75,10 @@ impl<F: Field> GKR<F> {
             }
         }
 
-        println!("  evaluated in {:?}", now.elapsed());
+        evaluation_span.exit();
 
-        let now = Instant::now();
+        let _gkr_span = tracing::span!(Level::INFO, "prove GKR").entered();
+
         let mut gkr_proof = GKRProof {
             rounds: Vec::with_capacity(circuit.layers.len()),
         };
@@ -100,6 +103,7 @@ impl<F: Field> GKR<F> {
                 &evaluations[i + 1],
             );
 
+            info!("proving layer {i}");
             let functions = layer
                 .gates
                 .iter()
@@ -123,11 +127,11 @@ impl<F: Field> GKR<F> {
             gkr_proof.rounds.push(proof);
         }
 
-        println!("  proved in {:?}", now.elapsed());
         gkr_proof
     }
 
     /// Verifies a proof of a GKR circuit execution.
+    #[instrument(skip_all)]
     pub fn verify<R: FeedableRNG>(
         rng: &mut R,
         circuit: &Circuit,

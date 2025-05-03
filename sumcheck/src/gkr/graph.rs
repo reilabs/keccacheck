@@ -131,8 +131,6 @@ pub fn to_evaluation_graph(
             }
 
             if constraints.iter().any(|x| x.is_none()) {
-                //debug_constraints(&constraints, outputs, inputs);
-                warn!("underconstrained predicate for out {out:x?}, all variables should be set");
                 return None;
             }
 

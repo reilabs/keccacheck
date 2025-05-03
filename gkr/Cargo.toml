@@ -13,3 +13,4 @@ ark-poly = "0.5.0"
 ark-serialize = { version = "0.5.0", default-features = false, features = ["derive"] }
 ark-std = { version = "0.5.0", default-features = false }
 ark-sumcheck = { path = "../sumcheck" }
+tracing-forest = "0.1.6"

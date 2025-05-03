@@ -8,6 +8,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{cfg_iter_mut, vec::Vec};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
+use tracing::info;
 
 /// Prover Message
 #[derive(Clone, CanonicalSerialize, CanonicalDeserialize, Debug)]
@@ -15,7 +16,9 @@ pub struct ProverMsg<F: Field> {
     /// evaluations on P(0), P(1), P(2), ...
     pub evaluations: Vec<F>,
 }
+
 /// Prover State
+#[derive(Debug)]
 pub struct ProverState<F: Field> {
     /// sampled randomness given by the verifier
     pub randomness: Vec<F>,
@@ -30,6 +33,16 @@ pub struct ProverState<F: Field> {
     pub max_multiplicands: usize,
     /// The current round number
     pub round: usize,
+}
+
+impl<F: Field> ProverState<F> {
+    pub fn print_debug(&self) {
+        let mut line = format!("ProverState(nv {}, mult {}, len {}): ", self.num_vars, self.max_multiplicands, self.flattened_ml_extensions.len());
+        for ml in &self.flattened_ml_extensions {
+            line += &format!("{} ", ml.num_vars);
+        }
+        info!("{line}");
+    }
 }
 
 impl<F: Field> IPForMLSumcheck<F> {
