@@ -37,7 +37,12 @@ pub struct ProverState<F: Field> {
 
 impl<F: Field> ProverState<F> {
     pub fn print_debug(&self) {
-        let mut line = format!("ProverState(nv {}, mult {}, len {}): ", self.num_vars, self.max_multiplicands, self.flattened_ml_extensions.len());
+        let mut line = format!(
+            "ProverState(nv {}, mult {}, len {}): ",
+            self.num_vars,
+            self.max_multiplicands,
+            self.flattened_ml_extensions.len()
+        );
         for ml in &self.flattened_ml_extensions {
             line += &format!("{} ", ml.num_vars);
         }

@@ -1,5 +1,4 @@
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use tracing::warn;
 
 use crate::gkr::predicate::VarMaskIterator;
 
@@ -120,15 +119,8 @@ pub fn to_evaluation_graph(
                 }
             }
 
-            let mut out = 0;
             let mut in1 = 0;
             let mut in2 = 0;
-
-            for bit in 0..outputs {
-                if constraints[bit] == Some(true) {
-                    out += 1 << bit;
-                }
-            }
 
             if constraints.iter().any(|x| x.is_none()) {
                 return None;

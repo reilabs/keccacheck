@@ -1,5 +1,4 @@
 use core::marker::PhantomData;
-use std::time::Instant;
 
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, Polynomial};

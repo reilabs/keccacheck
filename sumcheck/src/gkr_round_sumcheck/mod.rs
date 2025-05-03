@@ -17,7 +17,7 @@ use ark_poly::{
 use ark_std::marker::PhantomData;
 use ark_std::rc::Rc;
 use ark_std::vec::Vec;
-use tracing::{info, instrument, Level};
+use tracing::{instrument, Level};
 
 pub fn add_empty_variables<F: Field>(
     f2: &DenseMultilinearExtension<F>,
@@ -225,7 +225,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
     /// Takes a GKR Round Function and input, prove the sum.
     /// * `f1`,`f2`,`f3`: represents the GKR round function
     /// * `g`: represents the fixed input.
-    #[instrument(skip_all, name="prove layer")]
+    #[instrument(skip_all, name = "prove layer")]
     pub fn prove<R: FeedableRNG>(
         rng: &mut R,
         round: &GKRRound<F>,
@@ -252,7 +252,13 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .map(|(a, b)| (a, b))
             .collect::<Vec<_>>();
 
-        let evaluation_span = tracing::span!(Level::INFO, "sumcheck phase 0", dim = a_dim, addends = instances.len()).entered();
+        let evaluation_span = tracing::span!(
+            Level::INFO,
+            "sumcheck phase 0",
+            dim = a_dim,
+            addends = instances.len()
+        )
+        .entered();
         let mut phase0_ps = start_phase0_sumcheck(instances.as_slice());
         phase0_ps.print_debug();
         let mut phase0_vm = None;
@@ -290,7 +296,13 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .map(|((a, b), c)| (a, b, c))
             .collect::<Vec<_>>();
 
-        let evaluation_span = tracing::span!(Level::INFO, "sumcheck phase 1", dim = c_dim, addends = instances.len()).entered();
+        let evaluation_span = tracing::span!(
+            Level::INFO,
+            "sumcheck phase 1",
+            dim = c_dim,
+            addends = instances.len()
+        )
+        .entered();
         let mut phase1_ps = start_phase1_sumcheck(&instances);
         phase1_ps.print_debug();
         let mut phase1_vm = None;
@@ -338,7 +350,13 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .map(|((a, b), c)| (a, b, c.evaluate(&cp)))
             .collect::<Vec<_>>();
 
-        let evaluation_span = tracing::span!(Level::INFO, "sumcheck phase 2", dim = b_dim, addends = instances.len()).entered();
+        let evaluation_span = tracing::span!(
+            Level::INFO,
+            "sumcheck phase 2",
+            dim = b_dim,
+            addends = instances.len()
+        )
+        .entered();
         let mut phase2_ps = start_phase2_sumcheck(&instances);
         phase2_ps.print_debug();
         let mut phase2_vm = None;
@@ -353,7 +371,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
             v.push(vm.randomness);
         }
         evaluation_span.exit();
-        
+
         u.extend(&cp);
         v.extend(&cp);
 

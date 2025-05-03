@@ -45,7 +45,11 @@ impl Gate {
         values: &DenseMultilinearExtension<F>,
         combination: &[(F, &[F])],
     ) -> Vec<GKRFunction<F>> {
-        info!("gate {self:?} combination {} wiring len {}", combination.len(), wiring.len());
+        info!(
+            "gate {self:?} combination {} wiring len {}",
+            combination.len(),
+            wiring.len()
+        );
         match self {
             Gate::Add => {
                 let const_one = DenseMultilinearExtension::from_evaluations_vec(

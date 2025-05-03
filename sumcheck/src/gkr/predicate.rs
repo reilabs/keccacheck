@@ -57,7 +57,7 @@ impl SparseEvaluationPredicate {
         .evaluate(&point)
     }
 
-    pub fn rewire(&self, instance: usize, out: usize, inp: usize) -> Self {
+    pub fn rewire(&self, instance: usize, out: usize, _inp: usize) -> Self {
         let zab = self.var_mask;
 
         let z = zab & ((1 << out) - 1);
@@ -98,7 +98,7 @@ impl EqPredicate {
         }
     }
 
-    pub fn rewire(&self, instance: usize, out: usize, inp: usize) -> Self {
+    pub fn rewire(&self, instance: usize, out: usize, _inp: usize) -> Self {
         let zab = self.var_mask;
 
         let z = zab & ((1 << out) - 1);
