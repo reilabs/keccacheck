@@ -199,6 +199,14 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let b_dim = round.num_variables(2);
         assert_eq!(a_dim, b_dim, "inputs should have the same length");
 
+        let evaluation_span = tracing::span!(
+            Level::INFO,
+            "sumcheck phase 0 - prep",
+            dim = a_dim,
+            addends = round.functions.len()
+        )
+        .entered();
+
         let mut h_g_vec = Vec::with_capacity(round.functions.len());
         let mut f1_g_vec = Vec::with_capacity(round.functions.len());
         for function in &round.functions {
@@ -219,9 +227,11 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .map(|((a, b), c)| (a, b, c))
             .collect::<Vec<_>>();
 
+        evaluation_span.exit();
+
         let evaluation_span = tracing::span!(
             Level::INFO,
-            "sumcheck phase 0",
+            "sumcheck phase 0 - exec",
             dim = a_dim,
             addends = instances.len()
         )
@@ -240,6 +250,14 @@ impl<F: Field> GKRRoundSumcheck<F> {
             u.push(vm.randomness);
         }
         evaluation_span.exit();
+
+        let evaluation_span = tracing::span!(
+            Level::INFO,
+            "sumcheck phase 1 - prep",
+            dim = c_dim,
+            addends = round.functions.len()
+        )
+        .entered();
 
         let mut f1_gu_vec = Vec::with_capacity(round.functions.len());
 
@@ -265,9 +283,11 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .map(|(((a, b), c), d)| (a, b, c, d))
             .collect::<Vec<_>>();
 
+        evaluation_span.exit();
+
         let evaluation_span = tracing::span!(
             Level::INFO,
-            "sumcheck phase 1",
+            "sumcheck phase 1 - exec",
             dim = c_dim,
             addends = instances.len()
         )
@@ -286,6 +306,14 @@ impl<F: Field> GKRRoundSumcheck<F> {
             cp.push(vm.randomness);
         }
         evaluation_span.exit();
+
+        let evaluation_span = tracing::span!(
+            Level::INFO,
+            "sumcheck phase 2 - prep",
+            dim = b_dim,
+            addends = round.functions.len()
+        )
+        .entered();
 
         let mut f1_guc_vec = Vec::with_capacity(round.functions.len());
         for f1_gu in f1_gu_vec {
@@ -306,9 +334,11 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .map(|(((a, b), c), d)| (a, b, c.evaluate(&cp), d))
             .collect::<Vec<_>>();
 
+        evaluation_span.exit();
+
         let evaluation_span = tracing::span!(
             Level::INFO,
-            "sumcheck phase 2",
+            "sumcheck phase 2 - exec",
             dim = b_dim,
             addends = instances.len()
         )
