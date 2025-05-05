@@ -10,7 +10,11 @@ use tracing::{info, instrument, Level};
 use util::{bits_to_u64, ilog2_ceil};
 
 use crate::{
-    gkr_round_sumcheck::{data_structures::GKRRoundProof, function::GKRRound, GKRRoundSumcheck},
+    gkr_round_sumcheck::{
+        data_structures::GKRRoundProof,
+        function::{GKROperand, GKRRound},
+        GKRRoundSumcheck,
+    },
     rng::FeedableRNG,
 };
 
@@ -118,7 +122,7 @@ impl<F: Field> GKR<F> {
 
             let round = GKRRound {
                 functions,
-                layer: w_i,
+                layer: GKROperand::from_values(w_i),
                 instance_bits,
             };
 

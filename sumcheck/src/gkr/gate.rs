@@ -5,7 +5,7 @@ use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinea
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
 use tracing::info;
 
-use crate::gkr_round_sumcheck::function::GKRFunction;
+use crate::gkr_round_sumcheck::function::{GKRFunction, GKROperand};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -53,38 +53,31 @@ impl Gate {
             wiring.len()
         );
         match self {
-            Gate::Add => {
-                let const_one = Rc::new(DenseMultilinearExtension::from_evaluations_vec(
-                    values.num_vars,
-                    vec![F::ONE; 1 << values.num_vars],
-                ));
-
-                combination
-                    .into_iter()
-                    .flat_map(|(coeff, partial_point)| {
-                        wiring
-                            .fix_variables(partial_point)
-                            .into_iter()
-                            .flat_map(|predicate| {
-                                vec![
-                                    GKRFunction {
-                                        coefficient: *coeff,
-                                        f1_g: predicate.clone(),
-                                        f2: const_one.clone(),
-                                        f3: values.clone(),
-                                    },
-                                    GKRFunction {
-                                        coefficient: *coeff,
-                                        f1_g: predicate,
-                                        f2: values.clone(),
-                                        f3: const_one.clone(),
-                                    },
-                                ]
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                    .collect()
-            }
+            Gate::Add => combination
+                .into_iter()
+                .flat_map(|(coeff, partial_point)| {
+                    wiring
+                        .fix_variables(partial_point)
+                        .into_iter()
+                        .flat_map(|predicate| {
+                            vec![
+                                GKRFunction {
+                                    coefficient: *coeff,
+                                    f1_g: predicate.clone(),
+                                    f2: GKROperand::new_const(values.num_vars, F::ONE),
+                                    f3: GKROperand::from_values(values.clone()),
+                                },
+                                GKRFunction {
+                                    coefficient: *coeff,
+                                    f1_g: predicate,
+                                    f2: GKROperand::from_values(values.clone()),
+                                    f3: GKROperand::new_const(values.num_vars, F::ONE),
+                                },
+                            ]
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect(),
             Gate::Mul => combination
                 .into_iter()
                 .flat_map(|(coeff, partial_point)| {
@@ -95,104 +88,86 @@ impl Gate {
                             vec![GKRFunction {
                                 coefficient: *coeff,
                                 f1_g: predicate,
-                                f2: values.clone(),
-                                f3: values.clone(),
+                                f2: GKROperand::from_values(values.clone()),
+                                f3: GKROperand::from_values(values.clone()),
                             }]
                         })
                         .collect::<Vec<_>>()
                 })
                 .collect(),
-            Gate::Xor => {
-                let const_one = Rc::new(DenseMultilinearExtension::from_evaluations_vec(
-                    values.num_vars,
-                    vec![F::ONE; 1 << values.num_vars],
-                ));
-                combination
-                    .into_iter()
-                    .flat_map(|(coeff, partial_point)| {
-                        wiring
-                            .fix_variables(partial_point)
-                            .into_iter()
-                            .flat_map(|predicate| {
-                                vec![
-                                    GKRFunction {
-                                        coefficient: *coeff,
-                                        f1_g: predicate.clone(),
-                                        f2: const_one.clone(),
-                                        f3: values.clone(),
-                                    },
-                                    GKRFunction {
-                                        coefficient: *coeff,
-                                        f1_g: predicate.clone(),
-                                        f2: values.clone(),
-                                        f3: const_one.clone(),
-                                    },
-                                    GKRFunction {
-                                        coefficient: *coeff * Into::<F>::into(-2),
-                                        f1_g: predicate,
-                                        f2: values.clone(),
-                                        f3: values.clone(),
-                                    },
-                                ]
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                    .collect()
-            }
-            Gate::XorLeft => {
-                let const_one = Rc::new(DenseMultilinearExtension::from_evaluations_vec(
-                    values.num_vars,
-                    vec![F::ONE; 1 << values.num_vars],
-                ));
-                combination
-                    .into_iter()
-                    .flat_map(|(coeff, partial_point)| {
-                        wiring
-                            .fix_variables(partial_point)
-                            .into_iter()
-                            .flat_map(|predicate| {
-                                vec![
-                                    GKRFunction {
-                                        coefficient: *coeff,
-                                        f1_g: predicate.clone(),
-                                        f2: values.clone(),
-                                        f3: const_one.clone(),
-                                    },
-                                    GKRFunction {
-                                        coefficient: *coeff * Into::<F>::into(-2),
-                                        f1_g: predicate,
-                                        f2: values.clone(),
-                                        f3: values.clone(),
-                                    },
-                                ]
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                    .collect()
-            }
-            Gate::Left => {
-                let const_one = Rc::new(DenseMultilinearExtension::from_evaluations_vec(
-                    values.num_vars,
-                    vec![F::ONE; 1 << values.num_vars],
-                ));
-                combination
-                    .into_iter()
-                    .flat_map(|(coeff, partial_point)| {
-                        wiring
-                            .fix_variables(partial_point)
-                            .into_iter()
-                            .flat_map(|predicate| {
-                                vec![GKRFunction {
+            Gate::Xor => combination
+                .into_iter()
+                .flat_map(|(coeff, partial_point)| {
+                    wiring
+                        .fix_variables(partial_point)
+                        .into_iter()
+                        .flat_map(|predicate| {
+                            vec![
+                                GKRFunction {
                                     coefficient: *coeff,
+                                    f1_g: predicate.clone(),
+                                    f2: GKROperand::new_const(values.num_vars, F::ONE),
+                                    f3: GKROperand::from_values(values.clone()),
+                                },
+                                GKRFunction {
+                                    coefficient: *coeff,
+                                    f1_g: predicate.clone(),
+                                    f2: GKROperand::from_values(values.clone()),
+                                    f3: GKROperand::new_const(values.num_vars, F::ONE),
+                                },
+                                GKRFunction {
+                                    coefficient: *coeff * Into::<F>::into(-2),
                                     f1_g: predicate,
-                                    f2: values.clone(),
-                                    f3: const_one.clone(),
-                                }]
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                    .collect()
-            }
+                                    f2: GKROperand::from_values(values.clone()),
+                                    f3: GKROperand::from_values(values.clone()),
+                                },
+                            ]
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect(),
+            Gate::XorLeft => combination
+                .into_iter()
+                .flat_map(|(coeff, partial_point)| {
+                    wiring
+                        .fix_variables(partial_point)
+                        .into_iter()
+                        .flat_map(|predicate| {
+                            vec![
+                                GKRFunction {
+                                    coefficient: *coeff,
+                                    f1_g: predicate.clone(),
+                                    f2: GKROperand::from_values(values.clone()),
+                                    f3: GKROperand::new_const(values.num_vars, F::ONE),
+                                },
+                                GKRFunction {
+                                    coefficient: *coeff * Into::<F>::into(-2),
+                                    f1_g: predicate,
+                                    f2: GKROperand::from_values(values.clone()),
+                                    f3: GKROperand::from_values(values.clone()),
+                                },
+                            ]
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect(),
+            Gate::Left => combination
+                .into_iter()
+                .flat_map(|(coeff, partial_point)| {
+                    wiring
+                        .fix_variables(partial_point)
+                        .into_iter()
+                        .flat_map(|predicate| {
+                            vec![GKRFunction {
+                                coefficient: *coeff,
+                                f1_g: predicate,
+                                f2: GKROperand::from_values(values.clone()),
+                                f3: GKROperand::new_const(values.num_vars, F::ONE),
+                            }]
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect(),
             Gate::Null => {
                 vec![]
             }

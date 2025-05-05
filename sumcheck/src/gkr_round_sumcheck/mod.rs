@@ -7,61 +7,25 @@ pub mod function;
 #[cfg(test)]
 mod test;
 
+use core::cmp::max;
+
 use crate::gkr_round_sumcheck::data_structures::{GKRRoundProof, GKRRoundSumcheckSubClaim};
 use crate::ml_sumcheck::protocol::prover::ProverState;
 use crate::ml_sumcheck::protocol::{IPForMLSumcheck, ListOfProductsOfPolynomials, PolynomialInfo};
 use crate::rng::FeedableRNG;
 use ark_ff::Field;
-use ark_poly::{
-    DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
-};
+use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
 use ark_std::marker::PhantomData;
 use ark_std::rc::Rc;
 use ark_std::vec::Vec;
-use function::GKRRound;
+use function::{GKROperand, GKRRound};
 use tracing::{instrument, Level};
-
-pub fn add_empty_variables<F: Field>(
-    f2: &DenseMultilinearExtension<F>,
-    num_vars: usize,
-) -> Rc<DenseMultilinearExtension<F>> {
-    let dim: usize = f2.num_vars + num_vars;
-    let evaluations = (0..(1 << dim))
-        .map(|out| {
-            let k = out & (1 << f2.num_vars) - 1;
-            f2.evaluations[k]
-        })
-        .collect();
-    Rc::new(DenseMultilinearExtension::from_evaluations_vec(
-        dim,
-        evaluations,
-    ))
-}
-
-pub fn shift_variables_to_end<F: Field>(
-    f3: &DenseMultilinearExtension<F>,
-    b_dim: usize,
-) -> Rc<DenseMultilinearExtension<F>> {
-    let dim = f3.num_vars;
-    let c_dim = dim - b_dim;
-    let evaluations = (0..(1 << dim))
-        .map(|cb| {
-            let c = cb & ((1 << c_dim) - 1);
-            let b = cb >> c_dim;
-            f3.evaluations[(c << b_dim) + b]
-        })
-        .collect();
-    Rc::new(DenseMultilinearExtension::from_evaluations_vec(
-        dim,
-        evaluations,
-    ))
-}
 
 pub fn initialize_f1_gu<F: Field>(
     f1_g: &SparseMultilinearExtension<F>,
     u: &[F],
     c_dim: usize,
-) -> Rc<DenseMultilinearExtension<F>> {
+) -> GKROperand<F> {
     let ab_dim = f1_g.num_vars - c_dim;
     assert_eq!(ab_dim % 2, 0, "a, b inputs must have the same length");
     let a_dim = ab_dim / 2;
@@ -88,17 +52,17 @@ pub fn initialize_f1_gu<F: Field>(
         .fix_variables(&u)
         .to_dense_multilinear_extension();
 
-    Rc::new(f1_gu)
+    GKROperand::from_values(Rc::new(f1_gu))
 }
 
 /// Takes multilinear f1 fixed at g (output), and f3. Returns h_g.
 pub fn initialize_phased_sumcheck<F: Field>(
     f1_at_g: &SparseMultilinearExtension<F>,
-    f3: &DenseMultilinearExtension<F>,
+    f3: &GKROperand<F>,
     instance_bits: usize,
-) -> Rc<DenseMultilinearExtension<F>> {
+) -> GKROperand<F> {
     // dim contains instance_bits
-    let instance_dim = f3.num_vars; // 'l` in paper
+    let instance_dim = f3.num_vars(); // 'l` in paper
     let base_dim = instance_dim - instance_bits;
 
     assert_eq!(f1_at_g.num_vars + instance_bits, 2 * instance_dim);
@@ -122,66 +86,97 @@ pub fn initialize_phased_sumcheck<F: Field>(
         }
     }
 
-    Rc::new(DenseMultilinearExtension::from_evaluations_vec(
+    GKROperand::from_values(Rc::new(DenseMultilinearExtension::from_evaluations_vec(
         instance_dim,
         a_hg,
-    ))
+    )))
 }
 
 /// Takes h_g and f2, returns a sumcheck state
 pub fn start_phase0_sumcheck<F: Field>(
-    instances: &[(
-        Rc<DenseMultilinearExtension<F>>,
-        Rc<DenseMultilinearExtension<F>>,
-        &F,
-    )],
+    instances: &[(GKROperand<F>, GKROperand<F>, &F)],
 ) -> ProverState<F> {
-    let dim = instances[0].0.num_vars;
+    let dim = instances[0].0.num_vars();
     let mut poly = ListOfProductsOfPolynomials::new(dim);
     for (h_g, f2, coeff) in instances {
-        poly.add_product(vec![h_g.clone(), f2.clone()], **coeff);
+        let v = vec![h_g, f2];
+        let product = v
+            .iter()
+            .filter_map(|x| match x {
+                GKROperand::Const { .. } => None,
+                GKROperand::Values { mle, .. } => Some(mle.clone()),
+            })
+            .collect::<Vec<_>>();
+
+        let coefficient = v.iter().fold(**coeff, |acc, e| match e {
+            GKROperand::Const { val: one, .. } => acc * *one,
+            GKROperand::Values { .. } => acc,
+        });
+
+        poly.add_product(product, coefficient);
     }
     IPForMLSumcheck::prover_init(&poly)
 }
 
 /// Takes f1_g fixed at u, f2 fixed at u, and f3, returns a sumcheck state
 pub fn start_phase1_sumcheck<F: Field>(
-    instances: &[(
-        Rc<DenseMultilinearExtension<F>>,
-        Rc<DenseMultilinearExtension<F>>,
-        Rc<DenseMultilinearExtension<F>>,
-        &F,
-    )],
+    instances: &[(GKROperand<F>, GKROperand<F>, GKROperand<F>, &F)],
 ) -> ProverState<F> {
-    let dim = instances[0].0.num_vars;
+    let dim = instances[0].0.num_vars();
     //assert_eq!(f2.num_vars, dim);
     let mut poly = ListOfProductsOfPolynomials::new(dim);
     for (f1_gu, f2_u, f3, coeff) in instances {
-        poly.add_product(vec![f1_gu.clone(), f2_u.clone(), f3.clone()], **coeff);
+        let v = vec![f1_gu, f2_u, f3];
+        let product = v
+            .iter()
+            .filter_map(|x| match x {
+                GKROperand::Const { .. } => None,
+                GKROperand::Values { mle, .. } => Some(mle.clone()),
+            })
+            .collect::<Vec<_>>();
+
+        let coefficient = v.iter().fold(**coeff, |acc, e| match e {
+            GKROperand::Const { val: one, .. } => acc * *one,
+            GKROperand::Values { .. } => acc,
+        });
+
+        poly.add_product(product, coefficient);
     }
     IPForMLSumcheck::prover_init(&poly)
 }
 
 /// Takes f1_g fixed at u||c, f3 fixed at c, and f2 evaluated at u|cc.
 pub fn start_phase2_sumcheck<F: Field>(
-    instances: &[(
-        &DenseMultilinearExtension<F>,
-        DenseMultilinearExtension<F>,
-        F,
-        &F,
-    )],
+    instances: &[(&GKROperand<F>, GKROperand<F>, F, &F)],
 ) -> ProverState<F> {
     let first = &instances[0];
-    let dim = first.0.num_vars;
+    let dim = first.0.num_vars();
     let mut poly = ListOfProductsOfPolynomials::new(dim);
     for (f1_gu, f3, f2_u, coeff) in instances {
-        assert_eq!(f1_gu.num_vars, dim);
-        assert_eq!(f3.num_vars, dim);
-        poly.add_product(
-            vec![Rc::new((*f1_gu).clone()), Rc::new(f3.clone())],
-            **coeff * f2_u,
-        );
+        assert_eq!(f1_gu.num_vars(), dim);
+        assert_eq!(f3.num_vars(), dim);
+
+        let v = vec![f1_gu, f3];
+        let product = v
+            .iter()
+            .filter_map(|x| match x {
+                GKROperand::Const { .. } => None,
+                GKROperand::Values { mle, .. } => Some(mle.clone()),
+            })
+            .collect::<Vec<_>>();
+
+        let coefficient = v.iter().fold(**coeff * *f2_u, |acc, e| match e {
+            GKROperand::Const { val: one, .. } => acc * *one,
+            GKROperand::Values { .. } => acc,
+        });
+
+        poly.add_product(product, coefficient);
     }
+
+    // manually raise max multiplicand numbers. otherwise very basic tests (id gates only)
+    // degenerate to const funcs and verifier gets confused.
+    poly.max_multiplicands = max(poly.max_multiplicands, 2);
+
     IPForMLSumcheck::prover_init(&poly)
 }
 
@@ -254,12 +249,12 @@ impl<F: Field> GKRRoundSumcheck<F> {
 
         let f2_u = f2.map(|f2| f2.fix_variables(&u));
 
-        let f2_u_exp = f2_u.clone().map(|f2| add_empty_variables(&f2, b_dim));
+        let f2_u_exp = f2_u.clone().map(|f2| f2.add_empty_variables(b_dim));
 
         let f3 = round
             .functions
             .iter()
-            .map(|func| shift_variables_to_end(&func.f3, b_dim));
+            .map(|func| func.f3.shift_variables_to_end(b_dim));
 
         let instances = f1_gu_vec
             .iter()
@@ -299,21 +294,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
         }
 
         let f3 = round.functions.iter().map(|func| {
-            // f3(y, c) has wrong endianness. we fixed c in the previous phase of sumcheck
-            // now need to iterate over y. we'll relabel f3(y, c) to f3(c, y) and set c to a const
-            // so we're left with f3(y) required for this phase of sumcheck
-
-            let mut evaluations = vec![F::ZERO; func.f3.evaluations.len()];
-            // currently y is in least significant bits, c in the most significant bits.
-            for (yc, val) in func.f3.evaluations.iter().enumerate() {
-                let y = yc & ((1 << b_dim) - 1);
-                let c = yc >> b_dim;
-                let cy = (y << round.instance_bits) + c;
-                evaluations[cy] = *val;
-            }
-            let f3_r =
-                DenseMultilinearExtension::from_evaluations_vec(func.f3.num_vars, evaluations);
-
+            let f3_r = func.f3.shift_variables_to_end(b_dim);
             f3_r.fix_variables(&cp)
         });
 

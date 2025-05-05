@@ -64,8 +64,8 @@ impl<F: Field> GKRRoundSumcheckSubClaim<F> {
             let dim = self.u.len();
             assert_eq!(self.v.len(), dim);
             assert_eq!(f1_g.num_vars, 2 * dim);
-            assert_eq!(f2.num_vars, dim);
-            assert_eq!(f3.num_vars, dim);
+            assert_eq!(f2.num_vars(), dim);
+            assert_eq!(f3.num_vars(), dim);
 
             let uv: Vec<_> = self.u.iter().chain(self.v.iter()).copied().collect();
             actual_evaluation += f1_g.evaluate(&uv) * f2.evaluate(&self.u) * f3.evaluate(&self.v);
