@@ -198,19 +198,6 @@ impl Gate {
     }
 }
 
-/// Scale SparseMLE
-pub fn scale<F: Field>(
-    mle: &SparseMultilinearExtension<F>,
-    scalar: &F,
-) -> SparseMultilinearExtension<F> {
-    let evaluations = mle
-        .evaluations
-        .iter()
-        .map(|(i, v)| (*i, *v * scalar))
-        .collect::<Vec<_>>();
-    SparseMultilinearExtension::from_evaluations(mle.num_vars, &evaluations)
-}
-
 trait EvaluateSparseSum<F: Field> {
     fn fix_variables(&self, partial_point: &[F]) -> Vec<SparseMultilinearExtension<F>>;
 }

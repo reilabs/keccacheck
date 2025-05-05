@@ -10,7 +10,7 @@ use crate::gkr_round_sumcheck::data_structures::{GKRRoundProof, GKRRoundSumcheck
 use crate::ml_sumcheck::protocol::prover::ProverState;
 use crate::ml_sumcheck::protocol::{IPForMLSumcheck, ListOfProductsOfPolynomials, PolynomialInfo};
 use crate::rng::FeedableRNG;
-use ark_ff::{Field, Zero};
+use ark_ff::Field;
 use ark_poly::{
     DenseMultilinearExtension, MultilinearExtension, Polynomial, SparseMultilinearExtension,
 };
