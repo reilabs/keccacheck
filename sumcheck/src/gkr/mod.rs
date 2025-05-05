@@ -1,4 +1,5 @@
 use core::marker::PhantomData;
+use std::rc::Rc;
 
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, Polynomial};
@@ -97,10 +98,10 @@ impl<F: Field> GKR<F> {
                 &[(alpha, &uc), (beta, &vc)]
             };
 
-            let w_i = DenseMultilinearExtension::from_evaluations_slice(
+            let w_i = Rc::new(DenseMultilinearExtension::from_evaluations_slice(
                 instance_bits + num_vars[i + 1],
                 &evaluations[i + 1],
-            );
+            ));
 
             info!("proving layer {i}");
             let functions = layer
@@ -109,7 +110,7 @@ impl<F: Field> GKR<F> {
                 .flat_map(|gate_type| {
                     gate_type.gate.to_gkr_combination(
                         &gate_type.sum_of_sparse_mle,
-                        &w_i,
+                        w_i.clone(),
                         combination,
                     )
                 })

@@ -22,7 +22,7 @@ use tracing::{instrument, Level};
 pub fn add_empty_variables<F: Field>(
     f2: &DenseMultilinearExtension<F>,
     num_vars: usize,
-) -> DenseMultilinearExtension<F> {
+) -> Rc<DenseMultilinearExtension<F>> {
     let dim: usize = f2.num_vars + num_vars;
     let evaluations = (0..(1 << dim))
         .map(|out| {
@@ -30,13 +30,16 @@ pub fn add_empty_variables<F: Field>(
             f2.evaluations[k]
         })
         .collect();
-    DenseMultilinearExtension::from_evaluations_vec(dim, evaluations)
+    Rc::new(DenseMultilinearExtension::from_evaluations_vec(
+        dim,
+        evaluations,
+    ))
 }
 
 pub fn shift_variables_to_end<F: Field>(
     f3: &DenseMultilinearExtension<F>,
     b_dim: usize,
-) -> DenseMultilinearExtension<F> {
+) -> Rc<DenseMultilinearExtension<F>> {
     let dim = f3.num_vars;
     let c_dim = dim - b_dim;
     let evaluations = (0..(1 << dim))
@@ -46,14 +49,17 @@ pub fn shift_variables_to_end<F: Field>(
             f3.evaluations[(c << b_dim) + b]
         })
         .collect();
-    DenseMultilinearExtension::from_evaluations_vec(dim, evaluations)
+    Rc::new(DenseMultilinearExtension::from_evaluations_vec(
+        dim,
+        evaluations,
+    ))
 }
 
 pub fn initialize_f1_gu<F: Field>(
     f1_g: &SparseMultilinearExtension<F>,
     u: &[F],
     c_dim: usize,
-) -> DenseMultilinearExtension<F> {
+) -> Rc<DenseMultilinearExtension<F>> {
     let ab_dim = f1_g.num_vars - c_dim;
     assert_eq!(ab_dim % 2, 0, "a, b inputs must have the same length");
     let a_dim = ab_dim / 2;
@@ -80,7 +86,7 @@ pub fn initialize_f1_gu<F: Field>(
         .fix_variables(&u)
         .to_dense_multilinear_extension();
 
-    f1_gu
+    Rc::new(f1_gu)
 }
 
 /// Takes multilinear f1 fixed at g (output), and f3. Returns h_g.
@@ -88,7 +94,7 @@ pub fn initialize_phased_sumcheck<F: Field>(
     f1_at_g: &SparseMultilinearExtension<F>,
     f3: &DenseMultilinearExtension<F>,
     instance_bits: usize,
-) -> DenseMultilinearExtension<F> {
+) -> Rc<DenseMultilinearExtension<F>> {
     // dim contains instance_bits
     let instance_dim = f3.num_vars; // 'l` in paper
     let base_dim = instance_dim - instance_bits;
@@ -114,24 +120,24 @@ pub fn initialize_phased_sumcheck<F: Field>(
         }
     }
 
-    DenseMultilinearExtension::from_evaluations_vec(instance_dim, a_hg)
+    Rc::new(DenseMultilinearExtension::from_evaluations_vec(
+        instance_dim,
+        a_hg,
+    ))
 }
 
 /// Takes h_g and f2, returns a sumcheck state
 pub fn start_phase0_sumcheck<F: Field>(
     instances: &[(
-        &DenseMultilinearExtension<F>,
-        &DenseMultilinearExtension<F>,
+        Rc<DenseMultilinearExtension<F>>,
+        Rc<DenseMultilinearExtension<F>>,
         &F,
     )],
 ) -> ProverState<F> {
     let dim = instances[0].0.num_vars;
     let mut poly = ListOfProductsOfPolynomials::new(dim);
     for (h_g, f2, coeff) in instances {
-        poly.add_product(
-            vec![Rc::new((*h_g).clone()), Rc::new((*f2).clone())],
-            **coeff,
-        );
+        poly.add_product(vec![h_g.clone(), f2.clone()], **coeff);
     }
     IPForMLSumcheck::prover_init(&poly)
 }
@@ -139,9 +145,9 @@ pub fn start_phase0_sumcheck<F: Field>(
 /// Takes f1_g fixed at u, f2 fixed at u, and f3, returns a sumcheck state
 pub fn start_phase1_sumcheck<F: Field>(
     instances: &[(
-        &DenseMultilinearExtension<F>,
-        DenseMultilinearExtension<F>,
-        DenseMultilinearExtension<F>,
+        Rc<DenseMultilinearExtension<F>>,
+        Rc<DenseMultilinearExtension<F>>,
+        Rc<DenseMultilinearExtension<F>>,
         &F,
     )],
 ) -> ProverState<F> {
@@ -149,14 +155,7 @@ pub fn start_phase1_sumcheck<F: Field>(
     //assert_eq!(f2.num_vars, dim);
     let mut poly = ListOfProductsOfPolynomials::new(dim);
     for (f1_gu, f2_u, f3, coeff) in instances {
-        poly.add_product(
-            vec![
-                Rc::new((*f1_gu).clone()),
-                Rc::new((*f2_u).clone()),
-                Rc::new((*f3).clone()),
-            ],
-            **coeff,
-        );
+        poly.add_product(vec![f1_gu.clone(), f2_u.clone(), f3.clone()], **coeff);
     }
     IPForMLSumcheck::prover_init(&poly)
 }
@@ -192,9 +191,9 @@ pub struct GKRFunction<F: Field> {
     /// sparse wiring polynomial evaluated at random output r
     pub f1_g: SparseMultilinearExtension<F>,
     /// gate evaluation, left operand
-    pub f2: DenseMultilinearExtension<F>,
+    pub f2: Rc<DenseMultilinearExtension<F>>,
     /// gate evaluation, right operand
-    pub f3: DenseMultilinearExtension<F>,
+    pub f3: Rc<DenseMultilinearExtension<F>>,
 }
 
 #[derive(Debug)]
@@ -203,7 +202,7 @@ pub struct GKRRound<F: Field> {
     /// List of functions under sum
     pub functions: Vec<GKRFunction<F>>,
     /// Layer evaluations
-    pub layer: DenseMultilinearExtension<F>,
+    pub layer: Rc<DenseMultilinearExtension<F>>,
     /// Number of vars used to describe the instance number
     pub instance_bits: usize,
 }
@@ -249,11 +248,11 @@ impl<F: Field> GKRRoundSumcheck<F> {
             f1_g_vec.push(f1_g);
         }
 
-        let f2 = round.functions.iter().map(|func| &func.f2);
+        let f2 = round.functions.iter().map(|func| func.f2.clone());
         let coeff = round.functions.iter().map(|func| &func.coefficient);
 
         let instances = h_g_vec
-            .iter()
+            .into_iter()
             .zip(f2.clone())
             .zip(coeff.clone())
             .map(|((a, b), c)| (a, b, c))
@@ -298,6 +297,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
 
         let instances = f1_gu_vec
             .iter()
+            .cloned()
             .zip(f2_u_exp)
             .zip(f3.clone())
             .zip(coeff.clone())

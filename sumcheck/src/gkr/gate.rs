@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinearExtension};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
@@ -42,7 +44,7 @@ impl Gate {
     pub fn to_gkr_combination<F: Field>(
         &self,
         wiring: &[SparseMultilinearExtension<F>],
-        values: &DenseMultilinearExtension<F>,
+        values: Rc<DenseMultilinearExtension<F>>,
         combination: &[(F, &[F])],
     ) -> Vec<GKRFunction<F>> {
         info!(
@@ -52,10 +54,10 @@ impl Gate {
         );
         match self {
             Gate::Add => {
-                let const_one = DenseMultilinearExtension::from_evaluations_vec(
+                let const_one = Rc::new(DenseMultilinearExtension::from_evaluations_vec(
                     values.num_vars,
                     vec![F::ONE; 1 << values.num_vars],
-                );
+                ));
 
                 combination
                     .into_iter()
@@ -101,10 +103,10 @@ impl Gate {
                 })
                 .collect(),
             Gate::Xor => {
-                let const_one = DenseMultilinearExtension::from_evaluations_vec(
+                let const_one = Rc::new(DenseMultilinearExtension::from_evaluations_vec(
                     values.num_vars,
                     vec![F::ONE; 1 << values.num_vars],
-                );
+                ));
                 combination
                     .into_iter()
                     .flat_map(|(coeff, partial_point)| {
@@ -138,10 +140,10 @@ impl Gate {
                     .collect()
             }
             Gate::XorLeft => {
-                let const_one = DenseMultilinearExtension::from_evaluations_vec(
+                let const_one = Rc::new(DenseMultilinearExtension::from_evaluations_vec(
                     values.num_vars,
                     vec![F::ONE; 1 << values.num_vars],
-                );
+                ));
                 combination
                     .into_iter()
                     .flat_map(|(coeff, partial_point)| {
@@ -169,10 +171,10 @@ impl Gate {
                     .collect()
             }
             Gate::Left => {
-                let const_one = DenseMultilinearExtension::from_evaluations_vec(
+                let const_one = Rc::new(DenseMultilinearExtension::from_evaluations_vec(
                     values.num_vars,
                     vec![F::ONE; 1 << values.num_vars],
-                );
+                ));
                 combination
                     .into_iter()
                     .flat_map(|(coeff, partial_point)| {
