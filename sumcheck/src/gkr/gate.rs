@@ -5,7 +5,7 @@ use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinea
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
 use tracing::info;
 
-use crate::gkr_round_sumcheck::GKRFunction;
+use crate::gkr_round_sumcheck::function::GKRFunction;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]

@@ -5,7 +5,7 @@ use ark_ff::Field;
 use ark_poly::Polynomial;
 use ark_std::vec::Vec;
 
-use super::GKRRound;
+use super::function::GKRRound;
 
 #[derive(Debug)]
 /// Proof for GKR Round Function

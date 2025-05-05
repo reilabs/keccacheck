@@ -10,7 +10,7 @@ use tracing::{info, instrument, Level};
 use util::{bits_to_u64, ilog2_ceil};
 
 use crate::{
-    gkr_round_sumcheck::{data_structures::GKRRoundProof, GKRRound, GKRRoundSumcheck},
+    gkr_round_sumcheck::{data_structures::GKRRoundProof, function::GKRRound, GKRRoundSumcheck},
     rng::FeedableRNG,
 };
 
