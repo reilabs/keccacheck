@@ -119,14 +119,18 @@ pub fn initialize_phased_sumcheck<F: Field>(
 
 /// Takes h_g and f2, returns a sumcheck state
 pub fn start_phase0_sumcheck<F: Field>(
-    instances: &[(&DenseMultilinearExtension<F>, &DenseMultilinearExtension<F>)],
+    instances: &[(
+        &DenseMultilinearExtension<F>,
+        &DenseMultilinearExtension<F>,
+        &F,
+    )],
 ) -> ProverState<F> {
     let dim = instances[0].0.num_vars;
     let mut poly = ListOfProductsOfPolynomials::new(dim);
-    for (h_g, f2) in instances {
+    for (h_g, f2, coeff) in instances {
         poly.add_product(
             vec![Rc::new((*h_g).clone()), Rc::new((*f2).clone())],
-            F::one(),
+            **coeff,
         );
     }
     IPForMLSumcheck::prover_init(&poly)
@@ -138,19 +142,20 @@ pub fn start_phase1_sumcheck<F: Field>(
         &DenseMultilinearExtension<F>,
         DenseMultilinearExtension<F>,
         DenseMultilinearExtension<F>,
+        &F,
     )],
 ) -> ProverState<F> {
     let dim = instances[0].0.num_vars;
     //assert_eq!(f2.num_vars, dim);
     let mut poly = ListOfProductsOfPolynomials::new(dim);
-    for (f1_gu, f2_u, f3) in instances {
+    for (f1_gu, f2_u, f3, coeff) in instances {
         poly.add_product(
             vec![
                 Rc::new((*f1_gu).clone()),
                 Rc::new((*f2_u).clone()),
                 Rc::new((*f3).clone()),
             ],
-            F::one(),
+            **coeff,
         );
     }
     IPForMLSumcheck::prover_init(&poly)
@@ -162,22 +167,19 @@ pub fn start_phase2_sumcheck<F: Field>(
         &DenseMultilinearExtension<F>,
         DenseMultilinearExtension<F>,
         F,
+        &F,
     )],
 ) -> ProverState<F> {
     let first = &instances[0];
     let dim = first.0.num_vars;
     let mut poly = ListOfProductsOfPolynomials::new(dim);
-    for (f1_gu, f3, f2_u) in instances {
+    for (f1_gu, f3, f2_u, coeff) in instances {
         assert_eq!(f1_gu.num_vars, dim);
         assert_eq!(f3.num_vars, dim);
-
-        let f3_f2u = {
-            let mut zero = DenseMultilinearExtension::zero();
-            zero += (*f2_u, f3);
-            zero
-        };
-
-        poly.add_product(vec![Rc::new((*f1_gu).clone()), Rc::new(f3_f2u)], F::one());
+        poly.add_product(
+            vec![Rc::new((*f1_gu).clone()), Rc::new(f3.clone())],
+            **coeff * f2_u,
+        );
     }
     IPForMLSumcheck::prover_init(&poly)
 }
@@ -185,6 +187,8 @@ pub fn start_phase2_sumcheck<F: Field>(
 #[derive(Debug)]
 /// GKR function in a form of f1(r, u, v) * f2(u) * f3(v) where r is const.
 pub struct GKRFunction<F: Field> {
+    /// coefficient
+    pub coefficient: F,
     /// sparse wiring polynomial evaluated at random output r
     pub f1_g: SparseMultilinearExtension<F>,
     /// gate evaluation, left operand
@@ -246,10 +250,13 @@ impl<F: Field> GKRRoundSumcheck<F> {
         }
 
         let f2 = round.functions.iter().map(|func| &func.f2);
+        let coeff = round.functions.iter().map(|func| &func.coefficient);
+
         let instances = h_g_vec
             .iter()
             .zip(f2.clone())
-            .map(|(a, b)| (a, b))
+            .zip(coeff.clone())
+            .map(|((a, b), c)| (a, b, c))
             .collect::<Vec<_>>();
 
         let evaluation_span = tracing::span!(
@@ -293,7 +300,8 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .iter()
             .zip(f2_u_exp)
             .zip(f3.clone())
-            .map(|((a, b), c)| (a, b, c))
+            .zip(coeff.clone())
+            .map(|(((a, b), c), d)| (a, b, c, d))
             .collect::<Vec<_>>();
 
         let evaluation_span = tracing::span!(
@@ -347,7 +355,8 @@ impl<F: Field> GKRRoundSumcheck<F> {
             .iter()
             .zip(f3)
             .zip(f2_u)
-            .map(|((a, b), c)| (a, b, c.evaluate(&cp)))
+            .zip(coeff.clone())
+            .map(|(((a, b), c), d)| (a, b, c.evaluate(&cp), d))
             .collect::<Vec<_>>();
 
         let evaluation_span = tracing::span!(

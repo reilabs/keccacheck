@@ -66,12 +66,14 @@ impl Gate {
                             .flat_map(|predicate| {
                                 vec![
                                     GKRFunction {
-                                        f1_g: scale(&predicate, coeff),
+                                        coefficient: *coeff,
+                                        f1_g: predicate.clone(),
                                         f2: const_one.clone(),
                                         f3: values.clone(),
                                     },
                                     GKRFunction {
-                                        f1_g: scale(&predicate, coeff),
+                                        coefficient: *coeff,
+                                        f1_g: predicate,
                                         f2: values.clone(),
                                         f3: const_one.clone(),
                                     },
@@ -89,7 +91,8 @@ impl Gate {
                         .into_iter()
                         .flat_map(|predicate| {
                             vec![GKRFunction {
-                                f1_g: scale(&predicate, coeff),
+                                coefficient: *coeff,
+                                f1_g: predicate,
                                 f2: values.clone(),
                                 f3: values.clone(),
                             }]
@@ -111,17 +114,20 @@ impl Gate {
                             .flat_map(|predicate| {
                                 vec![
                                     GKRFunction {
-                                        f1_g: scale(&predicate, coeff),
+                                        coefficient: *coeff,
+                                        f1_g: predicate.clone(),
                                         f2: const_one.clone(),
                                         f3: values.clone(),
                                     },
                                     GKRFunction {
-                                        f1_g: scale(&predicate, coeff),
+                                        coefficient: *coeff,
+                                        f1_g: predicate.clone(),
                                         f2: values.clone(),
                                         f3: const_one.clone(),
                                     },
                                     GKRFunction {
-                                        f1_g: scale(&predicate, &(*coeff * Into::<F>::into(-2))),
+                                        coefficient: *coeff * Into::<F>::into(-2),
+                                        f1_g: predicate,
                                         f2: values.clone(),
                                         f3: values.clone(),
                                     },
@@ -144,18 +150,15 @@ impl Gate {
                             .into_iter()
                             .flat_map(|predicate| {
                                 vec![
-                                    // GKRFunction {
-                                    //     f1_g: scale(&predicate, coeff),
-                                    //     f2: const_one.clone(),
-                                    //     f3: values.clone(),
-                                    // },
                                     GKRFunction {
-                                        f1_g: scale(&predicate, coeff),
+                                        coefficient: *coeff,
+                                        f1_g: predicate.clone(),
                                         f2: values.clone(),
                                         f3: const_one.clone(),
                                     },
                                     GKRFunction {
-                                        f1_g: scale(&predicate, &(*coeff * Into::<F>::into(-2))),
+                                        coefficient: *coeff * Into::<F>::into(-2),
+                                        f1_g: predicate,
                                         f2: values.clone(),
                                         f3: values.clone(),
                                     },
@@ -178,7 +181,8 @@ impl Gate {
                             .into_iter()
                             .flat_map(|predicate| {
                                 vec![GKRFunction {
-                                    f1_g: scale(&predicate, coeff),
+                                    coefficient: *coeff,
+                                    f1_g: predicate,
                                     f2: values.clone(),
                                     f3: const_one.clone(),
                                 }]
