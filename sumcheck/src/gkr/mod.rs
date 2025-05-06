@@ -87,22 +87,21 @@ impl<F: Field> GKR<F> {
             rounds: Vec::with_capacity(circuit.layers.len()),
         };
 
-        let mut uc = Vec::new();
-        let mut vc = Vec::new();
-        let r_1 = (0..(instance_bits + num_vars[0]))
+        let mut uc = (0..(instance_bits + num_vars[0]))
             .map(|_| F::rand(rng))
             .collect::<Vec<_>>();
+        let mut vc = Vec::new();
 
         for (i, layer) in circuit.layers.iter().enumerate() {
             let combination: &[(F, &[F])] = if i == 0 {
-                &[(F::ONE, &r_1)]
+                &[(F::ONE, &uc)]
             } else {
                 let alpha = F::rand(rng);
                 let beta = F::rand(rng);
                 &[(alpha, &uc), (beta, &vc)]
             };
 
-            let w_i = Rc::new(DenseMultilinearExtension::from_evaluations_slice(
+            let values = Rc::new(DenseMultilinearExtension::from_evaluations_slice(
                 instance_bits + num_vars[i + 1],
                 &evaluations[i + 1],
             ));
@@ -114,7 +113,7 @@ impl<F: Field> GKR<F> {
                 .flat_map(|gate_type| {
                     gate_type.gate.to_gkr_combination(
                         &gate_type.sum_of_sparse_mle,
-                        w_i.clone(),
+                        values.clone(),
                         combination,
                     )
                 })
@@ -122,7 +121,7 @@ impl<F: Field> GKR<F> {
 
             let round = GKRRound {
                 functions,
-                layer: GKROperand::from_values(w_i),
+                layer: GKROperand::from_values(values),
                 instance_bits,
             };
 
