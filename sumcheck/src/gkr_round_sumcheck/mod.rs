@@ -273,14 +273,20 @@ impl<F: Field> GKRRoundSumcheck<F> {
         )
         .entered();
 
-        let mut f1_gu_vec = Vec::with_capacity(round.functions.len());
-
+        let mut f1_gu_cache: HashMap<OperandId<F>, usize> = HashMap::new();
+        let mut f1_gu_vec: Vec<GKROperand<F>> = Vec::with_capacity(round.functions.len());
         for f1_g in f1_g_vec {
-            f1_gu_vec.push(initialize_f1_gu(&f1_g, &u, c_dim));
+            let id = f1_g.id();
+            if let Some(index) = f1_gu_cache.get(&id) {
+                f1_gu_vec.push(f1_gu_vec[*index].clone());
+            } else {
+                let index = f1_gu_vec.len();
+                f1_gu_vec.push(initialize_f1_gu(&f1_g, &u, c_dim));
+                f1_gu_cache.insert(id, index);
+            }
         }
 
         let f2_u = f2.map(|f2| f2.fix_variables(&u));
-
         let f2_u_exp = f2_u.clone().map(|f2| f2.add_empty_variables(b_dim));
 
         let f3 = round
