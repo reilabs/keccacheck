@@ -286,19 +286,47 @@ impl<F: Field> GKRRoundSumcheck<F> {
             }
         }
 
-        let f2_u = f2.map(|f2| f2.fix_variables(&u));
-        let f2_u_exp = f2_u.clone().map(|f2| f2.add_empty_variables(b_dim));
+        let mut f2_u_cache: HashMap<OperandId<F>, usize> = HashMap::new();
+        let mut f2_u: Vec<GKROperand<F>> = Vec::with_capacity(round.functions.len());
+        let mut f2_u_exp: Vec<GKROperand<F>> = Vec::with_capacity(round.functions.len());
+        for f2_instance in f2 {
+            let id = f2_instance.id();
+            if let Some(index) = f2_u_cache.get(&id) {
+                f2_u.push(f2_u[*index].clone());
+                f2_u_exp.push(f2_u_exp[*index].clone());
+            } else {
+                let index = f2_u.len();
+                let fixed = f2_instance.fix_variables(&u);
+                f2_u.push(fixed.clone());
+                f2_u_exp.push(fixed.add_empty_variables(b_dim));
+                f2_u_cache.insert(id, index);
+            }
+        }
 
-        let f3 = round
-            .functions
-            .iter()
-            .map(|func| func.f3.shift_variables_to_end(b_dim));
+        let mut f3_cache: HashMap<OperandId<F>, usize> = HashMap::new();
+        let mut f3_shift: Vec<GKROperand<F>> = Vec::with_capacity(round.functions.len());
+        for func in &round.functions {
+            let f3 = &func.f3;
+            let id = f3.id();
+            if let Some(index) = f3_cache.get(&id) {
+                f3_shift.push(f3_shift[*index].clone());
+            } else {
+                let index = f3_shift.len();
+                f3_shift.push(f3.shift_variables_to_end(b_dim));
+                f3_cache.insert(id, index);
+            }
+        }
+
+        // let f3 = round
+        //     .functions
+        //     .iter()
+        //     .map(|func| func.f3.shift_variables_to_end(b_dim));
 
         let instances = f1_gu_vec
             .iter()
             .cloned()
             .zip(f2_u_exp)
-            .zip(f3.clone())
+            .zip(f3_shift)
             .zip(coeff.clone())
             .map(|(((a, b), c), d)| (a, b, c, d))
             .collect::<Vec<_>>();

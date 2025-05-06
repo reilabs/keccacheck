@@ -50,13 +50,13 @@ impl<F: Field> ProverState<F> {
 
         // TODO: we still have a lot of duplicated polynomials that affect performance
 
-        for i in 0..self.flattened_ml_extensions.len() {
-            for j in (i+1)..self.flattened_ml_extensions.len() {
-                if self.flattened_ml_extensions[i] == self.flattened_ml_extensions[j] {
-                    warn!("duplicated polynomials {i} & {j}");
-                }
-            }
-        }
+        // for i in 0..self.flattened_ml_extensions.len() {
+        //     for j in (i + 1)..self.flattened_ml_extensions.len() {
+        //         if self.flattened_ml_extensions[i] == self.flattened_ml_extensions[j] {
+        //             warn!("duplicated polynomials {i} & {j}");
+        //         }
+        //     }
+        // }
     }
 }
 
