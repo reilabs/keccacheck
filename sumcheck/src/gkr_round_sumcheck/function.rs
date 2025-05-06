@@ -12,7 +12,7 @@ pub struct GKRFunction<F: Field> {
     /// coefficient
     pub coefficient: F,
     /// sparse wiring polynomial evaluated at random output r
-    pub f1_g: SparseMultilinearExtension<F>,
+    pub f1_g: Rc<SparseMultilinearExtension<F>>,
     /// gate evaluation, left operand
     pub f2: GKROperand<F>,
     /// gate evaluation, right operand
@@ -40,6 +40,13 @@ impl<F: Field> GKRRound<F> {
             _ => panic!("only functions in the form of f1(...)f2(...)f3(...) supported"),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum OperandId<F: Field> {
+    Const(usize, F),
+    Dense(*const DenseMultilinearExtension<F>),
+    Sparse(*const SparseMultilinearExtension<F>),
 }
 
 #[derive(Debug, Clone)]
@@ -157,5 +164,34 @@ impl<F: Field> Index<usize> for GKROperand<F> {
             GKROperand::Const { val: one, .. } => one,
             GKROperand::Values { mle, .. } => &mle[index],
         }
+    }
+}
+
+pub trait GKROperandId<F: Field> {
+    fn id(&self) -> OperandId<F>;
+}
+
+impl<F: Field> GKROperandId<F> for &GKROperand<F> {
+    fn id(&self) -> OperandId<F> {
+        match self {
+            GKROperand::Const { num_vars, val } => OperandId::Const(*num_vars, *val),
+            GKROperand::Values { mle } => {
+                let ptr: *const DenseMultilinearExtension<F> = Rc::as_ptr(mle);
+                OperandId::Dense(ptr)
+            }
+        }
+    }
+}
+
+impl<F: Field> GKROperandId<F> for GKROperand<F> {
+    fn id(&self) -> OperandId<F> {
+        (&self).id()
+    }
+}
+
+impl<F: Field> GKROperandId<F> for Rc<SparseMultilinearExtension<F>> {
+    fn id(&self) -> OperandId<F> {
+        let ptr: *const SparseMultilinearExtension<F> = Rc::as_ptr(self);
+        OperandId::Sparse(ptr)
     }
 }

@@ -60,6 +60,7 @@ impl Gate {
                         .fix_variables(partial_point)
                         .into_iter()
                         .flat_map(|predicate| {
+                            let predicate = Rc::new(predicate);
                             vec![
                                 GKRFunction {
                                     coefficient: *coeff,
@@ -85,6 +86,7 @@ impl Gate {
                         .fix_variables(partial_point)
                         .into_iter()
                         .flat_map(|predicate| {
+                            let predicate = Rc::new(predicate);
                             vec![GKRFunction {
                                 coefficient: *coeff,
                                 f1_g: predicate,
@@ -102,6 +104,7 @@ impl Gate {
                         .fix_variables(partial_point)
                         .into_iter()
                         .flat_map(|predicate| {
+                            let predicate = Rc::new(predicate);
                             vec![
                                 GKRFunction {
                                     coefficient: *coeff,
@@ -133,6 +136,7 @@ impl Gate {
                         .fix_variables(partial_point)
                         .into_iter()
                         .flat_map(|predicate| {
+                            let predicate = Rc::new(predicate);
                             vec![
                                 GKRFunction {
                                     coefficient: *coeff,
@@ -158,6 +162,7 @@ impl Gate {
                         .fix_variables(partial_point)
                         .into_iter()
                         .flat_map(|predicate| {
+                            let predicate = Rc::new(predicate);
                             vec![GKRFunction {
                                 coefficient: *coeff,
                                 f1_g: predicate,

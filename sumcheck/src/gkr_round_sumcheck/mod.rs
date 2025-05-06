@@ -18,8 +18,9 @@ use ark_poly::{DenseMultilinearExtension, MultilinearExtension, SparseMultilinea
 use ark_std::marker::PhantomData;
 use ark_std::rc::Rc;
 use ark_std::vec::Vec;
-use function::{GKROperand, GKRRound};
-use tracing::{instrument, Level};
+use function::{GKROperand, GKROperandId, GKRRound, OperandId};
+use hashbrown::HashMap;
+use tracing::{info, instrument, Level};
 
 pub fn initialize_f1_gu<F: Field>(
     f1_g: &SparseMultilinearExtension<F>,
@@ -57,7 +58,7 @@ pub fn initialize_f1_gu<F: Field>(
 
 /// Takes multilinear f1 fixed at g (output), and f3. Returns h_g.
 pub fn initialize_phased_sumcheck<F: Field>(
-    f1_at_g: &SparseMultilinearExtension<F>,
+    f1_at_g: Rc<SparseMultilinearExtension<F>>,
     f3: &GKROperand<F>,
     instance_bits: usize,
 ) -> GKROperand<F> {
@@ -207,14 +208,27 @@ impl<F: Field> GKRRoundSumcheck<F> {
         )
         .entered();
 
-        let mut h_g_vec = Vec::with_capacity(round.functions.len());
-        let mut f1_g_vec = Vec::with_capacity(round.functions.len());
+        let mut h_g_cache: HashMap<(OperandId<F>, OperandId<F>), usize> = HashMap::new();
+        let mut h_g_vec: Vec<GKROperand<F>> = Vec::with_capacity(round.functions.len());
+        let mut f1_g_vec: Vec<Rc<SparseMultilinearExtension<F>>> =
+            Vec::with_capacity(round.functions.len());
         for function in &round.functions {
-            let f1_g = &function.f1_g;
-            let f3 = &function.f3;
-            let h_g = initialize_phased_sumcheck(f1_g, f3, round.instance_bits);
-            h_g_vec.push(h_g);
-            f1_g_vec.push(f1_g);
+            let f1_id = function.f1_g.id();
+            let f3_id = function.f3.id();
+            let id = (f1_id, f3_id);
+
+            if let Some(index) = h_g_cache.get(&id) {
+                h_g_vec.push(h_g_vec[*index].clone());
+                f1_g_vec.push(f1_g_vec[*index].clone());
+            } else {
+                let index = h_g_vec.len();
+                let f1_g = function.f1_g.clone();
+                let h_g =
+                    initialize_phased_sumcheck(f1_g.clone(), &function.f3, round.instance_bits);
+                h_g_vec.push(h_g);
+                f1_g_vec.push(f1_g);
+                h_g_cache.insert(id, index);
+            }
         }
 
         let f2 = round.functions.iter().map(|func| func.f2.clone());
@@ -262,7 +276,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let mut f1_gu_vec = Vec::with_capacity(round.functions.len());
 
         for f1_g in f1_g_vec {
-            f1_gu_vec.push(initialize_f1_gu(f1_g, &u, c_dim));
+            f1_gu_vec.push(initialize_f1_gu(&f1_g, &u, c_dim));
         }
 
         let f2_u = f2.map(|f2| f2.fix_variables(&u));
