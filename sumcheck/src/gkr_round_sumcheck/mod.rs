@@ -20,7 +20,7 @@ use ark_std::rc::Rc;
 use ark_std::vec::Vec;
 use function::{GKROperand, GKROperandId, GKRRound, OperandId};
 use hashbrown::HashMap;
-use tracing::{info, instrument, Level};
+use tracing::{instrument, Level};
 
 pub fn initialize_f1_gu<F: Field>(
     f1_g: &SparseMultilinearExtension<F>,
@@ -121,7 +121,7 @@ pub fn start_phase0_sumcheck<F: Field>(
 
 /// Takes f1_g fixed at u, f2 fixed at u, and f3, returns a sumcheck state
 pub fn start_phase1_sumcheck<F: Field>(
-    instances: &[(GKROperand<F>, GKROperand<F>, GKROperand<F>, &F)],
+    instances: &[(GKROperand<F>, GKROperand<F>, &GKROperand<F>, &F)],
 ) -> ProverState<F> {
     let dim = instances[0].0.num_vars();
     //assert_eq!(f2.num_vars, dim);
@@ -203,10 +203,11 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let evaluation_span = tracing::span!(
             Level::INFO,
             "sumcheck phase 0 - prep",
-            dim = a_dim,
             addends = round.functions.len()
         )
         .entered();
+
+        // TODO: use rayon for all preparation steps
 
         let mut h_g_cache: HashMap<(OperandId<F>, OperandId<F>), usize> = HashMap::new();
         let mut h_g_vec: Vec<GKROperand<F>> = Vec::with_capacity(round.functions.len());
@@ -246,7 +247,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let evaluation_span = tracing::span!(
             Level::INFO,
             "sumcheck phase 0 - exec",
-            dim = a_dim,
+            steps = a_dim,
             addends = instances.len()
         )
         .entered();
@@ -268,7 +269,6 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let evaluation_span = tracing::span!(
             Level::INFO,
             "sumcheck phase 1 - prep",
-            dim = c_dim,
             addends = round.functions.len()
         )
         .entered();
@@ -317,16 +317,11 @@ impl<F: Field> GKRRoundSumcheck<F> {
             }
         }
 
-        // let f3 = round
-        //     .functions
-        //     .iter()
-        //     .map(|func| func.f3.shift_variables_to_end(b_dim));
-
         let instances = f1_gu_vec
             .iter()
             .cloned()
             .zip(f2_u_exp)
-            .zip(f3_shift)
+            .zip(&f3_shift)
             .zip(coeff.clone())
             .map(|(((a, b), c), d)| (a, b, c, d))
             .collect::<Vec<_>>();
@@ -336,7 +331,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let evaluation_span = tracing::span!(
             Level::INFO,
             "sumcheck phase 1 - exec",
-            dim = c_dim,
+            steps = c_dim,
             addends = instances.len()
         )
         .entered();
@@ -358,25 +353,39 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let evaluation_span = tracing::span!(
             Level::INFO,
             "sumcheck phase 2 - prep",
-            dim = b_dim,
             addends = round.functions.len()
         )
         .entered();
 
-        let mut f1_guc_vec = Vec::with_capacity(round.functions.len());
+        let mut f1_guc_cache: HashMap<OperandId<F>, usize> = HashMap::new();
+        let mut f1_guc_vec: Vec<GKROperand<F>> = Vec::with_capacity(round.functions.len());
         for f1_gu in f1_gu_vec {
-            let f1_guc = f1_gu.fix_variables(&cp);
-            f1_guc_vec.push(f1_guc);
+            let id = f1_gu.id();
+            if let Some(index) = f1_guc_cache.get(&id) {
+                f1_guc_vec.push(f1_guc_vec[*index].clone());
+            } else {
+                let index = f1_guc_vec.len();
+                f1_guc_vec.push(f1_gu.fix_variables(&cp));
+                f1_guc_cache.insert(id, index);
+            }
         }
 
-        let f3 = round.functions.iter().map(|func| {
-            let f3_r = func.f3.shift_variables_to_end(b_dim);
-            f3_r.fix_variables(&cp)
-        });
+        let mut f3_u_cache: HashMap<OperandId<F>, usize> = HashMap::new();
+        let mut f3_u_vec: Vec<GKROperand<F>> = Vec::with_capacity(round.functions.len());
+        for f3_r in f3_shift {
+            let id = f3_r.id();
+            if let Some(index) = f3_u_cache.get(&id) {
+                f3_u_vec.push(f3_u_vec[*index].clone());
+            } else {
+                let index = f3_u_vec.len();
+                f3_u_vec.push(f3_r.fix_variables(&cp));
+                f3_u_cache.insert(id, index);
+            }
+        }
 
         let instances = f1_guc_vec
             .iter()
-            .zip(f3)
+            .zip(f3_u_vec)
             .zip(f2_u)
             .zip(coeff.clone())
             .map(|(((a, b), c), d)| (a, b, c.evaluate(&cp), d))
@@ -387,7 +396,7 @@ impl<F: Field> GKRRoundSumcheck<F> {
         let evaluation_span = tracing::span!(
             Level::INFO,
             "sumcheck phase 2 - exec",
-            dim = b_dim,
+            steps = b_dim,
             addends = instances.len()
         )
         .entered();

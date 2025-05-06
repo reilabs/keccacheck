@@ -8,7 +8,7 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{cfg_iter_mut, vec::Vec};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
-use tracing::{info, warn};
+use tracing::info;
 
 /// Prover Message
 #[derive(Clone, CanonicalSerialize, CanonicalDeserialize, Debug)]
@@ -47,16 +47,6 @@ impl<F: Field> ProverState<F> {
             line += &format!("{} ", ml.num_vars);
         }
         info!("{line}");
-
-        // TODO: we still have a lot of duplicated polynomials that affect performance
-
-        // for i in 0..self.flattened_ml_extensions.len() {
-        //     for j in (i + 1)..self.flattened_ml_extensions.len() {
-        //         if self.flattened_ml_extensions[i] == self.flattened_ml_extensions[j] {
-        //             warn!("duplicated polynomials {i} & {j}");
-        //         }
-        //     }
-        // }
     }
 }
 
