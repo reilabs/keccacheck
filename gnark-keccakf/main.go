@@ -426,12 +426,12 @@ func keccakF1600(a [25]uint64) [25]uint64 {
 // GNARK
 
 type keccakfCircuit struct {
-	In       [25]uints.U64
-	Expected [25]uints.U64 `gnark:",public"`
+	In       [8][25]uints.U64
+	Expected [8][25]uints.U64 `gnark:",public"`
 }
 
 func (c *keccakfCircuit) Define(api frontend.API) error {
-	var res [25]uints.U64
+	var res [8][25]uints.U64
 	for i := range res {
 		res[i] = c.In[i]
 	}
@@ -439,10 +439,14 @@ func (c *keccakfCircuit) Define(api frontend.API) error {
 	if err != nil {
 		return err
 	}
-	res = keccakf.Permute(uapi, res)
+	for i := range res {
+		res[i] = keccakf.Permute(uapi, res[i])
+	}
 
 	for i := range res {
-		uapi.AssertEq(res[i], c.Expected[i])
+		for j := range res[i] {
+			uapi.AssertEq(res[i][j], c.Expected[i][j])
+		}
 	}
 	return nil
 }
@@ -466,18 +470,24 @@ func main() {
 	}
 
 	// Calculate witness
-	var nativeIn [25]uint64
-	var res [25]uint64
+	var nativeIn [8][25]uint64
+	var res [8][25]uint64
 	for i := range nativeIn {
-		nativeIn[i] = 2
-		res[i] = 2
+		for j := range nativeIn[i] {
+			nativeIn[i][j] = 2
+			res[i][j] = 2
+		}
 	}
-	res = keccakF1600(res)
+	for i := range nativeIn {
+		res[i] = keccakF1600(res[i])
+	}
 
 	assignment := keccakfCircuit{}
 	for i := range nativeIn {
-		assignment.In[i] = uints.NewU64(nativeIn[i])
-		assignment.Expected[i] = uints.NewU64(res[i])
+		for j := range nativeIn[i] {
+			assignment.In[i][j] = uints.NewU64(nativeIn[i][j])
+			assignment.Expected[i][j] = uints.NewU64(res[i][j])
+		}
 	}
 	witness, _ := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
 
