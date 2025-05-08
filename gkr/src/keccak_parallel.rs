@@ -43,7 +43,7 @@ pub fn gkr_pred_theta(instances: &[Instance<Fr>]) {
                                     * cmp_leq(&[
                                         z(9)..=z(11),
                                         a(9)..=a(11),
-                                    ], &[1, 0, 1])
+                                    ], &[0, 0, 1])
 
                                     * eq_const(b(11), 1)
                                     * eq_const(b(10), 0)           // b is the aux array in the row 0b101
