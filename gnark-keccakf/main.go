@@ -492,6 +492,8 @@ func main() {
 	witness, _ := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
 
 	// Prove
+	fmt.Printf("Proving starts\n")
+
 	start := time.Now()
 	_, err = groth16.Prove(ccs, pk, witness)
 	if err != nil {
