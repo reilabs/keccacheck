@@ -1,0 +1,16 @@
+[package]
+name = "bench-provekit"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rayon = "1.10.0"
+ruint = { version = "1.12.3", features = ["num-traits", "rand"] }
+spongefish = { git = "https://github.com/arkworks-rs/spongefish", features = [
+    "arkworks-algebra",
+] }
+tracing = "0.1.41"
+ark-std = { version = "0.5", features = ["std"] }
+ark-ff-macros = { version = "0.5.0" }
+ark-ff = { version = "0.5" }
+tracing-forest = "0.1.6"
