@@ -426,12 +426,12 @@ func keccakF1600(a [25]uint64) [25]uint64 {
 // GNARK
 
 type keccakfCircuit struct {
-	In       [8][25]uints.U64
-	Expected [8][25]uints.U64 `gnark:",public"`
+	In       [512][25]uints.U64
+	Expected [512][25]uints.U64 `gnark:",public"`
 }
 
 func (c *keccakfCircuit) Define(api frontend.API) error {
-	var res [8][25]uints.U64
+	var res [512][25]uints.U64
 	for i := range res {
 		res[i] = c.In[i]
 	}
@@ -470,8 +470,8 @@ func main() {
 	}
 
 	// Calculate witness
-	var nativeIn [8][25]uint64
-	var res [8][25]uint64
+	var nativeIn [512][25]uint64
+	var res [512][25]uint64
 	for i := range nativeIn {
 		for j := range nativeIn[i] {
 			nativeIn[i][j] = 2
@@ -493,12 +493,13 @@ func main() {
 
 	// Prove
 	fmt.Printf("Proving starts\n")
-
-	start := time.Now()
-	_, err = groth16.Prove(ccs, pk, witness)
-	if err != nil {
-		panic(err)
+	for i := 1; i <= 50; i++ {
+		start := time.Now()
+		_, err = groth16.Prove(ccs, pk, witness)
+		if err != nil {
+			panic(err)
+		}
+		duration := time.Since(start)
+		fmt.Printf("Proving time: %s\n", duration)
 	}
-	duration := time.Since(start)
-	fmt.Printf("Proving time: %s\n", duration)
 }
