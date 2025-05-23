@@ -232,6 +232,68 @@ pub fn cmp_leq(vars: &[RangeInclusive<u8>], consts: &[usize]) -> PredicateExpr {
     result
 }
 
+/// Returns a predicate that is true when the variables are strictly greater than the constants
+pub fn cmp_gt(vars: &[RangeInclusive<u8>], consts: &[usize]) -> PredicateExpr {
+    for range in vars {
+        assert_eq!(
+            range.len(),
+            consts.len(),
+            "all vectors must be of equal length"
+        );
+    }
+
+    let vars = vars
+        .iter()
+        .map(|x| x.clone().collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+
+    // For (a > b), we need to find the first differing bit (from MSB) where a=1 and b=0
+    // All more significant bits must be equal
+
+    let mut checked_true: Vec<PredicateExpr> = Vec::new();
+    let mut equality_prefix: Option<PredicateExpr> = None;
+
+    // Process bits from most significant to least significant (right to left)
+    for (index, &c) in consts.iter().enumerate().rev() {
+        assert!(c == 0 || c == 1);
+        let vars_at_index = vars.iter().map(|v| v[index]).collect::<Vec<_>>();
+
+        // For all previously found "greater than" conditions, we need to maintain equality at this bit
+        for already_true in checked_true.iter_mut() {
+            *already_true *= eq(&vars_at_index);
+        }
+
+        if c == 0 {
+            // If constant bit is 0, we can be greater by having vars=1
+            checked_true
+                .push(mul_optional(equality_prefix.clone(), eq_c(&vars_at_index, 1)).unwrap());
+
+            // Update equality prefix to continue checking lower bits
+            equality_prefix = mul_optional(equality_prefix, eq_c(&vars_at_index, 0));
+        } else if c == 1 {
+            // If constant bit is 1, we can't be greater with vars=0
+            // So we only continue with equality checks if vars=1
+            equality_prefix = mul_optional(equality_prefix, eq_c(&vars_at_index, 1));
+        }
+    }
+
+    // If we have no "greater than" conditions, the result is false (empty sum)
+    if checked_true.is_empty() {
+        // Return a predicate that's always false (empty sum)
+        // We can use eq_c with two contradictory conditions
+        return eq_c(&[vars[0][0]], 0) * eq_c(&[vars[0][0]], 1);
+    }
+
+    // Combine all "greater than" conditions with OR
+    let mut iter = checked_true.into_iter();
+    let mut result = iter.next().unwrap();
+    while let Some(predicate) = iter.next() {
+        result += predicate;
+    }
+
+    result
+}
+
 fn mul_optional(current: Option<PredicateExpr>, predicate: PredicateExpr) -> Option<PredicateExpr> {
     current.map(|x| x * predicate.clone()).or(Some(predicate))
 }
