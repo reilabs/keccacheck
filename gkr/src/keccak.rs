@@ -46,6 +46,23 @@ const PI: [usize; 24] = [
     10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1,
 ];
 
+// State layout:
+//     0   1   2   3   4   5   6   7
+//    ---------------------------------
+// 0 | v | v | v | v | v | a | a | rc  |
+// 1 | v | v | v | v | v | a | a | max |
+// 2 | v | v | v | v | v | a | a |  a  |
+// 3 | v | v | v | v | v | a | a |  a  |
+// 4 | v | v | v | v | v | a | a |  a  |
+// 5 | a | a | a | a | a | a | a |  a  |
+// 6 | a | a | a | a | a | a | a |  a  |
+// 7 | a | a | a | a | a | a | a |  a  |
+//    ---------------------------------
+// v - keccak state value
+// a - auxiliary value
+// rc - round constant
+// max - max value
+
 // Layers: 15, Gates: 67
 pub fn gkr_pred(input: &[u64], output: &[u64]) {
     // inputs: all state bits: 25 * 64 < 32 * 64 = (1 << 11)
@@ -62,7 +79,7 @@ pub fn gkr_pred(input: &[u64], output: &[u64]) {
         input_bits: inputs,
         output_bits: outputs,
         layers: vec![
-            // extra layer to copy only the necessary values - we should be able to remove this
+            // TODO: remove this layer and move copying to the Iota step
             vec![Layer {
                 layer_bits: 12,
                 gates: vec![LayerGate {
@@ -295,7 +312,7 @@ fn gkr_rho_and_pi_layers(
     b: impl Fn(u8) -> u8,
 ) -> Vec<Layer> {
     let mut gates = vec![
-        // copy auxiliary values
+        // Copy auxiliary values: round constant and max value from column 7
         LayerGate {
             gate: Gate::Left,
             wiring: eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)])
@@ -310,7 +327,7 @@ fn gkr_rho_and_pi_layers(
                 * eq_const(b(7), 1)
                 * eq_const(b(6), 1),
         },
-        // copy value from position 0,0
+        // Value on position (0,0) doesn't change
         LayerGate {
             gate: Gate::Left,
             wiring: eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)])
@@ -375,48 +392,60 @@ fn gkr_rho_and_pi_layers(
 
 // Layers: 8, Gates: 30
 fn gkr_chi_layers(z: impl Fn(u8) -> u8, a: impl Fn(u8) -> u8, b: impl Fn(u8) -> u8) -> Vec<Layer> {
+    // Chi step: A[x, y] = A[x, y] ^ (!A[(x+1)%5, y] & A[(x+2)%5, y])
+    // Operations are performed in a couple of steps:
+    // 1. A[(x+1)%5, y] is saved to auxiliary rows
+    //    Gate type Left using rot() predicate
+    // 2. Temporary values are replaced by NOT A[(x+1)%5, y]
+    //    NOT is performed by XORing with max value
+    // 3. Temporaty values are replaced by NOT A[(x+1)%5, y] AND A[(x+2)%5, y]
+    //    AND is performed by
+    // 4. Original values are replaced with A[x, y] XOR (NOT A[(x+1)%5, y] AND A[(x+2)%5, y])
+
+    // In order to reuse auxiliary rows, we first perform above operations on rows 0-2
+    // Then, on rows 3-4
+
+    // TODO: Use columns 5, 6 as auxiliary columns for operations on rows 3, 4
+
     vec![
+        // Rows 3-4
         Layer {
             layer_bits: 12,
             gates: vec![
                 LayerGate {
                     gate: Gate::Left,
-                    wiring: eq_vec(&[
-                        z(0)..=z(8),
-                        a(0)..=a(8), // all original state elements are copied to z
-                        b(0)..=b(8),
-                    ]) * cmp_leq(&[z(9)..=z(11), a(9)..=a(11), b(9)..=b(11)], &[0, 1, 0]),
+                    wiring: eq_vec(&[z(0)..=z(8), a(0)..=a(8), b(0)..=b(8)])
+                        * cmp_leq(&[z(9)..=z(11), a(9)..=a(11), b(9)..=b(11)], &[0, 1, 0]),
                 },
                 // row index 3
                 LayerGate {
                     gate: Gate::Xor,
-                    wiring: eq_const(z(11), 0) * eq_const(z(10), 1) * eq_const(z(9), 1)
-
-                            * eq_const(a(11), 0) * eq_const(a(10), 1) * eq_const(a(9), 1)
-
-                            * eq_const(b(11), 1) * eq_const(b(10), 0) * eq_const(b(9), 1)
-
-                            // same x for inputs and outputs
-                            * eq_vec(&[z(6)..=z(8), a(6)..=a(8), b(6)..=b(8)])
-
-                            // same offset for values
-                            * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
+                    wiring: eq_const(z(11), 0)
+                        * eq_const(z(10), 1)
+                        * eq_const(z(9), 1)
+                        * eq_const(a(11), 0)
+                        * eq_const(a(10), 1)
+                        * eq_const(a(9), 1)
+                        * eq_const(b(11), 1)
+                        * eq_const(b(10), 0)
+                        * eq_const(b(9), 1)
+                        * eq_vec(&[z(6)..=z(8), a(6)..=a(8), b(6)..=b(8)])
+                        * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
                 // row index 4
                 LayerGate {
                     gate: Gate::Xor,
-                    wiring: eq_const(z(11), 1) * eq_const(z(10), 0) * eq_const(z(9), 0)
-
-                            * eq_const(a(11), 1) * eq_const(a(10), 0) * eq_const(a(9), 0)
-
-                            // b_y = 5
-                            * eq_const(b(11), 1) * eq_const(b(10), 1) * eq_const(b(9), 0)
-
-                            // same x for inputs and outputs
-                            * eq_vec(&[z(6)..=z(8), a(6)..=a(8), b(6)..=b(8)])
-
-                            // same offset for values
-                            * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
+                    wiring: eq_const(z(11), 1)
+                        * eq_const(z(10), 0)
+                        * eq_const(z(9), 0)
+                        * eq_const(a(11), 1)
+                        * eq_const(a(10), 0)
+                        * eq_const(a(9), 0)
+                        * eq_const(b(11), 1)
+                        * eq_const(b(10), 1)
+                        * eq_const(b(9), 0)
+                        * eq_vec(&[z(6)..=z(8), a(6)..=a(8), b(6)..=b(8)])
+                        * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
             ],
         },
@@ -425,47 +454,46 @@ fn gkr_chi_layers(z: impl Fn(u8) -> u8, a: impl Fn(u8) -> u8, b: impl Fn(u8) -> 
             gates: vec![
                 LayerGate {
                     gate: Gate::Left,
-                    wiring: eq_vec(&[
-                        z(0)..=z(8),
-                        a(0)..=a(8), // all original state elements are copied to z
-                        b(0)..=b(8),
-                    ]) * cmp_leq(&[z(9)..=z(11), a(9)..=a(11), b(9)..=b(11)], &[0, 0, 1]),
+                    wiring: eq_vec(&[z(0)..=z(8), a(0)..=a(8), b(0)..=b(8)])
+                        * cmp_leq(&[z(9)..=z(11), a(9)..=a(11), b(9)..=b(11)], &[0, 0, 1]),
                 },
                 // row index 3
                 LayerGate {
                     gate: Gate::Mul,
-                    wiring: eq_const(z(11), 1) * eq_const(z(10), 0) * eq_const(z(9), 1)
-
-                            * eq_const(b(11), 1) * eq_const(b(10), 0) * eq_const(b(9), 1)
-
-                            * eq_const(a(11), 0) * eq_const(a(10), 1) * eq_const(a(9), 1)
-
-                            * rot(
-                                (z(6)..=z(8), 0, 5),
-                                (a(6)..=a(8), 2, 5),
-                                (b(6)..=b(8), 0, 5)
-                            )
-
-                            // same offset for values
-                            * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
+                    wiring: eq_const(z(11), 1)
+                        * eq_const(z(10), 0)
+                        * eq_const(z(9), 1)
+                        * eq_const(b(11), 1)
+                        * eq_const(b(10), 0)
+                        * eq_const(b(9), 1)
+                        * eq_const(a(11), 0)
+                        * eq_const(a(10), 1)
+                        * eq_const(a(9), 1)
+                        * rot(
+                            (z(6)..=z(8), 0, 5),
+                            (a(6)..=a(8), 2, 5),
+                            (b(6)..=b(8), 0, 5),
+                        )
+                        * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
                 // row index 4
                 LayerGate {
                     gate: Gate::Mul,
-                    wiring: eq_const(z(11), 1) * eq_const(z(10), 1) * eq_const(z(9), 0)
-
-                            * eq_const(b(11), 1) * eq_const(b(10), 1) * eq_const(b(9), 0)
-
-                            * eq_const(a(11), 1) * eq_const(a(10), 0) * eq_const(a(9), 0)
-
-                            * rot(
-                                (z(6)..=z(8), 0, 5),
-                                (a(6)..=a(8), 2, 5),
-                                (b(6)..=b(8), 0, 5)
-                            )
-
-                            // same offset for values
-                            * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
+                    wiring: eq_const(z(11), 1)
+                        * eq_const(z(10), 1)
+                        * eq_const(z(9), 0)
+                        * eq_const(b(11), 1)
+                        * eq_const(b(10), 1)
+                        * eq_const(b(9), 0)
+                        * eq_const(a(11), 1)
+                        * eq_const(a(10), 0)
+                        * eq_const(a(9), 0)
+                        * rot(
+                            (z(6)..=z(8), 0, 5),
+                            (a(6)..=a(8), 2, 5),
+                            (b(6)..=b(8), 0, 5),
+                        )
+                        * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
             ],
         },
@@ -474,52 +502,41 @@ fn gkr_chi_layers(z: impl Fn(u8) -> u8, a: impl Fn(u8) -> u8, b: impl Fn(u8) -> 
             gates: vec![
                 LayerGate {
                     gate: Gate::Left,
-                    wiring: eq_vec(&[
-                        z(0)..=z(8),
-                        a(0)..=a(8), // all original state elements are copied to z
-                        b(0)..=b(8),
-                    ]) * cmp_leq(&[z(9)..=z(11), a(9)..=a(11), b(9)..=b(11)], &[0, 0, 1]),
+                    wiring: eq_vec(&[z(0)..=z(8), a(0)..=a(8), b(0)..=b(8)])
+                        * cmp_leq(&[z(9)..=z(11), a(9)..=a(11), b(9)..=b(11)], &[0, 0, 1]),
                 },
                 LayerGate {
                     gate: Gate::Left,
-                    wiring: eq_vec(&[
-                        z(0)..=z(5),
-                        a(0)..=a(5), // all original state elements are copied to z
-                        b(0)..=b(5),
-                    ]) * cmp_leq(&[z(6)..=z(8), a(6)..=a(8), b(6)..=b(8)], &[0, 0, 1])
+                    wiring: eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)])
+                        * cmp_leq(&[z(6)..=z(8), a(6)..=a(8), b(6)..=b(8)], &[0, 0, 1])
                         * cmp_gt(&[z(9)..=z(11), a(9)..=a(11), b(9)..=b(11)], &[0, 0, 1]),
                 },
-                // NOT A[(x+1)%5, y]
                 // row index 3
                 LayerGate {
                     gate: Gate::XorLeft,
                     wiring: eq_const(z(11), 1) * eq_const(z(10), 0) * eq_const(z(9), 1)
-                            // a_x and a_y are constant
+                            // a points to max value stored on position (1, 7)
                             * eq_const(a(11), 0) * eq_const(a(10), 0) * eq_const(a(9), 1)
                             * eq_const(a(8), 1) * eq_const(a(7), 1) * eq_const(a(6), 1)
 
                             * eq_const(b(11), 1) * eq_const(b(10), 0) * eq_const(b(9), 1)
 
-                            // z_x and b_x are the same
                             * eq_vec(&[z(6)..=z(8), b(6)..=b(8)])
 
-                            // same offset for values
                             * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
                 // row index 4
                 LayerGate {
                     gate: Gate::XorLeft,
                     wiring: eq_const(z(11), 1) * eq_const(z(10), 1) * eq_const(z(9), 0)
-                            // a_x and a_y are constant
+                            // a points to max value stored on position (1, 7)
                             * eq_const(a(11), 0) * eq_const(a(10), 0) * eq_const(a(9), 1)
                             * eq_const(a(8), 1) * eq_const(a(7), 1) * eq_const(a(6), 1)
 
                             * eq_const(b(11), 1) * eq_const(b(10), 1) * eq_const(b(9), 0)
 
-                            // z_x and b_x are the same
                             * eq_vec(&[z(6)..=z(8), b(6)..=b(8)])
 
-                            // same offset for values
                             * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
             ],
@@ -532,45 +549,48 @@ fn gkr_chi_layers(z: impl Fn(u8) -> u8, a: impl Fn(u8) -> u8, b: impl Fn(u8) -> 
                     wiring: eq_vec(&[z(0)..=z(8), a(0)..=a(8), b(0)..=b(8)])
                         * cmp_leq(&[z(9)..=z(11), a(9)..=a(11), b(9)..=b(11)], &[0, 0, 1]),
                 },
-                // A[(x+1)%5, y]
                 // row index 3
                 LayerGate {
                     gate: Gate::Left,
-                    wiring: eq_const(z(11), 1) * eq_const(z(10), 0) * eq_const(z(9), 1)
-
-                            * eq_const(a(11), 0) * eq_const(a(10), 1) * eq_const(a(9), 1)
-
-                            * eq_const(b(11), 0) * eq_const(b(10), 0) * eq_const(b(9), 0)
-
-                            * rot(
-                                (z(6)..=z(8), 0, 5),
-                                (a(6)..=a(8), 1, 5),
-                                (b(6)..=b(8), 0, 5)
-                            )
-
-                            // binds values together
-                            * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
+                    wiring: eq_const(z(11), 1)
+                        * eq_const(z(10), 0)
+                        * eq_const(z(9), 1)
+                        * eq_const(a(11), 0)
+                        * eq_const(a(10), 1)
+                        * eq_const(a(9), 1)
+                        * eq_const(b(11), 0)
+                        * eq_const(b(10), 0)
+                        * eq_const(b(9), 0)
+                        * rot(
+                            (z(6)..=z(8), 0, 5),
+                            (a(6)..=a(8), 1, 5),
+                            (b(6)..=b(8), 0, 5),
+                        )
+                        * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
                 // row index 4
                 LayerGate {
                     gate: Gate::Left,
-                    wiring: eq_const(z(11), 1) * eq_const(z(10), 1) * eq_const(z(9), 0)
-
-                            * eq_const(a(11), 1) * eq_const(a(10), 0) * eq_const(a(9), 0)
-
-                            * eq_const(b(11), 0) * eq_const(b(10), 0) * eq_const(b(9), 0)
-
-                            * rot(
-                                (z(6)..=z(8), 0, 5),
-                                (a(6)..=a(8), 1, 5),
-                                (b(6)..=b(8), 0, 5)
-                            )
-
-                            // binds values together
-                            * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
+                    wiring: eq_const(z(11), 1)
+                        * eq_const(z(10), 1)
+                        * eq_const(z(9), 0)
+                        * eq_const(a(11), 1)
+                        * eq_const(a(10), 0)
+                        * eq_const(a(9), 0)
+                        * eq_const(b(11), 0)
+                        * eq_const(b(10), 0)
+                        * eq_const(b(9), 0)
+                        * rot(
+                            (z(6)..=z(8), 0, 5),
+                            (a(6)..=a(8), 1, 5),
+                            (b(6)..=b(8), 0, 5),
+                        )
+                        * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
             ],
         },
+        // Rows 3-4
+        // Rows 0-2
         Layer {
             layer_bits: 12,
             gates: vec![
@@ -614,18 +634,17 @@ fn gkr_chi_layers(z: impl Fn(u8) -> u8, a: impl Fn(u8) -> u8, b: impl Fn(u8) -> 
                 // row index 2
                 LayerGate {
                     gate: Gate::Xor,
-                    wiring: eq_const(z(11), 0) * eq_const(z(10), 1) * eq_const(z(9), 0)
-
-                            * eq_const(a(11), 0) * eq_const(a(10), 1) * eq_const(a(9), 0)
-
-                            // b_y = 7
-                            * eq_const(b(11), 1) * eq_const(b(10), 1) * eq_const(b(9), 1)
-
-                            // same x for inputs and outputs
-                            * eq_vec(&[z(6)..=z(8), a(6)..=a(8), b(6)..=b(8)])
-
-                            // same offset for values
-                            * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
+                    wiring: eq_const(z(11), 0)
+                        * eq_const(z(10), 1)
+                        * eq_const(z(9), 0)
+                        * eq_const(a(11), 0)
+                        * eq_const(a(10), 1)
+                        * eq_const(a(9), 0)
+                        * eq_const(b(11), 1)
+                        * eq_const(b(10), 1)
+                        * eq_const(b(9), 1)
+                        * eq_vec(&[z(6)..=z(8), a(6)..=a(8), b(6)..=b(8)])
+                        * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
             ],
         },
@@ -634,65 +653,65 @@ fn gkr_chi_layers(z: impl Fn(u8) -> u8, a: impl Fn(u8) -> u8, b: impl Fn(u8) -> 
             gates: vec![
                 LayerGate {
                     gate: Gate::Left,
-                    wiring: eq_vec(&[
-                        z(0)..=z(8),
-                        a(0)..=a(8), // all original state elements are copied to z
-                        b(0)..=b(8),
-                    ]) * cmp_leq(&[z(9)..=z(11), a(9)..=a(11), b(9)..=b(11)], &[0, 0, 1]),
+                    wiring: eq_vec(&[z(0)..=z(8), a(0)..=a(8), b(0)..=b(8)])
+                        * cmp_leq(&[z(9)..=z(11), a(9)..=a(11), b(9)..=b(11)], &[0, 0, 1]),
                 },
                 // row index 0
                 LayerGate {
                     gate: Gate::Mul,
-                    wiring: eq_const(z(11), 1) * eq_const(z(10), 0) * eq_const(z(9), 1)
-
-                            * eq_const(b(11), 1) * eq_const(b(10), 0) * eq_const(b(9), 1)
-
-                            * eq_const(a(11), 0) * eq_const(a(10), 0) * eq_const(a(9), 0)
-
-                            * rot(
-                                (z(6)..=z(8), 0, 5),
-                                (a(6)..=a(8), 2, 5),
-                                (b(6)..=b(8), 0, 5)
-                            )
-
-                            // same offset for values
-                            * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
+                    wiring: eq_const(z(11), 1)
+                        * eq_const(z(10), 0)
+                        * eq_const(z(9), 1)
+                        * eq_const(b(11), 1)
+                        * eq_const(b(10), 0)
+                        * eq_const(b(9), 1)
+                        * eq_const(a(11), 0)
+                        * eq_const(a(10), 0)
+                        * eq_const(a(9), 0)
+                        * rot(
+                            (z(6)..=z(8), 0, 5),
+                            (a(6)..=a(8), 2, 5),
+                            (b(6)..=b(8), 0, 5),
+                        )
+                        * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
                 // row index 1
                 LayerGate {
                     gate: Gate::Mul,
-                    wiring: eq_const(z(11), 1) * eq_const(z(10), 1) * eq_const(z(9), 0)
-
-                            * eq_const(b(11), 1) * eq_const(b(10), 1) * eq_const(b(9), 0)
-
-                            * eq_const(a(11), 0) * eq_const(a(10), 0) * eq_const(a(9), 1)
-
-                            * rot(
-                                (z(6)..=z(8), 0, 5),
-                                (a(6)..=a(8), 2, 5),
-                                (b(6)..=b(8), 0, 5)
-                            )
-
-                            // same offset for values
-                            * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
+                    wiring: eq_const(z(11), 1)
+                        * eq_const(z(10), 1)
+                        * eq_const(z(9), 0)
+                        * eq_const(b(11), 1)
+                        * eq_const(b(10), 1)
+                        * eq_const(b(9), 0)
+                        * eq_const(a(11), 0)
+                        * eq_const(a(10), 0)
+                        * eq_const(a(9), 1)
+                        * rot(
+                            (z(6)..=z(8), 0, 5),
+                            (a(6)..=a(8), 2, 5),
+                            (b(6)..=b(8), 0, 5),
+                        )
+                        * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
                 // row index 2
                 LayerGate {
                     gate: Gate::Mul,
-                    wiring: eq_const(z(11), 1) * eq_const(z(10), 1) * eq_const(z(9), 1)
-
-                            * eq_const(b(11), 1) * eq_const(b(10), 1) * eq_const(b(9), 1)
-
-                            * eq_const(a(11), 0) * eq_const(a(10), 1) * eq_const(a(9), 0)
-
-                            * rot(
-                                (z(6)..=z(8), 0, 5),
-                                (a(6)..=a(8), 2, 5),
-                                (b(6)..=b(8), 0, 5)
-                            )
-
-                            // same offset for values
-                            * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
+                    wiring: eq_const(z(11), 1)
+                        * eq_const(z(10), 1)
+                        * eq_const(z(9), 1)
+                        * eq_const(b(11), 1)
+                        * eq_const(b(10), 1)
+                        * eq_const(b(9), 1)
+                        * eq_const(a(11), 0)
+                        * eq_const(a(10), 1)
+                        * eq_const(a(9), 0)
+                        * rot(
+                            (z(6)..=z(8), 0, 5),
+                            (a(6)..=a(8), 2, 5),
+                            (b(6)..=b(8), 0, 5),
+                        )
+                        * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
             ],
         },
@@ -701,68 +720,54 @@ fn gkr_chi_layers(z: impl Fn(u8) -> u8, a: impl Fn(u8) -> u8, b: impl Fn(u8) -> 
             gates: vec![
                 LayerGate {
                     gate: Gate::Left,
-                    wiring: eq_vec(&[
-                        z(0)..=z(8),
-                        a(0)..=a(8), // all original state elements are copied to z
-                        b(0)..=b(8),
-                    ]) * cmp_leq(&[z(9)..=z(11), a(9)..=a(11), b(9)..=b(11)], &[0, 0, 1]),
+                    wiring: eq_vec(&[z(0)..=z(8), a(0)..=a(8), b(0)..=b(8)])
+                        * cmp_leq(&[z(9)..=z(11), a(9)..=a(11), b(9)..=b(11)], &[0, 0, 1]),
                 },
                 LayerGate {
                     gate: Gate::Left,
-                    wiring: eq_vec(&[
-                        z(0)..=z(5),
-                        a(0)..=a(5), // all original state elements are copied to z
-                        b(0)..=b(5),
-                    ]) * cmp_leq(&[z(6)..=z(8), a(6)..=a(8), b(6)..=b(8)], &[0, 0, 1])
+                    wiring: eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)])
+                        * cmp_leq(&[z(6)..=z(8), a(6)..=a(8), b(6)..=b(8)], &[0, 0, 1])
                         * cmp_gt(&[z(9)..=z(11), a(9)..=a(11), b(9)..=b(11)], &[0, 0, 1]),
                 },
-                // NOT A[(x+1)%5, y]
                 // row index 0
                 LayerGate {
                     gate: Gate::XorLeft,
                     wiring: eq_const(z(11), 1) * eq_const(z(10), 0) * eq_const(z(9), 1)
-                            // a_x and a_y are constant
+                            // a points to max value stored on position (1, 7)
                             * eq_const(a(11), 0) * eq_const(a(10), 0) * eq_const(a(9), 1)
                             * eq_const(a(8), 1) * eq_const(a(7), 1) * eq_const(a(6), 1)
-                            // b_y = 5
                             * eq_const(b(11), 1) * eq_const(b(10), 0) * eq_const(b(9), 1)
 
-                            // z_x and b_x are the same
                             * eq_vec(&[z(6)..=z(8), b(6)..=b(8)])
 
-                            // same offset for values
                             * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
                 // row index 1
                 LayerGate {
                     gate: Gate::XorLeft,
                     wiring: eq_const(z(11), 1) * eq_const(z(10), 1) * eq_const(z(9), 0)
-                            // a_x and a_y are constant
+                            // a points to max value stored on position (1, 7)
                             * eq_const(a(11), 0) * eq_const(a(10), 0) * eq_const(a(9), 1)
                             * eq_const(a(8), 1) * eq_const(a(7), 1) * eq_const(a(6), 1)
 
                             * eq_const(b(11), 1) * eq_const(b(10), 1) * eq_const(b(9), 0)
 
-                            // z_x and b_x are the same
                             * eq_vec(&[z(6)..=z(8), b(6)..=b(8)])
 
-                            // same offset for values
                             * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
                 // row index 2
                 LayerGate {
                     gate: Gate::XorLeft,
                     wiring: eq_const(z(11), 1) * eq_const(z(10), 1) * eq_const(z(9), 1)
-                            // a_x and a_y are constant
+                            // a points to max value stored on position (1, 7)
                             * eq_const(a(11), 0) * eq_const(a(10), 0) * eq_const(a(9), 1)
                             * eq_const(a(8), 1) * eq_const(a(7), 1) * eq_const(a(6), 1)
 
                             * eq_const(b(11), 1) * eq_const(b(10), 1) * eq_const(b(9), 1)
 
-                            // z_x and b_x are the same
                             * eq_vec(&[z(6)..=z(8), b(6)..=b(8)])
 
-                            // same offset for values
                             * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
             ],
@@ -772,68 +777,67 @@ fn gkr_chi_layers(z: impl Fn(u8) -> u8, a: impl Fn(u8) -> u8, b: impl Fn(u8) -> 
             gates: vec![
                 LayerGate {
                     gate: Gate::Left,
-                    wiring: eq_vec(&[
-                        z(0)..=z(11),
-                        a(0)..=a(11), // all original state elements are copied to z
-                        b(0)..=b(11),
-                    ]),
+                    wiring: eq_vec(&[z(0)..=z(11), a(0)..=a(11), b(0)..=b(11)]),
                 },
-                // A[(x+1)%5, y]
                 // row index 0
                 LayerGate {
                     gate: Gate::Left,
-                    wiring: eq_const(z(11), 1) * eq_const(z(10), 0) * eq_const(z(9), 1)
-
-                            * eq_const(a(11), 0) * eq_const(a(10), 0) * eq_const(a(9), 0)
-
-                            * eq_const(b(11), 0) * eq_const(b(10), 0) * eq_const(b(9), 0)
-
-                            * rot(
-                                (z(6)..=z(8), 0, 5),
-                                (a(6)..=a(8), 1, 5),
-                                (b(6)..=b(8), 0, 5)
-                            )
-
-                            // binds values together
-                            * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
+                    wiring: eq_const(z(11), 1)
+                        * eq_const(z(10), 0)
+                        * eq_const(z(9), 1)
+                        * eq_const(a(11), 0)
+                        * eq_const(a(10), 0)
+                        * eq_const(a(9), 0)
+                        * eq_const(b(11), 0)
+                        * eq_const(b(10), 0)
+                        * eq_const(b(9), 0)
+                        * rot(
+                            (z(6)..=z(8), 0, 5),
+                            (a(6)..=a(8), 1, 5),
+                            (b(6)..=b(8), 0, 5),
+                        )
+                        * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
                 // row index 1
                 LayerGate {
                     gate: Gate::Left,
-                    wiring: eq_const(z(11), 1) * eq_const(z(10), 1) * eq_const(z(9), 0)
-
-                            * eq_const(a(11), 0) * eq_const(a(10), 0) * eq_const(a(9), 1)
-
-                            * eq_const(b(11), 0) * eq_const(b(10), 0) * eq_const(b(9), 0)
-
-                            * rot(
-                                (z(6)..=z(8), 0, 5),
-                                (a(6)..=a(8), 1, 5),
-                                (b(6)..=b(8), 0, 5)
-                            )
-
-                            // binds values together
-                            * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
+                    wiring: eq_const(z(11), 1)
+                        * eq_const(z(10), 1)
+                        * eq_const(z(9), 0)
+                        * eq_const(a(11), 0)
+                        * eq_const(a(10), 0)
+                        * eq_const(a(9), 1)
+                        * eq_const(b(11), 0)
+                        * eq_const(b(10), 0)
+                        * eq_const(b(9), 0)
+                        * rot(
+                            (z(6)..=z(8), 0, 5),
+                            (a(6)..=a(8), 1, 5),
+                            (b(6)..=b(8), 0, 5),
+                        )
+                        * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
                 // row index 2
                 LayerGate {
                     gate: Gate::Left,
-                    wiring: eq_const(z(11), 1) * eq_const(z(10), 1) * eq_const(z(9), 1)
-
-                            * eq_const(a(11), 0) * eq_const(a(10), 1) * eq_const(a(9), 0)
-
-                            * eq_const(b(11), 0) * eq_const(b(10), 0) * eq_const(b(9), 0)
-
-                            * rot(
-                                (z(6)..=z(8), 0, 5),
-                                (a(6)..=a(8), 1, 5),
-                                (b(6)..=b(8), 0, 5)
-                            )
-
-                            // binds values together
-                            * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
+                    wiring: eq_const(z(11), 1)
+                        * eq_const(z(10), 1)
+                        * eq_const(z(9), 1)
+                        * eq_const(a(11), 0)
+                        * eq_const(a(10), 1)
+                        * eq_const(a(9), 0)
+                        * eq_const(b(11), 0)
+                        * eq_const(b(10), 0)
+                        * eq_const(b(9), 0)
+                        * rot(
+                            (z(6)..=z(8), 0, 5),
+                            (a(6)..=a(8), 1, 5),
+                            (b(6)..=b(8), 0, 5),
+                        )
+                        * eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)]),
                 },
             ],
+            // Rows 0-2
         },
     ]
 }
@@ -845,31 +849,34 @@ fn gkr_iota_layers(z: impl Fn(u8) -> u8, a: impl Fn(u8) -> u8, b: impl Fn(u8) ->
         gates: vec![
             LayerGate {
                 gate: Gate::Left,
-                wiring: eq_vec(&[
-                            z(0)..=z(5),
-                            a(0)..=a(5),
-                            b(0)..=b(5),
-                        ])
-                        // Ensure position is > (0,0).
-                        // cmp_gt ensures z, a, and b positions are all > (0,0) and equal to each other.
-                        * cmp_gt(&[z(6)..=z(11), a(6)..=a(11), b(6)..=b(11)], &[0, 0, 0, 0, 0, 0]),
+                wiring: eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)])
+                    * cmp_gt(
+                        &[z(6)..=z(11), a(6)..=a(11), b(6)..=b(11)],
+                        &[0, 0, 0, 0, 0, 0],
+                    ),
             },
+            // XOR value on position (0,0) with round constant
             LayerGate {
                 gate: Gate::Xor,
-                wiring: eq_vec(&[
-                            z(0)..=z(5),
-                            a(0)..=a(5),
-                            b(0)..=b(5),
-                        ])
-                        // Ensure output z's position IS (0,0)
-                        * eq_const(z(6), 0) * eq_const(z(7), 0) * eq_const(z(8), 0) *
-                          eq_const(z(9), 0) * eq_const(z(10), 0) * eq_const(z(11), 0)
-                        // Ensure input a's position IS (0,0)
-                        * eq_const(a(6), 0) * eq_const(a(7), 0) * eq_const(a(8), 0) *
-                          eq_const(a(9), 0) * eq_const(a(10), 0) * eq_const(a(11), 0)
-                        // Ensure input b's position IS (0,7) for the round constant
-                        * eq_const(b(6), 1) * eq_const(b(7), 1) * eq_const(b(8), 1) *
-                          eq_const(b(9), 0) * eq_const(b(10), 0) * eq_const(b(11), 0),
+                wiring: eq_vec(&[z(0)..=z(5), a(0)..=a(5), b(0)..=b(5)])
+                    * eq_const(z(6), 0)
+                    * eq_const(z(7), 0)
+                    * eq_const(z(8), 0)
+                    * eq_const(z(9), 0)
+                    * eq_const(z(10), 0)
+                    * eq_const(z(11), 0)
+                    * eq_const(a(6), 0)
+                    * eq_const(a(7), 0)
+                    * eq_const(a(8), 0)
+                    * eq_const(a(9), 0)
+                    * eq_const(a(10), 0)
+                    * eq_const(a(11), 0)
+                    * eq_const(b(6), 1)
+                    * eq_const(b(7), 1)
+                    * eq_const(b(8), 1)
+                    * eq_const(b(9), 0)
+                    * eq_const(b(10), 0)
+                    * eq_const(b(11), 0),
             },
         ],
     }]
