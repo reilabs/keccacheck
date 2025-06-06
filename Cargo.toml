@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["sumcheck", "gkr", "bench-ark", "bench-provekit"]
+members = ["sumcheck", "gkr", "bench-ark", "bench-provekit", "bench-keccak"]
 
 [profile.release]
 opt-level = 3
