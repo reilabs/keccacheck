@@ -29,15 +29,13 @@ fn main() {
     println!("inp {input:?}");
     println!("out {output:?}");
 
-    let numvars = 6; // a single u64, one instance
-
-    // TODO: we should use the output somewhere!
+    let num_vars = 6; // a single u64, one instance
 
     let mut prover = Prover::new();
-    let alpha = (0..numvars).map(|_| prover.read()).collect::<Vec<_>>();
+    let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
     let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
-    // run sumcheck on $\sum_k eq(alpha, k) ⋅ [\beta_00 ⋅ (\chi00(k) xor RC(k)) + \sum_ij \beta_ij\chi_ij(k)]
+    // run sumcheck on $\sum_k eq(\alpha, k) ⋅ [\beta_00 ⋅ (\chi00(k) xor RC(k)) + \sum_ij \beta_ij\chi_ij(k)]
     // we have 4 polynomials:
     // - eq(\alpha, k)
     let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
@@ -46,11 +44,11 @@ fn main() {
     // - RC(k)
     let rc = to_poly(ROUND_CONSTANTS[0]);
     // - \sum_{ij} \beta_{ij}\chi_{ij}(k) where (i, j) != (0, 0)
-    let mut chi_rlc = vec![Fr::ZERO; 1 << numvars];
-    for i in 1..25 {
-        let poly = to_poly(input[i]);
-        for j in 0..(1 << numvars) {
-            chi_rlc[j] += beta[i] * poly[j];
+    let mut chi_rlc = vec![Fr::ZERO; 1 << num_vars];
+    for el in 1..25 {  // iterating from 1 to skip the first state element (i, j) = (0, 0)
+        let poly = to_poly(input[el]);
+        for x in 0..(1 << num_vars) {
+            chi_rlc[x] += beta[el] * poly[x];
         }
     }
 
@@ -67,7 +65,7 @@ fn main() {
         let mut chi_rlc = chi_rlc.clone();
         prove_sumcheck_iota(
             &mut prover,
-            numvars,
+            num_vars,
             beta[0],
             &mut eq,
             &mut chi_00,
@@ -86,17 +84,21 @@ fn main() {
     // Verify
     let mut verifier = Verifier::new(&proof);
 
-    let alpha = (0..numvars)
+    let alpha = (0..num_vars)
         .map(|_| verifier.generate())
         .collect::<Vec<_>>();
     let beta = (0..25).map(|_| verifier.generate()).collect::<Vec<_>>();
 
     let vs = verifier.read();
     assert_eq!(vs, sum);
-    let (ve, vrs) = verify_sumcheck::<3>(&mut verifier, numvars, vs);
+    // TODO: verifier sum needs to be calculated from the output array!
+    let (ve, vrs) = verify_sumcheck::<3>(&mut verifier, num_vars, vs);
 
-    // Verify last step (TODO: verifier needs to combine sublaims and continue recursively)
-    // TODO: do the same work we did in the prover
+    // Verify last step
+    // TODO: verifier needs to combine sublaims and continue recursively before we get to the last step
+    //
+    // NOTE: being lazy here, we've already tested prs and pe values after proving step.
+    // Here just making sure they are the same. In practice, this should be a separate implementation.
     assert_eq!(vrs, prs);
     assert_eq!(ve, pe);
 }
