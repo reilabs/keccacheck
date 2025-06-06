@@ -1,8 +1,18 @@
 use ark_bn254::Fr;
-use ark_ff::{AdditiveGroup};
+use ark_ff::AdditiveGroup;
 use itertools::izip;
 
-use crate::{reference::{keccak_round, ROUND_CONSTANTS}, sumcheck::{iota::prove_sumcheck_iota, util::{calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly, verify_sumcheck, xor}}, transcript::{Prover, Verifier}};
+use crate::{
+    reference::{ROUND_CONSTANTS, keccak_round},
+    sumcheck::{
+        iota::prove_sumcheck_iota,
+        util::{
+            calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
+            verify_sumcheck, xor,
+        },
+    },
+    transcript::{Prover, Verifier},
+};
 
 mod poseidon;
 mod reference;
@@ -13,7 +23,7 @@ fn main() {
     let input = [
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
     ];
-    let mut output = input.clone();
+    let mut output = input;
     keccak_round(&mut output, ROUND_CONSTANTS[0]);
 
     println!("inp {input:?}");
@@ -36,18 +46,16 @@ fn main() {
     // - RC(k)
     let rc = to_poly(ROUND_CONSTANTS[0]);
     // - \sum_{ij} \beta_{ij}\chi_{ij}(k) where (i, j) != (0, 0)
-    let mut chi_rlc = vec![Fr::ZERO; 1<<numvars];
+    let mut chi_rlc = vec![Fr::ZERO; 1 << numvars];
     for i in 1..25 {
         let poly = to_poly(input[i]);
-        for j in 0..(1<<numvars) {
+        for j in 0..(1 << numvars) {
             chi_rlc[j] += beta[i] * poly[j];
         }
     }
 
     let sum = izip!(&eq, &chi_00, &rc, &chi_rlc)
-        .map(|(&a, &b, &c, &d)| {
-            a * ((beta[0] * xor(b, c)) + d)
-        })
+        .map(|(&a, &b, &c, &d)| a * ((beta[0] * xor(b, c)) + d))
         .sum();
 
     // Prove
@@ -57,7 +65,16 @@ fn main() {
         let mut chi_00 = chi_00.clone();
         let mut rc = rc.clone();
         let mut chi_rlc = chi_rlc.clone();
-        prove_sumcheck_iota(&mut prover, numvars, beta[0], &mut eq, &mut chi_00, &mut rc, &mut chi_rlc, sum)
+        prove_sumcheck_iota(
+            &mut prover,
+            numvars,
+            beta[0],
+            &mut eq,
+            &mut chi_00,
+            &mut rc,
+            &mut chi_rlc,
+            sum,
+        )
     };
     let proof = prover.finish();
     let e_eq = eval_mle(&eq, &prs); // TODO: can evaluate eq faster
@@ -69,16 +86,17 @@ fn main() {
     // Verify
     let mut verifier = Verifier::new(&proof);
 
-    let alpha = (0..numvars).map(|_| verifier.generate()).collect::<Vec<_>>();
+    let alpha = (0..numvars)
+        .map(|_| verifier.generate())
+        .collect::<Vec<_>>();
     let beta = (0..25).map(|_| verifier.generate()).collect::<Vec<_>>();
 
     let vs = verifier.read();
     assert_eq!(vs, sum);
     let (ve, vrs) = verify_sumcheck::<3>(&mut verifier, numvars, vs);
-    
+
     // Verify last step (TODO: verifier needs to combine sublaims and continue recursively)
     // TODO: do the same work we did in the prover
     assert_eq!(vrs, prs);
     assert_eq!(ve, pe);
-
 }

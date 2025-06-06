@@ -6,13 +6,12 @@ use ark_std::UniformRand;
 use ark_std::rand::thread_rng;
 use ruint::aliases::U256;
 use ruint::uint;
+use spongefish::DomainSeparator;
 use spongefish::codecs::arkworks_algebra::{FieldToUnitSerialize, UnitToField};
 use std::mem::MaybeUninit;
-use spongefish::DomainSeparator;
-use tracing::{event, Level};
 use {
     ark_std::{One, Zero},
-    rayon::iter::{IndexedParallelIterator as _, IntoParallelRefIterator, ParallelIterator as _},
+    rayon::iter::{IndexedParallelIterator as _, ParallelIterator as _},
     spongefish::codecs::arkworks_algebra::FieldDomainSeparator,
     std::array,
     tracing::instrument,
@@ -266,9 +265,9 @@ fn prove_sumcheck_cubic(
 #[instrument()]
 fn run(logsize: usize) {
     let size = 1 << logsize;
-    let mut p1 = random_poly(size);
-    let mut p2 = random_poly(size);
-    let mut p3 = random_poly(size);
+    let p1 = random_poly(size);
+    let p2 = random_poly(size);
+    let p3 = random_poly(size);
 
     let mut claimed_sum = FieldElement::zero();
     for i in 0..size {

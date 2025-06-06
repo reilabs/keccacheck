@@ -1,23 +1,23 @@
 mod sponge;
 
-pub use sponge::Sponge;
 use ark_bn254::Fr;
+pub use sponge::Sponge;
 
 pub struct Prover {
-    sponge:    Sponge,
+    sponge: Sponge,
     pub proof: Vec<Fr>,
 }
 
 pub struct Verifier<'a> {
     sponge: Sponge,
-    proof:  &'a [Fr],
+    proof: &'a [Fr],
 }
 
 impl Prover {
     pub fn new() -> Self {
         Self {
             sponge: Sponge::new(),
-            proof:  Vec::new(),
+            proof: Vec::new(),
         }
     }
 

@@ -2,7 +2,10 @@ use ark_bn254::Fr;
 use ark_ff::Zero;
 use itertools::izip;
 
-use crate::{sumcheck::util::{update, xor, HALF}, transcript::Prover};
+use crate::{
+    sumcheck::util::{HALF, update, xor},
+    transcript::Prover,
+};
 
 /// Sumcheck for $\sum_x e(x) ⋅ (\beta ⋅ xor(a(x), b(x)) + c(x))$.
 /// Returns $(e, r)$ for reduced claim $e = e(r) ⋅ (\beta ⋅ xor(a(r), b(r)) + c(r))$.
@@ -21,7 +24,7 @@ pub fn prove_sumcheck_iota(
     assert_eq!(b.len(), 1 << size);
     assert_eq!(c.len(), 1 << size);
 
-    let beta_m2 = - beta_00 - beta_00;
+    let beta_m2 = -beta_00 - beta_00;
 
     let mut rs = Vec::with_capacity(size);
     for _ in 0..size {

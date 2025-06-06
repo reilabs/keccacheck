@@ -4,13 +4,13 @@ use ark_bn254::Fr;
 use ark_ff::Field;
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_std::rand::RngCore;
-use ark_sumcheck::{ml_sumcheck::{protocol::ListOfProductsOfPolynomials, MLSumcheck}, rng::{Blake2b512Rng, FeedableRNG}};
+use ark_sumcheck::{
+    ml_sumcheck::{MLSumcheck, protocol::ListOfProductsOfPolynomials},
+    rng::{Blake2b512Rng, FeedableRNG},
+};
 use tracing::instrument;
 
-fn random_mle<F: Field, R: RngCore>(
-    dim: usize,
-    rng: &mut R,
-) ->  DenseMultilinearExtension<F> {
+fn random_mle<F: Field, R: RngCore>(dim: usize, rng: &mut R) -> DenseMultilinearExtension<F> {
     DenseMultilinearExtension::rand(dim, rng)
 }
 
@@ -25,9 +25,9 @@ fn main() {
     let dim = 19;
 
     let mut rng = Blake2b512Rng::setup();
-    let mle = (0..10).map(|_| {
-        Rc::new(random_mle::<Fr, _>(dim, &mut rng))
-    }).collect::<Vec<_>>();
+    let mle = (0..10)
+        .map(|_| Rc::new(random_mle::<Fr, _>(dim, &mut rng)))
+        .collect::<Vec<_>>();
 
     // a single polynomial
     let mut instance = ListOfProductsOfPolynomials::new(dim);
@@ -42,8 +42,7 @@ fn main() {
     // a sum of 3 products, each product with 3 polynomials
     let mut instance = ListOfProductsOfPolynomials::new(dim);
     (0..3).for_each(|i| {
-        instance.add_product(mle[(i*3)..(i*3+3)].iter().cloned(), Fr::ONE);
+        instance.add_product(mle[(i * 3)..(i * 3 + 3)].iter().cloned(), Fr::ONE);
     });
     sumcheck(&instance);
-    
 }

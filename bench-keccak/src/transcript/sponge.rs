@@ -10,7 +10,7 @@ const INITIAL_STATE: [Fr; 3] = [
 
 #[derive(Debug)]
 pub struct Sponge {
-    state:  [Fr; 3],
+    state: [Fr; 3],
     sponge: SpongeState,
 }
 
@@ -26,7 +26,7 @@ enum SpongeState {
 impl Sponge {
     pub fn new() -> Self {
         Self {
-            state:  INITIAL_STATE,
+            state: INITIAL_STATE,
             sponge: SpongeState::Initial,
         }
     }

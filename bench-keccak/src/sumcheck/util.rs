@@ -21,9 +21,7 @@ pub const fn workload_size<T: Sized>() -> usize {
 }
 
 /// List of evaluations for eq(r, x) over the boolean hypercube
-pub fn calculate_evaluations_over_boolean_hypercube_for_eq(
-    r: &[Fr],
-) -> Vec<Fr> {
+pub fn calculate_evaluations_over_boolean_hypercube_for_eq(r: &[Fr]) -> Vec<Fr> {
     let mut result = vec![Fr::zero(); 1 << r.len()];
     eval_eq(r, &mut result, Fr::one());
     result
@@ -78,9 +76,7 @@ pub fn verify_sumcheck<const N: usize>(
 ) -> (Fr, Vec<Fr>) {
     let mut rs = Vec::with_capacity(size);
     for _ in 0..size {
-        let p: [Fr; N] = std::array::from_fn(|_| {
-            transcript.read()
-        });
+        let p: [Fr; N] = std::array::from_fn(|_| transcript.read());
         // Derive p0 from e = p(0) + p(1)
         let p0 = HALF * (e - p.iter().sum::<Fr>());
         let r = transcript.generate();
@@ -104,6 +100,6 @@ pub fn eval_mle(coefficients: &[Fr], eval: &[Fr]) -> Fr {
         let (c0, c1) = coefficients.split_at(coefficients.len() / 2);
         (Fr::one() - x) * eval_mle(c0, tail) + x * eval_mle(c1, tail)
     } else {
-        return coefficients[0];
+        coefficients[0]
     }
 }
