@@ -82,16 +82,20 @@ fn main() {
     assert_eq!(e_eq * (beta[0] * xor(e_chi_00, e_rc) + e_chi_rlc), pe);
 
     // Verify
+    let expected_sum = (0..25).map(|i| {
+        beta[i] * eval_mle(&to_poly(output[i]), &alpha)
+    }).sum();
+
     let mut verifier = Verifier::new(&proof);
 
+    // TODO: feed output to the prover/verifier before obtaining alpha
     let alpha = (0..num_vars)
         .map(|_| verifier.generate())
         .collect::<Vec<_>>();
     let beta = (0..25).map(|_| verifier.generate()).collect::<Vec<_>>();
 
     let vs = verifier.read();
-    assert_eq!(vs, sum);
-    // TODO: verifier sum needs to be calculated from the output array!
+    assert_eq!(vs, expected_sum);
     let (ve, vrs) = verify_sumcheck::<3>(&mut verifier, num_vars, vs);
 
     // Verify last step
