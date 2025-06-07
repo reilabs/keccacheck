@@ -98,6 +98,11 @@ fn main() {
     assert_eq!(vs, expected_sum);
     let (ve, vrs) = verify_sumcheck::<3>(&mut verifier, num_vars, vs);
 
+    let chi_00 = verifier.read();
+    let chi_rlc = verifier.read();
+    assert_eq!(e_eq * (beta[0] * xor(chi_00, e_rc) + chi_rlc), pe);
+
+
     // Verify last step
     // TODO: verifier needs to combine sublaims and continue recursively before we get to the last step
     //

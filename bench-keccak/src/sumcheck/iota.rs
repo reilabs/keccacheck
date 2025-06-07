@@ -74,6 +74,8 @@ pub fn prove_sumcheck_iota(
         // sum = p(r)
         sum = p0 + r * (p1 + r * (p2 + r * p3));
     }
+    transcript.write(a[0]); // chi_00(r)
+    transcript.write(c[0]); // \sum_{ij} \beta_{ij} ⋅ chi_{ij} 
     assert_eq!(e[0] * (beta_00 * xor(a[0], b[0]) + c[0]), sum);
     (sum, rs)
 }
