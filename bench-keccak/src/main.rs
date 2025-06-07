@@ -23,8 +23,8 @@ fn main() {
     let input = [
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
     ];
-    let mut output = input;
-    keccak_round(&mut output, ROUND_CONSTANTS[0]);
+    let mut buf = input.clone();
+    let output = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
 
     println!("inp {input:?}");
     println!("out {output:?}");
@@ -40,13 +40,13 @@ fn main() {
     // - eq(\alpha, k)
     let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
     // - \chi_{00}(k)
-    let chi_00 = to_poly(input[0]);
+    let chi_00 = to_poly(output[1][0]);
     // - RC(k)
     let rc = to_poly(ROUND_CONSTANTS[0]);
     // - \sum_{ij} \beta_{ij}\chi_{ij}(k) where (i, j) != (0, 0)
     let mut chi_rlc = vec![Fr::ZERO; 1 << num_vars];
     for el in 1..25 {  // iterating from 1 to skip the first state element (i, j) = (0, 0)
-        let poly = to_poly(input[el]);
+        let poly = to_poly(output[1][el]);
         for x in 0..(1 << num_vars) {
             chi_rlc[x] += beta[el] * poly[x];
         }
@@ -83,7 +83,7 @@ fn main() {
 
     // Verify
     let expected_sum = (0..25).map(|i| {
-        beta[i] * eval_mle(&to_poly(output[i]), &alpha)
+        beta[i] * eval_mle(&to_poly(output[0][i]), &alpha)
     }).sum();
 
     let mut verifier = Verifier::new(&proof);
