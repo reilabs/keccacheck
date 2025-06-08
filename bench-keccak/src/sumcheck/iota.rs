@@ -18,7 +18,7 @@ pub fn prove_sumcheck_iota(
     mut b: &mut [Fr],
     mut c: &mut [Fr],
     mut sum: Fr,
-) -> (Fr, Vec<Fr>) {
+) -> (Fr, Vec<Fr>, (Fr, Fr)) {
     assert_eq!(e.len(), 1 << size);
     assert_eq!(a.len(), 1 << size);
     assert_eq!(b.len(), 1 << size);
@@ -57,7 +57,7 @@ pub fn prove_sumcheck_iota(
         // Compute p1 and p2 from
         //  p(0) + p(1) = 2 ⋅ p0 + p1 + p2 + p3
         //  p(-1) = p0 - p1 + p2 - p3
-        let p2 = HALF * (sum + pem1 - p0 - p0 - p0);
+        let p2 = HALF * (sum + pem1 - p0) - p0;
         let p1 = sum - p0 - p0 - p3 - p2;
         assert_eq!(p0 + p0 + p1 + p2 + p3, sum);
         transcript.write(p1);
@@ -75,7 +75,7 @@ pub fn prove_sumcheck_iota(
         sum = p0 + r * (p1 + r * (p2 + r * p3));
     }
     transcript.write(a[0]); // chi_00(r)
-    transcript.write(c[0]); // \sum_{ij} \beta_{ij} ⋅ chi_{ij} 
+    transcript.write(c[0]); // \sum_{ij} \beta_{ij} ⋅ chi_{ij}
     assert_eq!(e[0] * (beta_00 * xor(a[0], b[0]) + c[0]), sum);
-    (sum, rs)
+    (sum, rs, (a[0], c[0]))
 }

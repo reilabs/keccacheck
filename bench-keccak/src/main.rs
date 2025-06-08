@@ -1,5 +1,5 @@
 use ark_bn254::Fr;
-use ark_ff::AdditiveGroup;
+use ark_ff::{AdditiveGroup, One, Zero};
 use itertools::izip;
 
 use crate::{
@@ -13,6 +13,8 @@ use crate::{
     },
     transcript::{Prover, Verifier},
 };
+use crate::sumcheck::chi::prove_sumcheck_chi;
+use crate::sumcheck::util::add_col;
 
 mod poseidon;
 mod reference;
@@ -52,13 +54,20 @@ fn main() {
         }
     }
 
+    let real_iota_sum: Fr = output[0].iter().enumerate().map(|(i, x)| {
+        let poly = to_poly(*x);
+        beta[i] * eval_mle(&poly, &alpha)
+    }).sum();
+
     let sum = izip!(&eq, &chi_00, &rc, &chi_rlc)
         .map(|(&a, &b, &c, &d)| a * ((beta[0] * xor(b, c)) + d))
         .sum();
 
+    assert_eq!(sum, real_iota_sum);
+
     // Prove
     prover.write(sum);
-    let (pe, prs) = {
+    let (pe, prs, (p_chi_00, p_chi_rlc)) = {
         let mut eq = eq.clone();
         let mut chi_00 = chi_00.clone();
         let mut rc = rc.clone();
@@ -74,12 +83,60 @@ fn main() {
             sum,
         )
     };
-    let proof = prover.finish();
+    // let proof = prover.finish();
     let e_eq = eval_mle(&eq, &prs); // TODO: can evaluate eq faster
     let e_chi_00 = eval_mle(&chi_00, &prs);
     let e_rc = eval_mle(&rc, &prs);
     let e_chi_rlc = eval_mle(&chi_rlc, &prs);
+    assert_eq!(p_chi_00, e_chi_00);
+    assert_eq!(p_chi_rlc, e_chi_rlc);
     assert_eq!(e_eq * (beta[0] * xor(e_chi_00, e_rc) + e_chi_rlc), pe);
+
+    // chi
+    let (pe_chi, prs_chi) = {
+        let x = prover.read();
+        let y = prover.read();
+        println!("prover rlc {x} {y} {p_chi_00} {p_chi_rlc}");
+        let mut beta = beta.clone();
+        beta[0] *= x;
+        beta.iter_mut().skip(1).for_each(|b| *b *= y);
+
+        let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&prs);
+        let mut pi = output[2].iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
+
+        let sum = beta[0] * p_chi_00 + y * p_chi_rlc;
+        println!("expected sum prover {sum}");
+
+        let real_chi_sum: Fr = output[1].iter().enumerate().map(|(i, x)| {
+            let poly = to_poly(*x);
+            beta[i] * eval_mle(&poly, &prs)
+        }).sum();
+
+
+        let chi = output[1].iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
+
+        let mut pi_sum = Fr::zero();
+        for i in 0..(1<<num_vars) {
+            for j in 0..pi.len() {
+                pi_sum += beta[j] * eq[i] * xor(pi[j][i], (Fr::one() - pi[add_col(j, 1)][i]) * pi[add_col(j, 2)][i]);
+                assert_eq!(chi[j][i], xor(pi[j][i], (Fr::one() - pi[add_col(j, 1)][i]) * pi[add_col(j, 2)][i]));
+            }
+        }
+
+        assert_eq!(sum, pi_sum);
+        assert_eq!(sum, real_chi_sum);
+
+        prove_sumcheck_chi(
+            &mut prover,
+            num_vars,
+            &beta,
+            &mut eq,
+            &mut pi,
+            sum
+        )
+    };
+
+    let proof = prover.finish();
 
     // Verify
     let expected_sum = (0..25).map(|i| {
@@ -92,7 +149,7 @@ fn main() {
     let alpha = (0..num_vars)
         .map(|_| verifier.generate())
         .collect::<Vec<_>>();
-    let beta = (0..25).map(|_| verifier.generate()).collect::<Vec<_>>();
+    let mut beta = (0..25).map(|_| verifier.generate()).collect::<Vec<_>>();
 
     let vs = verifier.read();
     assert_eq!(vs, expected_sum);
@@ -102,9 +159,17 @@ fn main() {
     let chi_rlc = verifier.read();
     assert_eq!(e_eq * (beta[0] * xor(chi_00, e_rc) + chi_rlc), pe);
 
+    let x = verifier.generate();
+    let y = verifier.generate();
+    println!("verifier rlc {x} {y} {chi_00} {chi_rlc}");
+    beta[0] *= x;
+    beta.iter_mut().skip(1).for_each(|b| *b *= y);
+
+    // TODO: verifier needs to combine sublaims and continue recursively before we get to the last step
+    let expected_sum = beta[0] * chi_00 + y * chi_rlc;
+    println!("expected sum verifier {expected_sum}");
 
     // Verify last step
-    // TODO: verifier needs to combine sublaims and continue recursively before we get to the last step
     //
     // NOTE: being lazy here, we've already tested prs and pe values after proving step.
     // Here just making sure they are the same. In practice, this should be a separate implementation.

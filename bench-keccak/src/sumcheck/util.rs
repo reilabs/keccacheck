@@ -50,7 +50,7 @@ pub fn to_poly(x: u64) -> Vec<Fr> {
     let mut res = Vec::with_capacity(64);
     let mut k = 1;
     for _ in 0..64 {
-        if x & k == 1 {
+        if x & k > 0 {
             res.push(Fr::ONE);
         } else {
             res.push(Fr::ZERO);
@@ -102,4 +102,11 @@ pub fn eval_mle(coefficients: &[Fr], eval: &[Fr]) -> Fr {
     } else {
         coefficients[0]
     }
+}
+
+#[inline(always)]
+pub fn add_col(j: usize, add: usize) -> usize {
+    let col = j % 5;
+    let row = j - col;
+    (col + add) % 5 + row
 }
