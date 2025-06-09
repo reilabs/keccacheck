@@ -2,11 +2,38 @@ use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use std::str::FromStr;
 
-use crate::sumcheck::util::{add_col, eval_mle};
+use crate::sumcheck::util::{add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly};
 use crate::{
     sumcheck::util::{HALF, update, xor},
     transcript::Prover,
 };
+
+pub struct ChiProof {
+    pub sum: Fr,
+    pub r: Vec<Fr>,
+    pub pi: Vec<Fr>,
+}
+
+pub fn prove_chi(
+    transcript: &mut Prover,
+    num_vars: usize,
+    r: &[Fr],
+    beta: &[Fr],
+    pi: &[u64],
+    sum: Fr,
+) -> ChiProof {
+    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
+    let mut pi = pi.iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
+
+    let (pe, prs, pi) =
+        prove_sumcheck_chi(transcript, num_vars, &beta, &mut eq, &mut pi, sum);
+
+    ChiProof {
+        sum: pe,
+        r: prs,
+        pi,
+    }
+}
 
 /// Sumcheck for $\sum_x e(x) ⋅ (\sum_ij \beta_ij ⋅ xor(\pi_{ij}, not(\pi_{i+1,j}) ⋅ \pi_{i+2, j}))$.
 pub fn prove_sumcheck_chi(
@@ -15,9 +42,8 @@ pub fn prove_sumcheck_chi(
     beta: &[Fr],
     mut e: &mut [Fr],
     mut pis: &mut Vec<Vec<Fr>>,
-    chi: &Vec<Vec<Fr>>,
     mut sum: Fr,
-) -> (Fr, Vec<Fr>) {
+) -> (Fr, Vec<Fr>, Vec<Fr>) {
     assert_eq!(e.len(), 1 << size);
     pis.iter().for_each(|pi| {
         assert_eq!(pi.len(), 1 << size);
@@ -111,8 +137,10 @@ pub fn prove_sumcheck_chi(
         }
         sum = p0 + r * (p1 + r * (p2 + r * (p3 + r * p4)));
     }
+    let mut subclaims = Vec::with_capacity(pis.len());
     for j in 0..pis.len() {
-        transcript.write(pis[j][0])
+        transcript.write(pis[j][0]);
+        subclaims.push(pis[j][0]);
     }
 
     let mut checksum = Fr::zero();
@@ -126,5 +154,5 @@ pub fn prove_sumcheck_chi(
             );
     }
     assert_eq!(sum, checksum);
-    (sum, rs)
+    (sum, rs, subclaims)
 }
