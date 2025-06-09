@@ -23,16 +23,30 @@ pub fn prove_chi(
     sum: Fr,
 ) -> ChiProof {
     let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
-    let mut pi = pi.iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
+    let mut pis = pi.iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
 
-    let (pe, prs, pi) =
-        prove_sumcheck_chi(transcript, num_vars, &beta, &mut eq, &mut pi, sum);
+    let proof = prove_sumcheck_chi(transcript, num_vars, &beta, &mut eq, &mut pis, sum);
 
-    ChiProof {
-        sum: pe,
-        r: prs,
-        pi,
+    #[cfg(debug_assertions)]
+    {
+        // sumcheck consumed all polynomials. create again
+        let eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
+        let e_eq = eval_mle(&eq, &proof.r); // TODO: can evaluate eq faster
+
+        let pi = pi.iter().map(|u| {
+            let poly = to_poly(*u);
+            eval_mle(&poly, &proof.r)
+        }).collect::<Vec<_>>();
+        let mut checksum_pi = Fr::zero();
+
+        for i in 0..pi.len() {
+            checksum_pi +=
+                e_eq * beta[i] * xor(pi[i], (Fr::one() - pi[add_col(i, 1)]) * (pi[add_col(i, 2)]));
+        }
+        assert_eq!(checksum_pi, proof.sum);
     }
+
+    proof
 }
 
 /// Sumcheck for $\sum_x e(x) ⋅ (\sum_ij \beta_ij ⋅ xor(\pi_{ij}, not(\pi_{i+1,j}) ⋅ \pi_{i+2, j}))$.
@@ -43,7 +57,7 @@ pub fn prove_sumcheck_chi(
     mut e: &mut [Fr],
     mut pis: &mut Vec<Vec<Fr>>,
     mut sum: Fr,
-) -> (Fr, Vec<Fr>, Vec<Fr>) {
+) -> ChiProof {
     assert_eq!(e.len(), 1 << size);
     pis.iter().for_each(|pi| {
         assert_eq!(pi.len(), 1 << size);
@@ -154,5 +168,9 @@ pub fn prove_sumcheck_chi(
             );
     }
     assert_eq!(sum, checksum);
-    (sum, rs, subclaims)
+    ChiProof {
+        sum,
+        r: rs,
+        pi: subclaims
+    }
 }

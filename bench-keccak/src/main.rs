@@ -165,7 +165,7 @@ fn chi_no_recursion() {
     }
     assert_eq!(pi_sum, real_chi_sum);
 
-    let (pe, prs, _) = {
+    let proof = {
         let mut eq = eq.clone();
         let mut pi = pi.clone();
         prove_sumcheck_chi(&mut prover, num_vars, &beta, &mut eq, &mut pi, real_chi_sum)
@@ -183,7 +183,7 @@ fn chi_no_recursion() {
                 let mut under_sum = to_poly(k)[0..(num_vars - step - 1)].to_vec();
                 let mut eval = vec![Fr::zero(); step + 1];
                 for k in 0..step {
-                    eval[k] = prs[k];
+                    eval[k] = proof.r[k];
                 }
                 eval[step] = Fr::zero();
                 eval.extend_from_slice(&under_sum);
@@ -231,13 +231,13 @@ fn chi_no_recursion() {
     let mut checksum = Fr::zero();
     for i in 0..25 {
         checksum += beta[i] * xor(
-            eval_mle(&pi[i], &prs),
-            (Fr::one() - eval_mle(&pi[add_col(i, 1)], &prs)) * eval_mle(&pi[add_col(i, 2)], &prs),
+            eval_mle(&pi[i], &proof.r),
+            (Fr::one() - eval_mle(&pi[add_col(i, 1)], &proof.r)) * eval_mle(&pi[add_col(i, 2)], &proof.r),
         );
     }
     assert_eq!(
-        eval_mle(&eq, &prs) * checksum,
-        pe
+        eval_mle(&eq, &proof.r) * checksum,
+        proof.sum
     );
 }
 
@@ -272,7 +272,7 @@ fn main() {
     // prove iota
     let iota_proof = prove_iota(&mut prover, num_vars, &alpha, &beta, &output[1], sum);
 
-    // create a linear combination of subclaims chi_00 and chi_rlc
+    // combine subclaims chi_00 and chi_rlc
     let x = prover.read();
     let y = prover.read();
     beta[0] *= x;
@@ -281,77 +281,6 @@ fn main() {
 
     // prove chi
     let chi_proof = prove_chi(&mut prover, num_vars, &iota_proof.r, &beta, &output[2], sum);
-
-    // chi
-    // let (pe_chi, prs_chi) = {
-    //     let x = prover.read();
-    //     let y = prover.read();
-    //
-    //     let mut beta = beta.clone();
-    //     beta[0] *= x;
-    //     beta.iter_mut().skip(1).for_each(|b| *b *= y);
-    //
-    //     let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&iota_proof.r);
-    //     let eq_clone = eq.clone();
-    //     let mut pi = output[2].iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
-    //     let pi_clone = pi.clone();
-    //     let sum = beta[0] * iota_proof.chi_00 + y * iota_proof.chi_rlc;
-    //
-    //     let real_chi_sum: Fr = output[1]
-    //         .iter()
-    //         .enumerate()
-    //         .map(|(i, x)| {
-    //             let poly = to_poly(*x);
-    //             beta[i] * eval_mle(&poly, &iota_proof.r)
-    //         })
-    //         .sum();
-    //
-    //     let chi = output[1].iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
-    //
-    //     let mut pi_sum = Fr::zero();
-    //     for i in 0..(1 << num_vars) {
-    //         for j in 0..pi.len() {
-    //             pi_sum += beta[j]
-    //                 * eq[i]
-    //                 * xor(
-    //                     pi[j][i],
-    //                     (Fr::one() - pi[add_col(j, 1)][i]) * pi[add_col(j, 2)][i],
-    //                 );
-    //             assert_eq!(
-    //                 chi[j][i],
-    //                 xor(
-    //                     pi[j][i],
-    //                     (Fr::one() - pi[add_col(j, 1)][i]) * pi[add_col(j, 2)][i]
-    //                 )
-    //             );
-    //         }
-    //     }
-    //
-    //     assert_eq!(sum, pi_sum);
-    //     assert_eq!(sum, real_chi_sum);
-    //
-    //     let (pe, prs) =
-    //         prove_sumcheck_chi(&mut prover, num_vars, &beta, &mut eq, &mut pi, &chi, sum);
-    //
-    //     let e_eq = eval_mle(&eq_clone, &prs); // TODO: can evaluate eq faster
-    //     let pi = pi_clone
-    //         .iter()
-    //         .map(|p| eval_mle(&p, &prs))
-    //         .collect::<Vec<_>>();
-    //     let chi = chi.iter().map(|p| eval_mle(&p, &prs)).collect::<Vec<_>>();
-    //
-    //     let mut checksum_pi = Fr::zero();
-    //     let mut checksum_chi = Fr::zero();
-    //     for i in 0..pi.len() {
-    //         checksum_pi +=
-    //             e_eq * beta[i] * xor(pi[i], (Fr::one() - pi[add_col(i, 1)]) * (pi[add_col(i, 2)]));
-    //         checksum_chi += beta[i] * chi[i];
-    //     }
-    //
-    //     assert_eq!(checksum_pi, pe);
-    //
-    //     (pe, prs)
-    // };
 
     let proof = prover.finish();
 
