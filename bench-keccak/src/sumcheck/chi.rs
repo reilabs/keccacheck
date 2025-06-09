@@ -163,7 +163,6 @@ pub fn prove_sumcheck_chi(
     }
 
     let mut checksum = Fr::zero();
-
     for j in 0..pis.len() {
         checksum += e[0]
             * beta[j]
