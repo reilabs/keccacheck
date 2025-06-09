@@ -7,7 +7,7 @@ use crate::transcript::Verifier;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 
-pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
+pub fn verify(num_vars: usize, output: &[u64], rho: &[u64], proof: &[Fr]) {
     let mut verifier = Verifier::new(&proof);
 
     // TODO: feed output to the verifier before obtaining alpha
@@ -45,8 +45,8 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
 
     // verify chi, assume rho is the final layer
     let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&vrs);
-    let mut pis = input.to_vec();
-    apply_pi(input, &mut pis);
+    let mut pis = rho.to_vec();
+    apply_pi(rho, &mut pis);
     let pis = pis.iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
 
     let (ve, vrs) = verify_sumcheck::<4>(&mut verifier, num_vars, expected_sum);
