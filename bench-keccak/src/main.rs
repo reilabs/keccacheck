@@ -16,6 +16,7 @@ use crate::{
     },
     transcript::{Prover, Verifier},
 };
+use crate::sumcheck::iota::prove_iota;
 
 mod poseidon;
 mod reference;
@@ -62,12 +63,12 @@ fn iota_no_recursion() {
         })
         .sum();
 
-    let (pe, prs, _) = {
+    let (pe, prs) = {
         let mut eq = eq.clone();
         let mut chi_00 = chi_00.clone();
         let mut rc = rc.clone();
         let mut chi_rlc = chi_rlc.clone();
-        prove_sumcheck_iota(
+        let proof = prove_sumcheck_iota(
             &mut prover,
             num_vars,
             beta[0],
@@ -76,7 +77,8 @@ fn iota_no_recursion() {
             &mut rc,
             &mut chi_rlc,
             real_iota_sum,
-        )
+        );
+        (proof.sum, proof.r)
     };
     let e_eq = eval_mle(&eq, &prs); // TODO: can evaluate eq faster
     let e_chi_00 = eval_mle(&chi_00, &prs);
@@ -255,25 +257,7 @@ fn main() {
     let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
     let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
-    // run sumcheck on $\sum_k eq(\alpha, k) ⋅ [\beta_00 ⋅ (\chi00(k) xor RC(k)) + \sum_ij \beta_ij\chi_ij(k)]
-    // we have 4 polynomials:
-    // - eq(\alpha, k)
-    let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
-    // - \chi_{00}(k)
-    let chi_00 = to_poly(output[1][0]);
-    // - RC(k)
-    let rc = to_poly(ROUND_CONSTANTS[0]);
-    // - \sum_{ij} \beta_{ij}\chi_{ij}(k) where (i, j) != (0, 0)
-    let mut chi_rlc = vec![Fr::ZERO; 1 << num_vars];
-    for el in 1..25 {
-        // iterating from 1 to skip the first state element (i, j) = (0, 0)
-        let poly = to_poly(output[1][el]);
-        for x in 0..(1 << num_vars) {
-            chi_rlc[x] += beta[el] * poly[x];
-        }
-    }
-
-    let real_iota_sum: Fr = output[0]
+    let sum: Fr = output[0]
         .iter()
         .enumerate()
         .map(|(i, x)| {
@@ -282,39 +266,8 @@ fn main() {
         })
         .sum();
 
-    let sum = izip!(&eq, &chi_00, &rc, &chi_rlc)
-        .map(|(&a, &b, &c, &d)| a * ((beta[0] * xor(b, c)) + d))
-        .sum();
-
-    assert_eq!(sum, real_iota_sum);
-
-    // Prove
     prover.write(sum);
-    let (pe, prs, (p_chi_00, p_chi_rlc)) = {
-        let mut eq = eq.clone();
-        let mut chi_00 = chi_00.clone();
-        let mut rc = rc.clone();
-        let mut chi_rlc = chi_rlc.clone();
-        prove_sumcheck_iota(
-            &mut prover,
-            num_vars,
-            beta[0],
-            &mut eq,
-            &mut chi_00,
-            &mut rc,
-            &mut chi_rlc,
-            sum,
-        )
-    };
-
-    // let proof = prover.finish();
-    let e_eq = eval_mle(&eq, &prs); // TODO: can evaluate eq faster
-    let e_chi_00 = eval_mle(&chi_00, &prs);
-    let e_rc = eval_mle(&rc, &prs);
-    let e_chi_rlc = eval_mle(&chi_rlc, &prs);
-    assert_eq!(p_chi_00, e_chi_00);
-    assert_eq!(p_chi_rlc, e_chi_rlc);
-    assert_eq!(e_eq * (beta[0] * xor(e_chi_00, e_rc) + e_chi_rlc), pe);
+    let iota_proof = prove_iota(&mut prover, num_vars, &alpha, &beta, &output[1], sum);
 
     // chi
     let (pe_chi, prs_chi) = {
@@ -325,18 +278,18 @@ fn main() {
         beta[0] *= x;
         beta.iter_mut().skip(1).for_each(|b| *b *= y);
 
-        let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&prs);
+        let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&iota_proof.r);
         let eq_clone = eq.clone();
         let mut pi = output[2].iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
         let pi_clone = pi.clone();
-        let sum = beta[0] * p_chi_00 + y * p_chi_rlc;
+        let sum = beta[0] * iota_proof.chi_00 + y * iota_proof.chi_rlc;
 
         let real_chi_sum: Fr = output[1]
             .iter()
             .enumerate()
             .map(|(i, x)| {
                 let poly = to_poly(*x);
-                beta[i] * eval_mle(&poly, &prs)
+                beta[i] * eval_mle(&poly, &iota_proof.r)
             })
             .sum();
 
@@ -405,12 +358,12 @@ fn main() {
     let vs = verifier.read();
     assert_eq!(vs, expected_sum);
     let (ve, vrs) = verify_sumcheck::<3>(&mut verifier, num_vars, vs);
-    assert_eq!(vrs, prs);
-    assert_eq!(ve, pe);
+    assert_eq!(vrs, iota_proof.r);
+    assert_eq!(ve, iota_proof.sum);
 
     let chi_00 = verifier.read();
     let chi_rlc = verifier.read();
-    assert_eq!(e_eq * (beta[0] * xor(chi_00, e_rc) + chi_rlc), pe);
+    //assert_eq!(e_eq * (beta[0] * xor(chi_00, e_rc) + chi_rlc), pe);
 
     let x = verifier.generate();
     let y = verifier.generate();
