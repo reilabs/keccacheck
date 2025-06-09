@@ -24,7 +24,7 @@ pub fn prove_sumcheck_chi(
     });
 
     let mut rs = Vec::with_capacity(size);
-    for xyz in 0..size {
+    for _ in 0..size {
         // p(x) = p0 + p1 ⋅ x + p2 ⋅ x^2 + p3 ⋅ x^3 + p4 ⋅ x^4
         let mut p0 = Fr::zero();
         let mut pem1 = Fr::zero();
@@ -80,14 +80,7 @@ pub fn prove_sumcheck_chi(
         //  p(-1) = p0 - p1 + p2 - p3 + p4
         //  p(2) = p0 + 2 ⋅ p1 + 4 ⋅ p2 + 8 ⋅ p3 + 16 ⋅ p4
 
-        println!("step {xyz} p(0) = {p0}");
-        println!("step {xyz} p(-1) = {pem1}");
-        println!("step {xyz} p(2) = {pe2}");
-        println!("step {xyz} p(inf) = {p4}");
-
-        // TODO: make it a compile-time const
-        let THIRD = Fr::one() / Fr::from_str("3").unwrap();
-
+        // TODO: coefficient calculations need to be optimized
         let pe1 = sum - p0;
 
         let p2 = HALF * (pe1 + pem1 - p4 - p4 - p0 - p0);
@@ -97,10 +90,6 @@ pub fn prove_sumcheck_chi(
 
         let p1 = (Fr::from_str("4").unwrap() * alpha - beta) / Fr::from_str("6").unwrap();
         let p3 = (beta - alpha) / Fr::from_str("6").unwrap();
-
-        // let p134 = sum - p0 - p0 - p2;
-        // let p3 = HALF * (THIRD * (pe2 - pem1) + p2 - p134) - p4 - p4;
-        // let p1 = p134 - p3 - p4;
 
         assert_eq!(sum, p0 + p0 + p1 + p2 + p3 + p4);
         assert_eq!(pem1, p0 - p1 + p2 - p3 + p4);
@@ -120,29 +109,15 @@ pub fn prove_sumcheck_chi(
             // TODO: unnecessary allocation
             pis[j] = update(&mut pis[j], r).to_vec()
         }
-        // sum = p(r)
-        // println!("sum {sum}");
         sum = p0 + r * (p1 + r * (p2 + r * (p3 + r * p4)));
     }
-    // println!("sum {sum}");
     for j in 0..pis.len() {
         transcript.write(pis[j][0])
     }
 
     let mut checksum = Fr::zero();
-    // println!("p_eq {}", e[0]);
 
     for j in 0..pis.len() {
-        // println!("p_pi[{j}] {}", pis[j][0]);
-        // println!(
-        //     "p_chi[{j}] {}",
-        //     e[0] * beta[j]
-        //         * xor(
-        //             pis[j][0],
-        //             (Fr::one() - pis[add_col(j, 1)][0]) * pis[add_col(j, 2)][0]
-        //         )
-        // );
-        // println!("e_chi[{j}] {}", eval_mle(&chi[j], &rs));
         checksum += e[0]
             * beta[j]
             * xor(

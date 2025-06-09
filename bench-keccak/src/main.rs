@@ -320,7 +320,7 @@ fn main() {
     let (pe_chi, prs_chi) = {
         let x = prover.read();
         let y = prover.read();
-        println!("prover rlc {x} {y} {p_chi_00} {p_chi_rlc}");
+
         let mut beta = beta.clone();
         beta[0] *= x;
         beta.iter_mut().skip(1).for_each(|b| *b *= y);
@@ -330,7 +330,6 @@ fn main() {
         let mut pi = output[2].iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
         let pi_clone = pi.clone();
         let sum = beta[0] * p_chi_00 + y * p_chi_rlc;
-        println!("expected sum prover {sum}");
 
         let real_chi_sum: Fr = output[1]
             .iter()
@@ -373,9 +372,6 @@ fn main() {
             .iter()
             .map(|p| eval_mle(&p, &prs))
             .collect::<Vec<_>>();
-        println!("e_eq {e_eq}");
-        println!("e_pi {pi:?}");
-
         let chi = chi.iter().map(|p| eval_mle(&p, &prs)).collect::<Vec<_>>();
 
         let mut checksum_pi = Fr::zero();
@@ -385,7 +381,7 @@ fn main() {
                 e_eq * beta[i] * xor(pi[i], (Fr::one() - pi[add_col(i, 1)]) * (pi[add_col(i, 2)]));
             checksum_chi += beta[i] * chi[i];
         }
-        println!("checksum {checksum_pi} {checksum_chi} res {pe}");
+
         assert_eq!(checksum_pi, pe);
 
         (pe, prs)
@@ -418,13 +414,12 @@ fn main() {
 
     let x = verifier.generate();
     let y = verifier.generate();
-    println!("verifier rlc {x} {y} {chi_00} {chi_rlc}");
+
     beta[0] *= x;
     beta.iter_mut().skip(1).for_each(|b| *b *= y);
 
     // TODO: verifier needs to combine sublaims and continue recursively before we get to the last step
     let expected_sum = beta[0] * chi_00 + y * chi_rlc;
-    println!("expected sum verifier {expected_sum}");
 
     let (ve, vrs) = verify_sumcheck::<4>(&mut verifier, num_vars, expected_sum);
     assert_eq!(vrs, prs_chi);
