@@ -88,12 +88,25 @@ pub fn prove_sumcheck_chi(
         // TODO: make it a compile-time const
         let THIRD = Fr::one() / Fr::from_str("3").unwrap();
 
-        let p2 = HALF * (sum + pem1 - p0) - p0 - p4;
-        let p134 = sum - p0 - p0 - p2;
-        let p3 = HALF * (THIRD * (pe2 - pem1) + p2 - p134) - p4 - p4;
-        let p1 = p134 - p3 - p4;
+        let pe1 = sum - p0;
 
-        assert_eq!(p0 + p0 + p1 + p2 + p3 + p4, sum);
+        let p2 = HALF * (pe1 + pem1 - p4 - p4 - p0 - p0);
+
+        let alpha = pe1 - pem1;
+        let beta = pe2 - Fr::from_str("16").unwrap() * p4 - Fr::from_str("4").unwrap() * p2 - p0;
+
+        let p1 = (Fr::from_str("4").unwrap() * alpha - beta) / Fr::from_str("6").unwrap();
+        let p3 = (beta - alpha) / Fr::from_str("6").unwrap();
+
+        // let p134 = sum - p0 - p0 - p2;
+        // let p3 = HALF * (THIRD * (pe2 - pem1) + p2 - p134) - p4 - p4;
+        // let p1 = p134 - p3 - p4;
+
+        assert_eq!(sum, p0 + p0 + p1 + p2 + p3 + p4);
+        assert_eq!(pem1, p0 - p1 + p2 - p3 + p4);
+        let two = Fr::one() + Fr::one();
+        assert_eq!(pe2, ((((p4 * two) + p3) * two + p2) * two + p1) * two + p0);
+
         transcript.write(p1);
         transcript.write(p2);
         transcript.write(p3);
@@ -137,6 +150,6 @@ pub fn prove_sumcheck_chi(
                 (Fr::one() - pis[add_col(j, 1)][0]) * pis[add_col(j, 2)][0],
             );
     }
-    // assert_eq!(sum, checksum);
+    assert_eq!(sum, checksum);
     (sum, rs)
 }
