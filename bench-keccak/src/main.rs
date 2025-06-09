@@ -1,22 +1,12 @@
-use std::str::FromStr;
 use ark_bn254::Fr;
-use ark_ff::{AdditiveGroup, One, Zero};
-use itertools::izip;
 
-use crate::sumcheck::chi::{prove_chi, prove_sumcheck_chi};
-use crate::sumcheck::util::add_col;
+use crate::sumcheck::chi::prove_chi;
+use crate::sumcheck::iota::prove_iota;
 use crate::{
     reference::{ROUND_CONSTANTS, keccak_round},
-    sumcheck::{
-        iota::prove_sumcheck_iota,
-        util::{
-            calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
-            verify_sumcheck, xor,
-        },
-    },
+    sumcheck::util::{eval_mle, to_poly, verify_sumcheck},
     transcript::{Prover, Verifier},
 };
-use crate::sumcheck::iota::prove_iota;
 
 mod poseidon;
 mod reference;
@@ -30,7 +20,7 @@ fn main() {
     let input = [
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
     ];
-    let mut buf = input.clone();
+    let mut buf = input;
     let output = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
 
     println!("inp {input:?}");
@@ -80,7 +70,6 @@ fn main() {
     let expected_sum = (0..25)
         .map(|i| beta[i] * eval_mle(&to_poly(output[0][i]), &alpha))
         .sum();
-
 
     // TODO: feed output to the prover/verifier before obtaining alpha
 

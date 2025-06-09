@@ -2,7 +2,9 @@ use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use std::str::FromStr;
 
-use crate::sumcheck::util::{add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly};
+use crate::sumcheck::util::{
+    add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
+};
 use crate::{
     sumcheck::util::{HALF, update, xor},
     transcript::Prover,
@@ -25,7 +27,7 @@ pub fn prove_chi(
     let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
     let mut pis = pi.iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
 
-    let proof = prove_sumcheck_chi(transcript, num_vars, &beta, &mut eq, &mut pis, sum);
+    let proof = prove_sumcheck_chi(transcript, num_vars, beta, &mut eq, &mut pis, sum);
 
     #[cfg(debug_assertions)]
     {
@@ -33,10 +35,13 @@ pub fn prove_chi(
         let eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
         let e_eq = eval_mle(&eq, &proof.r); // TODO: can evaluate eq faster
 
-        let pi = pi.iter().map(|u| {
-            let poly = to_poly(*u);
-            eval_mle(&poly, &proof.r)
-        }).collect::<Vec<_>>();
+        let pi = pi
+            .iter()
+            .map(|u| {
+                let poly = to_poly(*u);
+                eval_mle(&poly, &proof.r)
+            })
+            .collect::<Vec<_>>();
         let mut checksum_pi = Fr::zero();
 
         for i in 0..pi.len() {
@@ -55,7 +60,7 @@ pub fn prove_sumcheck_chi(
     size: usize,
     beta: &[Fr],
     mut e: &mut [Fr],
-    mut pis: &mut Vec<Vec<Fr>>,
+    pis: &mut Vec<Vec<Fr>>,
     mut sum: Fr,
 ) -> ChiProof {
     assert_eq!(e.len(), 1 << size);
@@ -171,6 +176,6 @@ pub fn prove_sumcheck_chi(
     ChiProof {
         sum,
         r: rs,
-        pi: subclaims
+        pi: subclaims,
     }
 }

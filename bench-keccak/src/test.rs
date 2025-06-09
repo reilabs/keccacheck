@@ -1,18 +1,20 @@
-use std::str::FromStr;
-use ark_bn254::Fr;
-use ark_ff::{One, Zero};
-use crate::reference::{keccak_round, ROUND_CONSTANTS};
+use crate::reference::{ROUND_CONSTANTS, keccak_round};
 use crate::sumcheck::chi::prove_sumcheck_chi;
 use crate::sumcheck::iota::prove_sumcheck_iota;
-use crate::sumcheck::util::{add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly, xor};
+use crate::sumcheck::util::{
+    add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly, xor,
+};
 use crate::transcript::Prover;
+use ark_bn254::Fr;
+use ark_ff::{One, Zero};
+use std::str::FromStr;
 
 #[test]
 fn iota_no_recursion() {
     let input = [
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
     ];
-    let mut buf = input.clone();
+    let mut buf = input;
     let output = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
     // output:
     // [0] - iota
@@ -42,9 +44,7 @@ fn iota_no_recursion() {
     let real_iota_sum: Fr = iota
         .iter()
         .enumerate()
-        .map(|(i, poly)| {
-            beta[i] * eval_mle(&poly, &alpha)
-        })
+        .map(|(i, poly)| beta[i] * eval_mle(poly, &alpha))
         .sum();
 
     let (pe, prs) = {
@@ -70,13 +70,13 @@ fn iota_no_recursion() {
     let e_chi_rlc = eval_mle(&chi_rlc, &prs);
     assert_eq!(e_eq * (beta[0] * xor(e_chi_00, e_rc) + e_chi_rlc), pe);
 
-    println!("");
+    println!();
 
     for step in 0..num_vars {
         let mut p = [Fr::zero(); 4];
         for i in 0..iota.len() {
             for k in 0..(1 << (num_vars - step - 1)) {
-                let mut under_sum = to_poly(k)[0..(num_vars - step - 1)].to_vec();
+                let under_sum = to_poly(k)[0..(num_vars - step - 1)].to_vec();
                 let mut eval = vec![Fr::zero(); step + 1];
                 for k in 0..step {
                     eval[k] = prs[k];
@@ -112,7 +112,7 @@ fn chi_no_recursion() {
     let input = [
         42, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
     ];
-    let mut buf = input.clone();
+    let mut buf = input;
     let output = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
     // output:
     // [0] - iota
@@ -132,7 +132,7 @@ fn chi_no_recursion() {
     let real_chi_sum: Fr = chi
         .iter()
         .enumerate()
-        .map(|(i, poly)| beta[i] * eval_mle(&poly, &alpha))
+        .map(|(i, poly)| beta[i] * eval_mle(poly, &alpha))
         .sum();
 
     let mut pi_sum = Fr::zero();
@@ -164,7 +164,7 @@ fn chi_no_recursion() {
 
         for i in 0..chi.len() {
             for k in 0..(1 << (num_vars - step - 1)) {
-                let mut under_sum = to_poly(k)[0..(num_vars - step - 1)].to_vec();
+                let under_sum = to_poly(k)[0..(num_vars - step - 1)].to_vec();
                 let mut eval = vec![Fr::zero(); step + 1];
                 for k in 0..step {
                     eval[k] = proof.r[k];
@@ -173,54 +173,70 @@ fn chi_no_recursion() {
                 eval.extend_from_slice(&under_sum);
                 assert_eq!(eval.len(), num_vars);
 
-                p0 += beta[i] * eval_mle(&eq, &eval) * xor(
-                    eval_mle(&pi[i], &eval),
-                    (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval)) * eval_mle(&pi[add_col(i, 2)], &eval),
-                );
+                p0 += beta[i]
+                    * eval_mle(&eq, &eval)
+                    * xor(
+                        eval_mle(&pi[i], &eval),
+                        (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval))
+                            * eval_mle(&pi[add_col(i, 2)], &eval),
+                    );
 
                 eval[step] = -Fr::one();
-                pm1 += beta[i] * eval_mle(&eq, &eval) * xor(
-                    eval_mle(&pi[i], &eval),
-                    (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval)) * eval_mle(&pi[add_col(i, 2)], &eval),
-                );
+                pm1 += beta[i]
+                    * eval_mle(&eq, &eval)
+                    * xor(
+                        eval_mle(&pi[i], &eval),
+                        (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval))
+                            * eval_mle(&pi[add_col(i, 2)], &eval),
+                    );
 
                 eval[step] = Fr::one() + Fr::one();
-                p2 += beta[i] * eval_mle(&eq, &eval) * xor(
-                    eval_mle(&pi[i], &eval),
-                    (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval)) * eval_mle(&pi[add_col(i, 2)], &eval),
-                );
+                p2 += beta[i]
+                    * eval_mle(&eq, &eval)
+                    * xor(
+                        eval_mle(&pi[i], &eval),
+                        (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval))
+                            * eval_mle(&pi[add_col(i, 2)], &eval),
+                    );
 
                 eval[step] = Fr::one();
-                p1 += beta[i] * eval_mle(&eq, &eval) * xor(
-                    eval_mle(&pi[i], &eval),
-                    (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval)) * eval_mle(&pi[add_col(i, 2)], &eval),
-                );
+                p1 += beta[i]
+                    * eval_mle(&eq, &eval)
+                    * xor(
+                        eval_mle(&pi[i], &eval),
+                        (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval))
+                            * eval_mle(&pi[add_col(i, 2)], &eval),
+                    );
 
-                eval[step] = - Fr::one() - Fr::one();
-                pm2+= beta[i] * eval_mle(&eq, &eval) * xor(
-                    eval_mle(&pi[i], &eval),
-                    (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval)) * eval_mle(&pi[add_col(i, 2)], &eval),
-                );
-
+                eval[step] = -Fr::one() - Fr::one();
+                pm2 += beta[i]
+                    * eval_mle(&eq, &eval)
+                    * xor(
+                        eval_mle(&pi[i], &eval),
+                        (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval))
+                            * eval_mle(&pi[add_col(i, 2)], &eval),
+                    );
             }
         }
 
         println!("step {step} v(0) = {}", p0);
         println!("step {step} v(-1) = {}", pm1);
         println!("step {step} v(2) = {}", p2);
-        println!("step {step} v(inf) = {}", (p2 + pm2 - Fr::from_str("4").unwrap() * (p1+pm1) + Fr::from_str("6").unwrap() * p0) / Fr::from_str("24").unwrap());
-
+        println!(
+            "step {step} v(inf) = {}",
+            (p2 + pm2 - Fr::from_str("4").unwrap() * (p1 + pm1) + Fr::from_str("6").unwrap() * p0)
+                / Fr::from_str("24").unwrap()
+        );
     }
 
     let mut checksum = Fr::zero();
     for i in 0..25 {
-        checksum += beta[i] * xor(
-            eval_mle(&pi[i], &proof.r),
-            (Fr::one() - eval_mle(&pi[add_col(i, 1)], &proof.r)) * eval_mle(&pi[add_col(i, 2)], &proof.r),
-        );
+        checksum += beta[i]
+            * xor(
+                eval_mle(&pi[i], &proof.r),
+                (Fr::one() - eval_mle(&pi[add_col(i, 1)], &proof.r))
+                    * eval_mle(&pi[add_col(i, 2)], &proof.r),
+            );
     }
-    assert_eq!(
-        eval_mle(&eq, &proof.r) * checksum,
-        proof.sum
-    );
+    assert_eq!(eval_mle(&eq, &proof.r) * checksum, proof.sum);
 }

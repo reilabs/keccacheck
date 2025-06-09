@@ -2,12 +2,14 @@ use ark_bn254::Fr;
 use ark_ff::Zero;
 use itertools::izip;
 
+use crate::reference::ROUND_CONSTANTS;
+use crate::sumcheck::util::{
+    calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
+};
 use crate::{
     sumcheck::util::{HALF, update, xor},
     transcript::Prover,
 };
-use crate::reference::ROUND_CONSTANTS;
-use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly};
 
 pub struct IotaProof {
     pub sum: Fr,
@@ -24,7 +26,7 @@ pub fn prove_iota(
     chi: &[u64],
     sum: Fr,
 ) -> IotaProof {
-    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
+    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
     let mut chi_00 = to_poly(chi[0]);
     let mut rc = to_poly(ROUND_CONSTANTS[0]);
     let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
@@ -50,7 +52,7 @@ pub fn prove_iota(
     #[cfg(debug_assertions)]
     {
         // sumcheck consumed all polynomials. create again
-        let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
+        let eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
         let chi_00 = to_poly(chi[0]);
         let rc = to_poly(ROUND_CONSTANTS[0]);
         let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
@@ -67,7 +69,10 @@ pub fn prove_iota(
         let e_chi_rlc = eval_mle(&chi_rlc, &proof.r);
         assert_eq!(proof.chi_00, e_chi_00);
         assert_eq!(proof.chi_rlc, e_chi_rlc);
-        assert_eq!(e_eq * (beta[0] * xor(e_chi_00, e_rc) + e_chi_rlc), proof.sum);
+        assert_eq!(
+            e_eq * (beta[0] * xor(e_chi_00, e_rc) + e_chi_rlc),
+            proof.sum
+        );
     }
 
     proof

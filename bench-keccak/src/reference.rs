@@ -1,5 +1,3 @@
-use itertools::Itertools;
-
 pub fn keccak_round(a: &mut [u64], rc: u64) -> Vec<Vec<u64>> {
     assert_eq!(a.len(), 25);
 
