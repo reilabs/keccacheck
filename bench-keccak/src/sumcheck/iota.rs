@@ -27,7 +27,7 @@ pub fn prove_sumcheck_iota(
     let beta_m2 = -beta_00 - beta_00;
 
     let mut rs = Vec::with_capacity(size);
-    for _ in 0..size {
+    for xyz in 0..size {
         // p(x) = p0 + p1 ⋅ x + p2 ⋅ x^2 + p3 ⋅ x^3
         let mut p0 = Fr::zero();
         let mut pem1 = Fr::zero();
@@ -57,6 +57,10 @@ pub fn prove_sumcheck_iota(
         // Compute p1 and p2 from
         //  p(0) + p(1) = 2 ⋅ p0 + p1 + p2 + p3
         //  p(-1) = p0 - p1 + p2 - p3
+        println!("step {xyz} p(0) = {p0}");
+        println!("step {xyz} p(-1) = {pem1}");
+        println!("step {xyz} p(inf) = {p3}");
+
         let p2 = HALF * (sum + pem1 - p0) - p0;
         let p1 = sum - p0 - p0 - p3 - p2;
         assert_eq!(p0 + p0 + p1 + p2 + p3, sum);
@@ -65,6 +69,7 @@ pub fn prove_sumcheck_iota(
         transcript.write(p3);
 
         let r = transcript.read();
+        println!("r = {r}");
         rs.push(r);
         // TODO: Fold update into evaluation loop.
         e = update(e, r);

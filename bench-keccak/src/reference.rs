@@ -45,7 +45,7 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> Vec<Vec<u64>> {
         a[PI[i]] = state_copy[i + 1];
     }
 
-    result.push((a.to_vec()));
+    result.push(a.to_vec());
 
     // Chi
     for y_step in 0..5 {

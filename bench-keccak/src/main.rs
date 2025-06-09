@@ -2,6 +2,8 @@ use ark_bn254::Fr;
 use ark_ff::{AdditiveGroup, One, Zero};
 use itertools::izip;
 
+use crate::sumcheck::chi::prove_sumcheck_chi;
+use crate::sumcheck::util::add_col;
 use crate::{
     reference::{ROUND_CONSTANTS, keccak_round},
     sumcheck::{
@@ -13,13 +15,207 @@ use crate::{
     },
     transcript::{Prover, Verifier},
 };
-use crate::sumcheck::chi::prove_sumcheck_chi;
-use crate::sumcheck::util::add_col;
 
 mod poseidon;
 mod reference;
 mod sumcheck;
 mod transcript;
+
+#[test]
+fn iota_no_recursion() {
+    let input = [
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+    ];
+    let mut buf = input.clone();
+    let output = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
+    // output:
+    // [0] - iota
+    // [1] - chi
+    // [2] - pi
+
+    let num_vars = 6; // a single u64, one instance
+
+    let mut prover = Prover::new();
+    let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
+    let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+
+    let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
+    let chi_00 = to_poly(output[1][0]);
+    let rc = to_poly(ROUND_CONSTANTS[0]);
+    let mut chi_rlc = vec![Fr::ZERO; 1 << num_vars];
+    for el in 1..25 {
+        // iterating from 1 to skip the first state element (i, j) = (0, 0)
+        let poly = to_poly(output[1][el]);
+        for x in 0..(1 << num_vars) {
+            chi_rlc[x] += beta[el] * poly[x];
+        }
+    }
+    let chi = output[1].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
+    let iota = output[0].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
+
+    let real_iota_sum: Fr = iota
+        .iter()
+        .enumerate()
+        .map(|(i, poly)| {
+            beta[i] * eval_mle(&poly, &alpha)
+        })
+        .sum();
+
+    let (pe, prs, _) = {
+        let mut eq = eq.clone();
+        let mut chi_00 = chi_00.clone();
+        let mut rc = rc.clone();
+        let mut chi_rlc = chi_rlc.clone();
+        prove_sumcheck_iota(
+            &mut prover,
+            num_vars,
+            beta[0],
+            &mut eq,
+            &mut chi_00,
+            &mut rc,
+            &mut chi_rlc,
+            real_iota_sum,
+        )
+    };
+    let e_eq = eval_mle(&eq, &prs); // TODO: can evaluate eq faster
+    let e_chi_00 = eval_mle(&chi_00, &prs);
+    let e_rc = eval_mle(&rc, &prs);
+    let e_chi_rlc = eval_mle(&chi_rlc, &prs);
+    assert_eq!(e_eq * (beta[0] * xor(e_chi_00, e_rc) + e_chi_rlc), pe);
+
+    println!("");
+
+    for step in 0..num_vars {
+        let mut p = [Fr::zero(); 4];
+        for i in 0..iota.len() {
+            for k in 0..(1 << (num_vars - step - 1)) {
+                let mut under_sum = to_poly(k)[0..(num_vars - step - 1)].to_vec();
+                let mut eval = vec![Fr::zero(); step + 1];
+                for k in 0..step {
+                    eval[k] = prs[k];
+                }
+                eval[step] = Fr::zero();
+                eval.extend_from_slice(&under_sum);
+                assert_eq!(eval.len(), num_vars);
+                // println!("eval st {step} i {i} @ 0: {eval:?}");
+
+                let val = if i == 0 {
+                    xor(eval_mle(&chi[i], &eval), eval_mle(&rc, &eval))
+                } else {
+                    eval_mle(&chi[i], &eval)
+                };
+                p[0] += beta[i] * eval_mle(&eq, &eval) * val;
+
+                eval[step] = -Fr::one();
+                let val = if i == 0 {
+                    xor(eval_mle(&chi[i], &eval), eval_mle(&rc, &eval))
+                } else {
+                    eval_mle(&chi[i], &eval)
+                };
+                p[1] += beta[i] * eval_mle(&eq, &eval) * val;
+            }
+        }
+        println!("step {step} v(0) = {}", p[0]);
+        println!("step {step} v(-1) = {}", p[1]);
+    }
+}
+
+#[test]
+fn chi_no_recursion() {
+    let input = [
+        42, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+    ];
+    let mut buf = input.clone();
+    let output = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
+    // output:
+    // [0] - iota
+    // [1] - chi
+    // [2] - pi
+
+    let num_vars = 6; // a single u64, one instance
+
+    let mut prover = Prover::new();
+    let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
+    let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+
+    let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
+    let pi = output[2].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
+    let chi = output[1].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
+
+    let real_chi_sum: Fr = chi
+        .iter()
+        .enumerate()
+        .map(|(i, poly)| beta[i] * eval_mle(&poly, &alpha))
+        .sum();
+
+    let mut pi_sum = Fr::zero();
+    for i in 0..25 {
+        for k in 0..(1 << num_vars) {
+            let e_chi = xor(
+                pi[i][k],
+                (Fr::one() - pi[add_col(i, 1)][k]) * pi[add_col(i, 2)][k],
+            );
+            assert_eq!(chi[i][k], e_chi);
+
+            pi_sum += beta[i] * eq[k] * e_chi;
+        }
+    }
+    assert_eq!(pi_sum, real_chi_sum);
+
+    let (pe, prs) = {
+        let mut eq = eq.clone();
+        let mut pi = pi.clone();
+        prove_sumcheck_chi(&mut prover, num_vars, &beta, &mut eq, &mut pi, &chi, real_chi_sum)
+    };
+
+    for step in 0..num_vars {
+        let mut p = [Fr::zero(); 4];
+        for i in 0..chi.len() {
+            for k in 0..(1 << (num_vars - step - 1)) {
+                let mut under_sum = to_poly(k)[0..(num_vars - step - 1)].to_vec();
+                let mut eval = vec![Fr::zero(); step + 1];
+                for k in 0..step {
+                    eval[k] = prs[k];
+                }
+                eval[step] = Fr::zero();
+                eval.extend_from_slice(&under_sum);
+                assert_eq!(eval.len(), num_vars);
+
+                p[0] += beta[i] * eval_mle(&eq, &eval) * xor(
+                    eval_mle(&pi[i], &eval),
+                    (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval)) * eval_mle(&pi[add_col(i, 2)], &eval),
+                );
+
+                eval[step] = -Fr::one();
+                p[1] += beta[i] * eval_mle(&eq, &eval) * xor(
+                    eval_mle(&pi[i], &eval),
+                    (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval)) * eval_mle(&pi[add_col(i, 2)], &eval),
+                );
+
+                eval[step] = Fr::one() + Fr::one();
+                p[2] += beta[i] * eval_mle(&eq, &eval) * xor(
+                    eval_mle(&pi[i], &eval),
+                    (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval)) * eval_mle(&pi[add_col(i, 2)], &eval),
+                );
+            }
+        }
+        println!("v(0) = {}", p[0]);
+        println!("v(-1) = {}", p[1]);
+        println!("v(2) = {}", p[2]);
+    }
+
+    let mut checksum = Fr::zero();
+    for i in 0..25 {
+        checksum += beta[i] * xor(
+            eval_mle(&pi[i], &prs),
+            (Fr::one() - eval_mle(&pi[add_col(i, 1)], &prs)) * eval_mle(&pi[add_col(i, 2)], &prs),
+        );
+    }
+    assert_eq!(
+        eval_mle(&eq, &prs) * checksum,
+        pe
+    );
+}
 
 fn main() {
     let input = [
@@ -47,17 +243,22 @@ fn main() {
     let rc = to_poly(ROUND_CONSTANTS[0]);
     // - \sum_{ij} \beta_{ij}\chi_{ij}(k) where (i, j) != (0, 0)
     let mut chi_rlc = vec![Fr::ZERO; 1 << num_vars];
-    for el in 1..25 {  // iterating from 1 to skip the first state element (i, j) = (0, 0)
+    for el in 1..25 {
+        // iterating from 1 to skip the first state element (i, j) = (0, 0)
         let poly = to_poly(output[1][el]);
         for x in 0..(1 << num_vars) {
             chi_rlc[x] += beta[el] * poly[x];
         }
     }
 
-    let real_iota_sum: Fr = output[0].iter().enumerate().map(|(i, x)| {
-        let poly = to_poly(*x);
-        beta[i] * eval_mle(&poly, &alpha)
-    }).sum();
+    let real_iota_sum: Fr = output[0]
+        .iter()
+        .enumerate()
+        .map(|(i, x)| {
+            let poly = to_poly(*x);
+            beta[i] * eval_mle(&poly, &alpha)
+        })
+        .sum();
 
     let sum = izip!(&eq, &chi_00, &rc, &chi_rlc)
         .map(|(&a, &b, &c, &d)| a * ((beta[0] * xor(b, c)) + d))
@@ -83,6 +284,7 @@ fn main() {
             sum,
         )
     };
+
     // let proof = prover.finish();
     let e_eq = eval_mle(&eq, &prs); // TODO: can evaluate eq faster
     let e_chi_00 = eval_mle(&chi_00, &prs);
@@ -102,46 +304,77 @@ fn main() {
         beta.iter_mut().skip(1).for_each(|b| *b *= y);
 
         let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&prs);
+        let eq_clone = eq.clone();
         let mut pi = output[2].iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
-
+        let pi_clone = pi.clone();
         let sum = beta[0] * p_chi_00 + y * p_chi_rlc;
         println!("expected sum prover {sum}");
 
-        let real_chi_sum: Fr = output[1].iter().enumerate().map(|(i, x)| {
-            let poly = to_poly(*x);
-            beta[i] * eval_mle(&poly, &prs)
-        }).sum();
-
+        let real_chi_sum: Fr = output[1]
+            .iter()
+            .enumerate()
+            .map(|(i, x)| {
+                let poly = to_poly(*x);
+                beta[i] * eval_mle(&poly, &prs)
+            })
+            .sum();
 
         let chi = output[1].iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
 
         let mut pi_sum = Fr::zero();
-        for i in 0..(1<<num_vars) {
+        for i in 0..(1 << num_vars) {
             for j in 0..pi.len() {
-                pi_sum += beta[j] * eq[i] * xor(pi[j][i], (Fr::one() - pi[add_col(j, 1)][i]) * pi[add_col(j, 2)][i]);
-                assert_eq!(chi[j][i], xor(pi[j][i], (Fr::one() - pi[add_col(j, 1)][i]) * pi[add_col(j, 2)][i]));
+                pi_sum += beta[j]
+                    * eq[i]
+                    * xor(
+                        pi[j][i],
+                        (Fr::one() - pi[add_col(j, 1)][i]) * pi[add_col(j, 2)][i],
+                    );
+                assert_eq!(
+                    chi[j][i],
+                    xor(
+                        pi[j][i],
+                        (Fr::one() - pi[add_col(j, 1)][i]) * pi[add_col(j, 2)][i]
+                    )
+                );
             }
         }
 
         assert_eq!(sum, pi_sum);
         assert_eq!(sum, real_chi_sum);
 
-        prove_sumcheck_chi(
-            &mut prover,
-            num_vars,
-            &beta,
-            &mut eq,
-            &mut pi,
-            sum
-        )
+        let (pe, prs) =
+            prove_sumcheck_chi(&mut prover, num_vars, &beta, &mut eq, &mut pi, &chi, sum);
+
+        let e_eq = eval_mle(&eq_clone, &prs); // TODO: can evaluate eq faster
+        let pi = pi_clone
+            .iter()
+            .map(|p| eval_mle(&p, &prs))
+            .collect::<Vec<_>>();
+        println!("e_eq {e_eq}");
+        println!("e_pi {pi:?}");
+
+        let chi = chi.iter().map(|p| eval_mle(&p, &prs)).collect::<Vec<_>>();
+
+        let mut checksum_pi = Fr::zero();
+        let mut checksum_chi = Fr::zero();
+        for i in 0..pi.len() {
+            checksum_pi +=
+                e_eq * beta[i] * xor(pi[i], (Fr::one() - pi[add_col(i, 1)]) * (pi[add_col(i, 2)]));
+            checksum_chi += beta[i] * chi[i];
+        }
+        println!("checksum {checksum_pi} {checksum_chi} res {pe}");
+        assert_eq!(checksum_pi, pe);
+
+        (pe, prs)
     };
 
     let proof = prover.finish();
 
     // Verify
-    let expected_sum = (0..25).map(|i| {
-        beta[i] * eval_mle(&to_poly(output[0][i]), &alpha)
-    }).sum();
+    let expected_sum = (0..25)
+        .map(|i| beta[i] * eval_mle(&to_poly(output[0][i]), &alpha))
+        .sum();
 
     let mut verifier = Verifier::new(&proof);
 
@@ -154,6 +387,8 @@ fn main() {
     let vs = verifier.read();
     assert_eq!(vs, expected_sum);
     let (ve, vrs) = verify_sumcheck::<3>(&mut verifier, num_vars, vs);
+    assert_eq!(vrs, prs);
+    assert_eq!(ve, pe);
 
     let chi_00 = verifier.read();
     let chi_rlc = verifier.read();
@@ -169,10 +404,12 @@ fn main() {
     let expected_sum = beta[0] * chi_00 + y * chi_rlc;
     println!("expected sum verifier {expected_sum}");
 
+    let (ve, vrs) = verify_sumcheck::<4>(&mut verifier, num_vars, expected_sum);
+    assert_eq!(vrs, prs_chi);
+    assert_eq!(ve, pe_chi);
+
     // Verify last step
     //
     // NOTE: being lazy here, we've already tested prs and pe values after proving step.
     // Here just making sure they are the same. In practice, this should be a separate implementation.
-    assert_eq!(vrs, prs);
-    assert_eq!(ve, pe);
 }
