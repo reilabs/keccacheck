@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use ark_bn254::Fr;
 use ark_ff::{AdditiveGroup, One, Zero};
 use itertools::izip;
@@ -169,7 +170,12 @@ fn chi_no_recursion() {
     };
 
     for step in 0..num_vars {
-        let mut p = [Fr::zero(); 4];
+        let mut pm2 = Fr::zero();
+        let mut pm1 = Fr::zero();
+        let mut p0 = Fr::zero();
+        let mut p1 = Fr::zero();
+        let mut p2 = Fr::zero();
+
         for i in 0..chi.len() {
             for k in 0..(1 << (num_vars - step - 1)) {
                 let mut under_sum = to_poly(k)[0..(num_vars - step - 1)].to_vec();
@@ -181,27 +187,43 @@ fn chi_no_recursion() {
                 eval.extend_from_slice(&under_sum);
                 assert_eq!(eval.len(), num_vars);
 
-                p[0] += beta[i] * eval_mle(&eq, &eval) * xor(
+                p0 += beta[i] * eval_mle(&eq, &eval) * xor(
                     eval_mle(&pi[i], &eval),
                     (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval)) * eval_mle(&pi[add_col(i, 2)], &eval),
                 );
 
                 eval[step] = -Fr::one();
-                p[1] += beta[i] * eval_mle(&eq, &eval) * xor(
+                pm1 += beta[i] * eval_mle(&eq, &eval) * xor(
                     eval_mle(&pi[i], &eval),
                     (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval)) * eval_mle(&pi[add_col(i, 2)], &eval),
                 );
 
                 eval[step] = Fr::one() + Fr::one();
-                p[2] += beta[i] * eval_mle(&eq, &eval) * xor(
+                p2 += beta[i] * eval_mle(&eq, &eval) * xor(
                     eval_mle(&pi[i], &eval),
                     (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval)) * eval_mle(&pi[add_col(i, 2)], &eval),
                 );
+
+                eval[step] = Fr::one();
+                p1 += beta[i] * eval_mle(&eq, &eval) * xor(
+                    eval_mle(&pi[i], &eval),
+                    (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval)) * eval_mle(&pi[add_col(i, 2)], &eval),
+                );
+
+                eval[step] = - Fr::one() - Fr::one();
+                pm2+= beta[i] * eval_mle(&eq, &eval) * xor(
+                    eval_mle(&pi[i], &eval),
+                    (Fr::one() - eval_mle(&pi[add_col(i, 1)], &eval)) * eval_mle(&pi[add_col(i, 2)], &eval),
+                );
+
             }
         }
-        println!("v(0) = {}", p[0]);
-        println!("v(-1) = {}", p[1]);
-        println!("v(2) = {}", p[2]);
+
+        println!("step {step} v(0) = {}", p0);
+        println!("step {step} v(-1) = {}", pm1);
+        println!("step {step} v(2) = {}", p2);
+        println!("step {step} v(inf) = {}", (p2 + pm2 - Fr::from_str("4").unwrap() * (p1+pm1) + Fr::from_str("6").unwrap() * p0) / Fr::from_str("24").unwrap());
+
     }
 
     let mut checksum = Fr::zero();
