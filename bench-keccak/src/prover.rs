@@ -33,8 +33,8 @@ pub fn prove(num_vars: usize, layers: &[Vec<u64>]) -> Vec<Fr> {
     beta.iter_mut().skip(1).for_each(|b| *b *= y);
     let sum = beta[0] * iota_proof.chi_00 + y * iota_proof.chi_rlc;
 
-    // prove chi
-    let chi_proof = prove_chi(&mut prover, num_vars, &iota_proof.r, &beta, &layers[2], sum);
+    // prove chi & pi
+    let pi_chi_proof = prove_chi(&mut prover, num_vars, &iota_proof.r, &beta, &layers[2], sum);
 
     // done
     prover.finish()

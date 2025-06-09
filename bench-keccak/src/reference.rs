@@ -1,3 +1,13 @@
+pub fn apply_pi(rho: &[u64], pi: &mut [u64]) {
+    // Position (0,0) doesn't change
+    // For all other positions, use the PI mapping
+    for i in 0..24 {
+        // i+1 is the source position (skipping 0,0)
+        // PI[i] is the target position
+        pi[PI[i]] = rho[i + 1];
+    }
+}
+
 pub fn keccak_round(a: &mut [u64], rc: u64) -> Vec<Vec<u64>> {
     assert_eq!(a.len(), 25);
 
@@ -31,19 +41,22 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> Vec<Vec<u64>> {
         a[x] = a[x].rotate_left(RHO_OFFSETS[x - 1]);
     }
 
+    result.push(a.to_vec());
+
     // Pi
     // Permute the positions of lanes
     let state_copy = a.to_owned();
+    apply_pi(&state_copy, a);
+    // // Position (0,0) doesn't change
+    // // For all other positions, use the PI mapping
+    // for i in 0..24 {
+    //     // i+1 is the source position (skipping 0,0)
+    //     // PI[i] is the target position
+    //     a[PI[i]] = state_copy[i + 1];
+    // }
 
-    // Position (0,0) doesn't change
-    // For all other positions, use the PI mapping
-    for i in 0..24 {
-        // i+1 is the source position (skipping 0,0)
-        // PI[i] is the target position
-        a[PI[i]] = state_copy[i + 1];
-    }
-
-    result.push(a.to_vec());
+    // no need to store pi, it only relabels elements
+    // result.push(a.to_vec());
 
     // Chi
     for y_step in 0..5 {

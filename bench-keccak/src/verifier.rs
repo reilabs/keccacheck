@@ -1,4 +1,4 @@
-use crate::reference::ROUND_CONSTANTS;
+use crate::reference::{apply_pi, ROUND_CONSTANTS};
 use crate::sumcheck::util::{
     add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
     verify_sumcheck, xor,
@@ -43,9 +43,11 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     beta.iter_mut().skip(1).for_each(|b| *b *= y);
     let expected_sum = beta[0] * chi_00 + y * chi_rlc;
 
-    // verify chi, assume pi is the final layer
-    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&vrs);
-    let mut pis = input.iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
+    // verify chi, assume rho is the final layer
+    let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&vrs);
+    let mut pis = input.to_vec();
+    apply_pi(input, &mut pis);
+    let pis = pis.iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
 
     let (ve, vrs) = verify_sumcheck::<4>(&mut verifier, num_vars, expected_sum);
 

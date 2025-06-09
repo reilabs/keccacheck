@@ -9,6 +9,7 @@ use crate::{
     sumcheck::util::{HALF, update, xor},
     transcript::Prover,
 };
+use crate::reference::{apply_pi, PI};
 
 pub struct ChiProof {
     pub sum: Fr,
@@ -21,9 +22,12 @@ pub fn prove_chi(
     num_vars: usize,
     r: &[Fr],
     beta: &[Fr],
-    pi: &[u64],
+    rho: &[u64],
     sum: Fr,
 ) -> ChiProof {
+    let mut pi = rho.to_vec();
+    apply_pi(rho, &mut pi);
+
     let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
     let mut pis = pi.iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
 
