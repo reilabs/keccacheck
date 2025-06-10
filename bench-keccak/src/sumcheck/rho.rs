@@ -2,17 +2,32 @@ use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use std::str::FromStr;
 
-use crate::sumcheck::util::{
-    eval_mle, to_poly,
-};
+use crate::sumcheck::util::{eval_mle, partial_eval_mle, to_poly};
 use crate::{
     sumcheck::util::{HALF, update, xor},
     transcript::Prover,
 };
+use crate::reference::RHO_OFFSETS;
+
+pub fn rot_poly(k: usize) -> Vec<Fr> {
+    let mut result = Vec::with_capacity(1<<12);
+    for a in 0..(1<<6) {
+        for b in 0..(1<<6) {
+            if a == (b + k) % 64 {
+                result.push(Fr::one());
+            } else {
+                result.push(Fr::zero());
+            }
+        }
+    }
+    result
+}
 
 /// List of evaluations for rot_i(r, x) over the boolean hypercube
 pub fn calculate_evaluations_over_boolean_hypercube_for_rot(r: &[Fr], i: usize) -> Vec<Fr> {
-    todo!()
+    // TODO: calc from one to simplify the code
+    let rot = rot_poly(RHO_OFFSETS[i] as usize);
+    partial_eval_mle(&rot, r)
 }
 
 pub struct RhoProof {

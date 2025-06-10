@@ -8,6 +8,7 @@ use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use std::str::FromStr;
+use crate::sumcheck::rho::{calculate_evaluations_over_boolean_hypercube_for_rot, prove_sumcheck_rho};
 
 #[test]
 fn iota_no_recursion() {
@@ -108,7 +109,7 @@ fn iota_no_recursion() {
 }
 
 #[test]
-fn chi_no_recursion() {
+fn pi_chi_no_recursion() {
     let input = [
         42, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
     ];
@@ -239,4 +240,49 @@ fn chi_no_recursion() {
             );
     }
     assert_eq!(eval_mle(&eq, &proof.r) * checksum, proof.sum);
+}
+
+#[test]
+fn rho_no_recursion() {
+    let input = [
+        42, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+    ];
+    let mut buf = input;
+    let output = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
+    // output:
+    // [0] - iota
+    // [1] - chi
+    //  pi is only reordered rho
+    // [2] - rho
+    // [3] theta
+
+    let num_vars = 6; // a single u64, one instance
+
+    let mut prover = Prover::new();
+    let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
+    let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+
+    let rot = (0..25).map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(&alpha, i)).collect::<Vec<_>>();
+    let theta = output[3].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
+    let rho = output[2].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
+
+    let real_rho_sum: Fr = rho
+        .iter()
+        .enumerate()
+        .map(|(i, poly)| beta[i] * eval_mle(poly, &alpha))
+        .sum();
+
+    let mut theta_sum = Fr::zero();
+    for i in 0..25 {
+        for k in 0..(1 << num_vars) {
+            theta_sum += beta[i] * rot[i][k] * theta[i][k];
+        }
+    }
+    assert_eq!(theta_sum, real_rho_sum);
+
+    let proof = {
+        let mut rots = rot.clone();
+        let mut thetas = theta.clone();
+        prove_sumcheck_rho(&mut prover, num_vars, &beta, &mut rots, &mut thetas, real_rho_sum)
+    };
 }

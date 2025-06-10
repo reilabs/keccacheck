@@ -104,6 +104,18 @@ pub fn eval_mle(coefficients: &[Fr], eval: &[Fr]) -> Fr {
     }
 }
 
+pub fn partial_eval_mle(coefficients: &[Fr], eval: &[Fr]) -> Vec<Fr> {
+    //debug_assert_eq!(coefficients.len(), 1 << eval.len());
+    if let Some((&x, tail)) = eval.split_first() {
+        let (c0, c1) = coefficients.split_at(coefficients.len() / 2);
+        partial_eval_mle(c0, tail).iter().zip(partial_eval_mle(c1, tail)).map(|(c0, c1)| {
+            (Fr::one() - x) * c0 + x * c1
+        }).collect()
+    } else {
+        coefficients.to_vec()
+    }
+}
+
 #[inline(always)]
 pub fn add_col(j: usize, add: usize) -> usize {
     let col = j % 5;

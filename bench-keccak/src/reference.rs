@@ -34,11 +34,13 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> Vec<Vec<u64>> {
         }
     }
 
+    result.push(a.to_vec());
+
     // Rho
     // Apply rotation to each lane
     for x in 1..25 {
-        // Skip position (0,0)
-        a[x] = a[x].rotate_left(RHO_OFFSETS[x - 1]);
+        // Skip position (0,0) - it doesn't rotate
+        a[x] = a[x].rotate_left(RHO_OFFSETS[x]);
     }
 
     result.push(a.to_vec());
@@ -109,8 +111,8 @@ pub const ROUND_CONSTANTS: [u64; 24] = [
     0x8000000080008008,
 ];
 
-pub const RHO_OFFSETS: [u32; 24] = [
-    1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14,
+pub const RHO_OFFSETS: [u32; 25] = [
+    0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14,
 ];
 
 pub const PI: [usize; 24] = [
