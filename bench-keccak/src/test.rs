@@ -2,7 +2,7 @@ use crate::reference::{ROUND_CONSTANTS, keccak_round};
 use crate::sumcheck::chi::prove_sumcheck_chi;
 use crate::sumcheck::iota::prove_sumcheck_iota;
 use crate::sumcheck::rho::{
-    calculate_evaluations_over_boolean_hypercube_for_rot, prove_rho, prove_sumcheck_rho,
+    calculate_evaluations_over_boolean_hypercube_for_rot, prove_rho,
 };
 use crate::sumcheck::util::{
     add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly, xor,

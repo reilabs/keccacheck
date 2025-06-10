@@ -1,4 +1,3 @@
-use ark_bn254::Fr;
 
 pub fn apply_pi<T: Copy>(rho: &[T], pi: &mut [T]) {
     // Position (0,0) doesn't change

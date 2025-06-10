@@ -1,4 +1,4 @@
-use crate::reference::{apply_pi, strip_pi};
+use crate::reference::strip_pi;
 use crate::sumcheck::chi::prove_chi;
 use crate::sumcheck::iota::prove_iota;
 use crate::sumcheck::rho::prove_rho;

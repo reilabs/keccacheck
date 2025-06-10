@@ -2,7 +2,7 @@ use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use std::str::FromStr;
 
-use crate::reference::{PI, apply_pi};
+use crate::reference::apply_pi;
 use crate::sumcheck::util::{
     add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
 };

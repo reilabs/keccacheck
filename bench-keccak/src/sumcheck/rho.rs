@@ -1,11 +1,10 @@
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
-use std::str::FromStr;
 
 use crate::reference::RHO_OFFSETS;
 use crate::sumcheck::util::{eval_mle, partial_eval_mle, to_poly};
 use crate::{
-    sumcheck::util::{HALF, update, xor},
+    sumcheck::util::update,
     transcript::Prover,
 };
 
@@ -46,7 +45,7 @@ pub fn prove_rho(
     sum: Fr,
 ) -> RhoProof {
     let mut rots = (0..25)
-        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(&r, i))
+        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(r, i))
         .collect::<Vec<_>>();
     let mut thetas = theta.iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
 
@@ -59,7 +58,7 @@ pub fn prove_rho(
             .enumerate()
             .map(|(i, theta)| {
                 let theta = to_poly(*theta);
-                let rot = calculate_evaluations_over_boolean_hypercube_for_rot(&r, i);
+                let rot = calculate_evaluations_over_boolean_hypercube_for_rot(r, i);
                 beta[i] * eval_mle(&theta, &proof.r) * eval_mle(&rot, &proof.r)
             })
             .sum();

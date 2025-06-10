@@ -1,4 +1,4 @@
-use crate::reference::{ROUND_CONSTANTS, apply_pi, strip_pi};
+use crate::reference::{ROUND_CONSTANTS, strip_pi};
 use crate::sumcheck::rho::calculate_evaluations_over_boolean_hypercube_for_rot;
 use crate::sumcheck::util::{
     add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
@@ -9,7 +9,7 @@ use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 
 pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
-    let mut verifier = Verifier::new(&proof);
+    let mut verifier = Verifier::new(proof);
 
     // TODO: feed output to the verifier before obtaining alpha
     let alpha = (0..num_vars)
@@ -79,7 +79,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
 
     let e_rot = rot
         .iter()
-        .map(|poly| eval_mle(&poly, &vrs))
+        .map(|poly| eval_mle(poly, &vrs))
         .collect::<Vec<_>>();
     let checksum = (0..25).map(|i| beta[i] * e_rot[i] * theta[i]).sum::<Fr>();
     assert_eq!(checksum, ve);
