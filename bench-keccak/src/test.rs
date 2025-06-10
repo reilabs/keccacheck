@@ -8,7 +8,7 @@ use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use std::str::FromStr;
-use crate::sumcheck::rho::{calculate_evaluations_over_boolean_hypercube_for_rot, prove_sumcheck_rho};
+use crate::sumcheck::rho::{calculate_evaluations_over_boolean_hypercube_for_rot, prove_rho, prove_sumcheck_rho};
 
 #[test]
 fn iota_no_recursion() {
@@ -262,8 +262,6 @@ fn rho_no_recursion() {
     let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
     let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
-    let rot = (0..25).map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(&alpha, i)).collect::<Vec<_>>();
-    let theta = output[3].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
     let rho = output[2].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
 
     let real_rho_sum: Fr = rho
@@ -272,20 +270,25 @@ fn rho_no_recursion() {
         .map(|(i, poly)| beta[i] * eval_mle(poly, &alpha))
         .sum();
 
-    let mut theta_sum = Fr::zero();
-    for i in 0..25 {
-        for k in 0..(1 << num_vars) {
-            theta_sum += beta[i] * rot[i][k] * theta[i][k];
-        }
-    }
-    assert_eq!(theta_sum, real_rho_sum);
+    let proof = prove_rho(&mut prover, num_vars, &alpha, &beta, &output[3], real_rho_sum);
 
-    let proof = {
-        let mut rots = rot.clone();
-        let mut thetas = theta.clone();
-        prove_sumcheck_rho(&mut prover, num_vars, &beta, &mut rots, &mut thetas, real_rho_sum)
-    };
-
+    let rot = (0..25).map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(&alpha, i)).collect::<Vec<_>>();
+    let theta = output[3].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
+    //
+    // let mut theta_sum = Fr::zero();
+    // for i in 0..25 {
+    //     for k in 0..(1 << num_vars) {
+    //         theta_sum += beta[i] * rot[i][k] * theta[i][k];
+    //     }
+    // }
+    // assert_eq!(theta_sum, real_rho_sum);
+    //
+    // let proof = {
+    //     let mut rots = rot.clone();
+    //     let mut thetas = theta.clone();
+    //     prove_sumcheck_rho(&mut prover, num_vars, &beta, &mut rots, &mut thetas, real_rho_sum)
+    // };
+    //
     let mut checksum = Fr::zero();
     for i in 0..25 {
         checksum += beta[i] * eval_mle(&rot[i], &proof.r) * eval_mle(&theta[i], &proof.r);

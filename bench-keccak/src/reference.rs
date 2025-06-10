@@ -1,10 +1,22 @@
-pub fn apply_pi(rho: &[u64], pi: &mut [u64]) {
+use ark_bn254::Fr;
+
+pub fn apply_pi<T: Copy>(rho: &[T], pi: &mut [T]) {
     // Position (0,0) doesn't change
     // For all other positions, use the PI mapping
     for i in 0..24 {
         // i+1 is the source position (skipping 0,0)
         // PI[i] is the target position
         pi[PI[i]] = rho[i + 1];
+    }
+}
+
+pub fn strip_pi<T: Copy>(pi: &[T], rho: &mut [T]) {
+    // Position (0,0) doesn't change
+    // For all other positions, use the PI mapping
+    for i in 0..24 {
+        // i+1 is the source position (skipping 0,0)
+        // PI[i] is the target position
+        rho[i+1] = pi[PI[i]];
     }
 }
 
