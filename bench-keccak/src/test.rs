@@ -285,4 +285,10 @@ fn rho_no_recursion() {
         let mut thetas = theta.clone();
         prove_sumcheck_rho(&mut prover, num_vars, &beta, &mut rots, &mut thetas, real_rho_sum)
     };
+
+    let mut checksum = Fr::zero();
+    for i in 0..25 {
+        checksum += beta[i] * eval_mle(&rot[i], &proof.r) * eval_mle(&theta[i], &proof.r);
+    }
+    assert_eq!(checksum, proof.sum);
 }

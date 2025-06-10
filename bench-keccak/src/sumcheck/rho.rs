@@ -9,8 +9,10 @@ use crate::{
 };
 use crate::reference::RHO_OFFSETS;
 
+// rotate input k bits left to 
 pub fn rot_poly(k: usize) -> Vec<Fr> {
     let mut result = Vec::with_capacity(1<<12);
+    // a is output, b is input
     for a in 0..(1<<6) {
         for b in 0..(1<<6) {
             if a == (b + k) % 64 {
@@ -25,7 +27,6 @@ pub fn rot_poly(k: usize) -> Vec<Fr> {
 
 /// List of evaluations for rot_i(r, x) over the boolean hypercube
 pub fn calculate_evaluations_over_boolean_hypercube_for_rot(r: &[Fr], i: usize) -> Vec<Fr> {
-    // TODO: calc from one to simplify the code
     let rot = rot_poly(RHO_OFFSETS[i] as usize);
     partial_eval_mle(&rot, r)
 }
