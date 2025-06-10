@@ -1,6 +1,9 @@
 use crate::reference::{ROUND_CONSTANTS, keccak_round};
 use crate::sumcheck::chi::prove_sumcheck_chi;
 use crate::sumcheck::iota::prove_sumcheck_iota;
+use crate::sumcheck::rho::{
+    calculate_evaluations_over_boolean_hypercube_for_rot, prove_rho, prove_sumcheck_rho,
+};
 use crate::sumcheck::util::{
     add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly, xor,
 };
@@ -8,7 +11,6 @@ use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use std::str::FromStr;
-use crate::sumcheck::rho::{calculate_evaluations_over_boolean_hypercube_for_rot, prove_rho, prove_sumcheck_rho};
 
 #[test]
 fn iota_no_recursion() {
@@ -270,9 +272,18 @@ fn rho_no_recursion() {
         .map(|(i, poly)| beta[i] * eval_mle(poly, &alpha))
         .sum();
 
-    let proof = prove_rho(&mut prover, num_vars, &alpha, &beta, &output[3], real_rho_sum);
+    let proof = prove_rho(
+        &mut prover,
+        num_vars,
+        &alpha,
+        &beta,
+        &output[3],
+        real_rho_sum,
+    );
 
-    let rot = (0..25).map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(&alpha, i)).collect::<Vec<_>>();
+    let rot = (0..25)
+        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(&alpha, i))
+        .collect::<Vec<_>>();
     let theta = output[3].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
     //
     // let mut theta_sum = Fr::zero();

@@ -16,7 +16,7 @@ pub fn strip_pi<T: Copy>(pi: &[T], rho: &mut [T]) {
     for i in 0..24 {
         // i+1 is the source position (skipping 0,0)
         // PI[i] is the target position
-        rho[i+1] = pi[PI[i]];
+        rho[i + 1] = pi[PI[i]];
     }
 }
 

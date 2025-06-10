@@ -1,11 +1,11 @@
+use crate::reference::{apply_pi, strip_pi};
 use crate::sumcheck::chi::prove_chi;
 use crate::sumcheck::iota::prove_iota;
+use crate::sumcheck::rho::prove_rho;
 use crate::sumcheck::util::{eval_mle, to_poly};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::Zero;
-use crate::reference::{apply_pi, strip_pi};
-use crate::sumcheck::rho::prove_rho;
 
 pub fn prove(num_vars: usize, layers: &[Vec<u64>]) -> Vec<Fr> {
     let mut prover = Prover::new();
@@ -39,19 +39,26 @@ pub fn prove(num_vars: usize, layers: &[Vec<u64>]) -> Vec<Fr> {
     // prove chi
     let pi_chi_proof = prove_chi(&mut prover, num_vars, &iota_proof.r, &beta, &layers[2], sum);
 
-    // reorder pi subclaims
-    let mut pi = pi_chi_proof.pi.clone();
-    strip_pi(&pi_chi_proof.pi, &mut pi);
+    // strip pi to get rho
+    let mut rho = pi_chi_proof.pi.clone();
+    strip_pi(&pi_chi_proof.pi, &mut rho);
 
-    // combine subclaims on pi
+    // combine subclaims on rho
     let mut sum = Fr::zero();
     beta.iter_mut().enumerate().for_each(|(i, b)| {
         *b = prover.read();
-        sum += *b * pi[i];
+        sum += *b * rho[i];
     });
 
     // prove rho
-    let rho_proof = prove_rho(&mut prover, num_vars, &pi_chi_proof.r, &beta, &layers[3], sum);
+    let rho_proof = prove_rho(
+        &mut prover,
+        num_vars,
+        &pi_chi_proof.r,
+        &beta,
+        &layers[3],
+        sum,
+    );
 
     // done
     prover.finish()

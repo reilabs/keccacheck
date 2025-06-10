@@ -2,19 +2,19 @@ use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use std::str::FromStr;
 
+use crate::reference::RHO_OFFSETS;
 use crate::sumcheck::util::{eval_mle, partial_eval_mle, to_poly};
 use crate::{
     sumcheck::util::{HALF, update, xor},
     transcript::Prover,
 };
-use crate::reference::RHO_OFFSETS;
 
-// rotate input k bits left to 
+// rotate input k bits left to
 pub fn rot_poly(k: usize) -> Vec<Fr> {
-    let mut result = Vec::with_capacity(1<<12);
+    let mut result = Vec::with_capacity(1 << 12);
     // a is output, b is input
-    for a in 0..(1<<6) {
-        for b in 0..(1<<6) {
+    for a in 0..(1 << 6) {
+        for b in 0..(1 << 6) {
             if a == (b + k) % 64 {
                 result.push(Fr::one());
             } else {
@@ -45,9 +45,9 @@ pub fn prove_rho(
     theta: &[u64],
     sum: Fr,
 ) -> RhoProof {
-    let mut rots = (0..25).map(|i| {
-        calculate_evaluations_over_boolean_hypercube_for_rot(&r, i)
-    }).collect::<Vec<_>>();
+    let mut rots = (0..25)
+        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(&r, i))
+        .collect::<Vec<_>>();
     let mut thetas = theta.iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
 
     let proof = prove_sumcheck_rho(transcript, num_vars, beta, &mut rots, &mut thetas, sum);
@@ -105,14 +105,10 @@ pub fn prove_sumcheck_rho(
         for i in 0..rot[0].0.len() {
             for j in 0..theta.len() {
                 // Evaluation at 0
-                p0 += beta[j]
-                    * rot[j].0[i]
-                    * theta[j].0[i];
+                p0 += beta[j] * rot[j].0[i] * theta[j].0[i];
 
                 // Evaluation at ∞
-                p2 += beta[j]
-                    * (rot[j].1[i] - rot[j].0[i])
-                    * (theta[j].1[i] - theta[j].0[i]);
+                p2 += beta[j] * (rot[j].1[i] - rot[j].0[i]) * (theta[j].1[i] - theta[j].0[i]);
             }
         }
 
@@ -142,9 +138,7 @@ pub fn prove_sumcheck_rho(
 
     let mut checksum = Fr::zero();
     for j in 0..thetas.len() {
-        checksum += beta[j]
-            * rots[j][0]
-            * thetas[j][0];
+        checksum += beta[j] * rots[j][0] * thetas[j][0];
     }
     assert_eq!(sum, checksum);
     RhoProof {
