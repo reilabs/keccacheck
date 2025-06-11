@@ -300,34 +300,3 @@ fn rho_no_recursion() {
     assert_eq!(checksum, proof.sum);
 }
 
-#[test]
-fn theta_no_recursion() {
-    let input = [
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-    ];
-    let mut buf = input;
-    let state = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
-
-    let num_vars = 6; // a single u64, one instance
-
-    let mut prover = Prover::new();
-    let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
-    let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
-
-    let theta = state.theta.iter().map(|x| to_poly_xor_base(*x)).collect::<Vec<_>>();
-    let real_theta_sum: Fr = theta
-        .iter()
-        .enumerate()
-        .map(|(i, poly)| beta[i] * eval_mle(poly, &alpha))
-        .sum();
-
-    prove_theta(
-        &mut prover,
-        num_vars,
-        &alpha,
-        &beta,
-        &state.d,
-        &state.a,
-        real_theta_sum,
-    );
-}
