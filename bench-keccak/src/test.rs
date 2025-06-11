@@ -17,10 +17,6 @@ fn iota_no_recursion() {
     ];
     let mut buf = input;
     let output = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
-    // output:
-    // [0] - iota
-    // [1] - chi
-    // [2] - pi
 
     let num_vars = 6; // a single u64, one instance
 
@@ -119,10 +115,6 @@ fn pi_chi_no_recursion() {
     ];
     let mut buf = input;
     let output = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
-    // output:
-    // [0] - iota
-    // [1] - chi
-    // [2] - pi
 
     let num_vars = 6; // a single u64, one instance
 
@@ -259,12 +251,6 @@ fn rho_no_recursion() {
     ];
     let mut buf = input;
     let output = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
-    // output:
-    // [0] - iota
-    // [1] - chi
-    //  pi is only reordered rho
-    // [2] - rho
-    // [3] theta
 
     let num_vars = 6; // a single u64, one instance
 

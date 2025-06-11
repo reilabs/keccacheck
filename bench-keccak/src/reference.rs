@@ -36,28 +36,27 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
     assert_eq!(a.len(), 25);
 
     let mut result = KeccakRoundState::default();
-
-    let mut array: [u64; 5] = [0; 5];
-
+    result.a = a.to_vec();
+    
     // Theta
-    // english: xor all 5 state columns into 5-element array
+    let mut c: [u64; 5] = [0; 5];
     for x in 0..5 {
         for y_count in 0..5 {
             let y = y_count * 5;
-            array[x] ^= a[x + y];
+            c[x] ^= a[x + y];
         }
     }
-    for x in 0..5 {
-        // for each column:
-        //   d = xor previous and (next with bits rotated) (wrapping)
-        //   for each state element: element xor d
-        let d = array[(x + 4) % 5] ^ array[(x + 1) % 5].rotate_left(1);
-        for y_count in 0..5 {
-            let y = y_count * 5;
-            a[y + x] ^= d;
-        }
-    }
+    result.c = c.to_vec();
 
+    let mut d: [u64; 5] = [0; 5];
+    for x in 0..5 {
+        d[x] = c[(x + 4) % 5] ^ c[(x + 1) % 5].rotate_left(1);
+        for y_count in 0..5 {
+            let y = y_count * 5;
+            a[y + x] ^= d[x];
+        }
+    }
+    result.d = d.to_vec();
     result.theta = a.to_vec();
 
     // Rho
@@ -73,27 +72,17 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
     // Permute the positions of lanes
     let state_copy = a.to_owned();
     apply_pi(&state_copy, a);
-    // // Position (0,0) doesn't change
-    // // For all other positions, use the PI mapping
-    // for i in 0..24 {
-    //     // i+1 is the source position (skipping 0,0)
-    //     // PI[i] is the target position
-    //     a[PI[i]] = state_copy[i + 1];
-    // }
-
-    // no need to store pi, it only relabels elements
-    // result.push(a.to_vec());
 
     // Chi
     for y_step in 0..5 {
         let y = y_step * 5;
 
         for x in 0..5 {
-            array[x] = a[y + x];
+            c[x] = a[y + x];
         }
 
         for x in 0..5 {
-            a[y + x] = array[x] ^ ((!array[(x + 1) % 5]) & (array[(x + 2) % 5]));
+            a[y + x] = c[x] ^ ((!c[(x + 1) % 5]) & (c[(x + 2) % 5]));
         }
     }
 
