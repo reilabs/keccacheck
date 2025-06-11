@@ -1,4 +1,4 @@
-use crate::sumcheck::theta::prove_sumcheck_theta;
+use crate::sumcheck::theta::{prove_sumcheck_theta, prove_theta};
 use crate::reference::{ROUND_CONSTANTS, apply_pi, keccak_round};
 use crate::sumcheck::chi::prove_sumcheck_chi;
 use crate::sumcheck::iota::prove_sumcheck_iota;
@@ -314,22 +314,6 @@ fn theta_no_recursion() {
     let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
     let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
-    let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
-    let d = (0..5).map(|i| {
-        to_poly_xor_base(state.d[i])
-    }).collect::<Vec<_>>();
-    let ai = (0..5).map(|i| {
-        let mut rlc = vec![Fr::zero(); 1 << num_vars];
-        for j in 0..5 {
-            let idx = j * 5 + i;
-            let poly = to_poly_xor_base(state.a[idx]);
-            for x in 0..(1<<num_vars) {
-                rlc[x] += beta[idx] * poly[x];
-            }
-        }
-        rlc
-    }).collect::<Vec<_>>();
-
     let theta = state.theta.iter().map(|x| to_poly_xor_base(*x)).collect::<Vec<_>>();
     let real_theta_sum: Fr = theta
         .iter()
@@ -337,26 +321,13 @@ fn theta_no_recursion() {
         .map(|(i, poly)| beta[i] * eval_mle(poly, &alpha))
         .sum();
 
-    let mut ai_d_sum = Fr::zero();
-    for j in 0..d.len() {
-        for x in 0..(1 << num_vars) {
-            ai_d_sum += eq[x] * d[j][x] * ai[j][x];
-        }
-    }
-    assert_eq!(ai_d_sum, real_theta_sum);
-
-    let _proof = {
-        let mut eq = eq.clone();
-        let mut d = d.clone();
-        let mut ai = ai.clone();
-
-        prove_sumcheck_theta(
-            &mut prover,
-            num_vars,
-            &mut eq,
-            &mut d,
-            &mut ai,
-            real_theta_sum,
-        )
-    };
+    prove_theta(
+        &mut prover,
+        num_vars,
+        &alpha,
+        &beta,
+        &state.d,
+        &state.a,
+        real_theta_sum,
+    );
 }

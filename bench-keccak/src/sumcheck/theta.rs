@@ -1,6 +1,6 @@
 use ark_bn254::Fr;
 use ark_ff::Zero;
-use crate::sumcheck::util::{update, HALF};
+use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, to_poly_xor_base, update, HALF};
 use crate::transcript::Prover;
 
 pub struct ThetaProof {
@@ -19,7 +19,36 @@ pub fn prove_theta(
     a: &[u64],
     sum: Fr,
 ) -> ThetaProof {
-    todo!()
+    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
+    let mut d = (0..5).map(|i| {
+        to_poly_xor_base(d[i])
+    }).collect::<Vec<_>>();
+    let mut ai = (0..5).map(|i| {
+        let mut rlc = vec![Fr::zero(); 1 << num_vars];
+        for j in 0..5 {
+            let idx = j * 5 + i;
+            let poly = to_poly_xor_base(a[idx]);
+            for x in 0..(1<<num_vars) {
+                rlc[x] += beta[idx] * poly[x];
+            }
+        }
+        rlc
+    }).collect::<Vec<_>>();
+
+    #[cfg(debug_assertions)]
+    {
+        let mut ai_d_sum = Fr::zero();
+        for j in 0..d.len() {
+            for x in 0..(1 << num_vars) {
+                ai_d_sum += eq[x] * d[j][x] * ai[j][x];
+            }
+        }
+        assert_eq!(ai_d_sum, sum);
+    }
+
+    let proof = prove_sumcheck_theta(transcript, num_vars, &mut eq, &mut d, &mut ai, sum);
+
+    proof
 }
 
 pub fn prove_sumcheck_theta(
