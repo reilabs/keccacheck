@@ -59,7 +59,7 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
     });
 
     // prove rho
-    let rho_proof = prove_rho(
+    let _rho_proof = prove_rho(
         &mut prover,
         num_vars,
         &pi_chi_proof.r,

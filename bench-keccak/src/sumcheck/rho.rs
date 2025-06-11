@@ -76,6 +76,7 @@ pub fn prove_sumcheck_rho(
 ) -> RhoProof {
     #[cfg(debug_assertions)]
     {
+        assert_eq!(rots.len(), thetas.len());
         rots.iter().for_each(|rot| {
             assert_eq!(rot.len(), 1 << size);
         });
@@ -132,11 +133,16 @@ pub fn prove_sumcheck_rho(
         subclaims.push(thetas[j][0]);
     }
 
-    let mut checksum = Fr::zero();
-    for j in 0..thetas.len() {
-        checksum += beta[j] * rots[j][0] * thetas[j][0];
+    // check result
+    #[cfg(debug_assertions)]
+    {
+        let mut checksum = Fr::zero();
+        for j in 0..thetas.len() {
+            checksum += beta[j] * rots[j][0] * thetas[j][0];
+        }
+        assert_eq!(sum, checksum);
     }
-    assert_eq!(sum, checksum);
+
     RhoProof {
         sum,
         r: rs,

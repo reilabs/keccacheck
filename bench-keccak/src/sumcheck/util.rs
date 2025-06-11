@@ -60,6 +60,20 @@ pub fn to_poly(x: u64) -> Vec<Fr> {
     res
 }
 
+pub fn to_poly_xor_base(x: u64) -> Vec<Fr> {
+    let mut res = Vec::with_capacity(64);
+    let mut k = 1;
+    for _ in 0..64 {
+        if x & k > 0 {
+            res.push(-Fr::ONE);
+        } else {
+            res.push(Fr::ONE);
+        }
+        k <<= 1;
+    }
+    res
+}
+
 /// Updates f(x, x') -> f(r, x') and returns f
 pub fn update(f: &mut [Fr], r: Fr) -> &mut [Fr] {
     let (a, b) = f.split_at_mut(f.len() / 2);

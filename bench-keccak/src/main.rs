@@ -12,6 +12,14 @@ mod prover;
 mod test;
 mod verifier;
 
+// High-level tasks:
+// - TODO: support for multiple instances
+// - TODO: add benchmarks
+// - TODO: perf: use multithreaded sumcheck
+// - TODO: perf: reuse pi polynomials in sumcheck
+// - TODO: perf: make sure nested loops leverage CPU cache
+// - TODO: perf: remove unnecessary allocations
+
 fn main() {
     let input = [
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,

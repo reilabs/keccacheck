@@ -1,0 +1,128 @@
+use ark_bn254::Fr;
+use ark_ff::Zero;
+use crate::sumcheck::util::{update, HALF};
+use crate::transcript::Prover;
+
+pub struct ThetaProof {
+    pub sum: Fr,
+    pub r: Vec<Fr>,
+    pub d: Vec<Fr>,
+    pub ai: Vec<Fr>,
+}
+
+pub fn prove_theta(
+    transcript: &mut Prover,
+    num_vars: usize,
+    r: &[Fr],
+    beta: &[Fr],
+    d: &[u64],
+    a: &[u64],
+    sum: Fr,
+) -> ThetaProof {
+    todo!()
+}
+
+pub fn prove_sumcheck_theta(
+    transcript: &mut Prover,
+    size: usize,
+    mut eq:  &mut [Fr],
+    ds: &mut Vec<Vec<Fr>>,
+    ai_rlc: &mut Vec<Vec<Fr>>,
+    mut sum: Fr,
+) -> ThetaProof {
+    #[cfg(debug_assertions)]
+    {
+        assert_eq!(eq.len(), 1 << size);
+        assert_eq!(ds.len(), ai_rlc.len());
+        ds.iter().for_each(|d| {
+            assert_eq!(d.len(), 1 << size);
+        });
+        ai_rlc.iter().for_each(|ai| {
+            assert_eq!(ai.len(), 1 << size);
+        });
+    }
+
+    let mut rs = Vec::with_capacity(size);
+    for _ in 0..size {
+        // p(x) = p0 + p1 ⋅ x + p2 ⋅ x^2 + p3 ⋅ x^3
+        let mut p0 = Fr::zero();
+        let mut pem1 = Fr::zero();
+        let mut p3 = Fr::zero();
+
+        let (e0, e1) = eq.split_at(eq.len() / 2);
+        let d = ds
+            .iter()
+            .map(|x| x.split_at(x.len() / 2))
+            .collect::<Vec<_>>();
+        let ai = ai_rlc
+            .iter()
+            .map(|x| x.split_at(x.len() / 2))
+            .collect::<Vec<_>>();
+
+        for i in 0..d[0].0.len() {
+            for j in 0..d.len() {
+                // Evaluation at 0
+                p0 += e0[i] * d[j].0[i] * ai[j].0[i];
+
+                // Evaluation at -1
+                pem1 += (e0[i] + e0[i] - e1[i]) * (d[j].0[i] + d[j].0[i] - d[j].1[i]) * (ai[j].0[i] + ai[j].0[i] - ai[j].1[i]);
+
+                // Evaluation at ∞
+                p3 += (e1[i] - e0[i]) * (d[j].1[i] - d[j].0[i]) * (ai[j].1[i] - ai[j].0[i]);
+            }
+        }
+
+        // Compute p1 and p2 from
+        //  p(0) + p(1) = 2 ⋅ p0 + p1 + p2 + p3
+        //  p(-1) = p0 - p1 + p2 - p3
+        let p2 = HALF * (sum + pem1 - p0) - p0;
+        let p1 = sum - p0 - p0 - p3 - p2;
+        assert_eq!(sum, p0 + p0 + p1 + p2 + p3);
+        assert_eq!(pem1, p0 - p1 + p2 - p3);
+
+        transcript.write(p1);
+        transcript.write(p2);
+        transcript.write(p3);
+
+        let r = transcript.read();
+        rs.push(r);
+        // TODO: Fold update into evaluation loop.
+        eq = update(eq, r);
+        for j in 0..ds.len() {
+            // TODO: unnecessary allocation
+            ds[j] = update(&mut ds[j], r).to_vec();
+            ai_rlc[j] = update(&mut ai_rlc[j], r).to_vec();
+        }
+
+        // sum = p(r)
+        sum = p0 + r * (p1 + r * (p2 + r * p3));
+    }
+
+    let mut ai_subclaims = Vec::with_capacity(ai_rlc.len());
+    for j in 0..ai_rlc.len() {
+        transcript.write(ai_rlc[j][0]);
+        ai_subclaims.push(ai_rlc[j][0]);
+    }
+    let mut d_subclaims = Vec::with_capacity(ds.len());
+    for j in 0..ds.len() {
+        transcript.write(ds[j][0]);
+        d_subclaims.push(ds[j][0]);
+    }
+
+    // check result
+    #[cfg(debug_assertions)]
+    {
+        let mut checksum = Fr::zero();
+        for j in 0..ds.len() {
+            checksum += eq[0] * ds[j][0] * ai_rlc[j][0];
+        }
+        assert_eq!(sum, checksum);
+    }
+
+    ThetaProof {
+        sum,
+        r: rs,
+        d: d_subclaims,
+        ai: ai_subclaims,
+    }
+}

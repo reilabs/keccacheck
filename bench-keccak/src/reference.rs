@@ -1,5 +1,3 @@
-use std::backtrace::Backtrace;
-
 pub fn apply_pi<T: Copy>(rho: &[T], pi: &mut [T]) {
     // Position (0,0) doesn't change
     // For all other positions, use the PI mapping
@@ -47,7 +45,7 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
         }
     }
     result.c = c.to_vec();
-
+ 
     let mut d: [u64; 5] = [0; 5];
     for x in 0..5 {
         d[x] = c[(x + 4) % 5] ^ c[(x + 1) % 5].rotate_left(1);

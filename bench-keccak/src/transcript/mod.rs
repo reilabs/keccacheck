@@ -33,12 +33,6 @@ impl Prover {
         self.sponge.absorb(value);
         self.proof.push(value);
     }
-
-    // Reveal a value to the verifier, but do hash it into the transcript.
-    // This is useful for decommitting values.
-    pub fn reveal(&mut self, value: Fr) {
-        self.proof.push(value);
-    }
 }
 
 impl<'a> Verifier<'a> {
