@@ -3,10 +3,7 @@ use ark_ff::{One, Zero};
 
 use crate::reference::RHO_OFFSETS;
 use crate::sumcheck::util::{eval_mle, partial_eval_mle, to_poly};
-use crate::{
-    sumcheck::util::update,
-    transcript::Prover,
-};
+use crate::{sumcheck::util::update, transcript::Prover};
 
 // rotate input k bits left to
 pub fn rot_poly(k: usize) -> Vec<Fr> {

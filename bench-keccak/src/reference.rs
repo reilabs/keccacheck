@@ -1,3 +1,4 @@
+use std::backtrace::Backtrace;
 
 pub fn apply_pi<T: Copy>(rho: &[T], pi: &mut [T]) {
     // Position (0,0) doesn't change
@@ -19,10 +20,22 @@ pub fn strip_pi<T: Copy>(pi: &[T], rho: &mut [T]) {
     }
 }
 
-pub fn keccak_round(a: &mut [u64], rc: u64) -> Vec<Vec<u64>> {
+// TODO: all state should be slicing into global state array with many keccak instances
+#[derive(Debug, Default)]
+pub struct KeccakRoundState {
+    pub iota: Vec<u64>,   // output, state after iota step
+    pub pi_chi: Vec<u64>, // state after pi and chi steps
+    pub rho: Vec<u64>,    // state after rho step
+    pub theta: Vec<u64>,  // state after theta step
+    pub d: Vec<u64>,      // d helper array
+    pub c: Vec<u64>,      // c helper array
+    pub a: Vec<u64>,      // input, should be equal to iota from the previous round
+}
+
+pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
     assert_eq!(a.len(), 25);
 
-    let mut result = Vec::with_capacity(6);
+    let mut result = KeccakRoundState::default();
 
     let mut array: [u64; 5] = [0; 5];
 
@@ -45,7 +58,7 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> Vec<Vec<u64>> {
         }
     }
 
-    result.push(a.to_vec());
+    result.theta = a.to_vec();
 
     // Rho
     // Apply rotation to each lane
@@ -54,7 +67,7 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> Vec<Vec<u64>> {
         a[x] = a[x].rotate_left(RHO_OFFSETS[x]);
     }
 
-    result.push(a.to_vec());
+    result.rho = a.to_vec();
 
     // Pi
     // Permute the positions of lanes
@@ -84,13 +97,12 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> Vec<Vec<u64>> {
         }
     }
 
-    result.push(a.to_vec());
+    result.pi_chi = a.to_vec();
 
     // Iota
     a[0] ^= rc;
 
-    result.push(a.to_vec());
-    result.reverse();
+    result.iota = a.to_vec();
 
     result
 }

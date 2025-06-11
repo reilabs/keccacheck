@@ -1,4 +1,4 @@
-use crate::reference::strip_pi;
+use crate::reference::{KeccakRoundState, strip_pi};
 use crate::sumcheck::chi::prove_chi;
 use crate::sumcheck::iota::prove_iota;
 use crate::sumcheck::rho::prove_rho;
@@ -7,7 +7,7 @@ use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::Zero;
 
-pub fn prove(num_vars: usize, layers: &[Vec<u64>]) -> Vec<Fr> {
+pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
     let mut prover = Prover::new();
 
     // TODO: feed output to the prover before obtaining alpha
@@ -15,7 +15,8 @@ pub fn prove(num_vars: usize, layers: &[Vec<u64>]) -> Vec<Fr> {
     let mut beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
     // write final output sum
-    let sum: Fr = layers[0]
+    let sum: Fr = layers
+        .iota
         .iter()
         .enumerate()
         .map(|(i, x)| {
@@ -27,7 +28,7 @@ pub fn prove(num_vars: usize, layers: &[Vec<u64>]) -> Vec<Fr> {
     prover.write(sum);
 
     // prove iota
-    let iota_proof = prove_iota(&mut prover, num_vars, &alpha, &beta, &layers[1], sum);
+    let iota_proof = prove_iota(&mut prover, num_vars, &alpha, &beta, &layers.pi_chi, sum);
 
     // combine subclaims chi_00 and chi_rlc
     let x = prover.read();
@@ -37,7 +38,14 @@ pub fn prove(num_vars: usize, layers: &[Vec<u64>]) -> Vec<Fr> {
     let sum = beta[0] * iota_proof.chi_00 + y * iota_proof.chi_rlc;
 
     // prove chi
-    let pi_chi_proof = prove_chi(&mut prover, num_vars, &iota_proof.r, &beta, &layers[2], sum);
+    let pi_chi_proof = prove_chi(
+        &mut prover,
+        num_vars,
+        &iota_proof.r,
+        &beta,
+        &layers.rho,
+        sum,
+    );
 
     // strip pi to get rho
     let mut rho = pi_chi_proof.pi.clone();
@@ -56,7 +64,7 @@ pub fn prove(num_vars: usize, layers: &[Vec<u64>]) -> Vec<Fr> {
         num_vars,
         &pi_chi_proof.r,
         &beta,
-        &layers[3],
+        &layers.theta,
         sum,
     );
 

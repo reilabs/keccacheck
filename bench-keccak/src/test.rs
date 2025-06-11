@@ -1,9 +1,7 @@
-use crate::reference::{ROUND_CONSTANTS, keccak_round};
+use crate::reference::{ROUND_CONSTANTS, apply_pi, keccak_round};
 use crate::sumcheck::chi::prove_sumcheck_chi;
 use crate::sumcheck::iota::prove_sumcheck_iota;
-use crate::sumcheck::rho::{
-    calculate_evaluations_over_boolean_hypercube_for_rot, prove_rho,
-};
+use crate::sumcheck::rho::{calculate_evaluations_over_boolean_hypercube_for_rot, prove_rho};
 use crate::sumcheck::util::{
     add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly, xor,
 };
@@ -31,18 +29,22 @@ fn iota_no_recursion() {
     let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
     let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
-    let chi_00 = to_poly(output[1][0]);
+    let chi_00 = to_poly(output.pi_chi[0]);
     let rc = to_poly(ROUND_CONSTANTS[0]);
     let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
     for el in 1..25 {
         // iterating from 1 to skip the first state element (i, j) = (0, 0)
-        let poly = to_poly(output[1][el]);
+        let poly = to_poly(output.pi_chi[el]);
         for x in 0..(1 << num_vars) {
             chi_rlc[x] += beta[el] * poly[x];
         }
     }
-    let chi = output[1].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
-    let iota = output[0].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
+    let chi = output
+        .pi_chi
+        .iter()
+        .map(|x| to_poly(*x))
+        .collect::<Vec<_>>();
+    let iota = output.iota.iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
 
     let real_iota_sum: Fr = iota
         .iter()
@@ -129,8 +131,14 @@ fn pi_chi_no_recursion() {
     let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
     let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
-    let pi = output[2].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
-    let chi = output[1].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
+    let mut pi = output.rho.to_vec();
+    apply_pi(&output.rho, &mut pi);
+    let pi = pi.iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
+    let chi = output
+        .pi_chi
+        .iter()
+        .map(|x| to_poly(*x))
+        .collect::<Vec<_>>();
 
     let real_chi_sum: Fr = chi
         .iter()
@@ -264,7 +272,7 @@ fn rho_no_recursion() {
     let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
     let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
-    let rho = output[2].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
+    let rho = output.rho.iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
 
     let real_rho_sum: Fr = rho
         .iter()
@@ -277,14 +285,14 @@ fn rho_no_recursion() {
         num_vars,
         &alpha,
         &beta,
-        &output[3],
+        &output.theta,
         real_rho_sum,
     );
 
     let rot = (0..25)
         .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(&alpha, i))
         .collect::<Vec<_>>();
-    let theta = output[3].iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
+    let theta = output.theta.iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
     //
     // let mut theta_sum = Fr::zero();
     // for i in 0..25 {
