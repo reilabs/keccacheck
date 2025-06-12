@@ -187,8 +187,20 @@ mod test {
 
         println!("real_theta_c_sum: {}", real_theta_c_sum);
 
+        fn derive_rot_evaluations_from_eq(eq: &[Fr], size: usize) -> Vec<Fr> {
+            let mut result = vec![Fr::zero(); eq.len()];
+            for i in 0..(eq.len()) {
+                // TODO: this needs to be updated for multi-instance support
+                // Shift only 6 last variables (u64)
+                result[i] = eq[(i + size) % eq.len()];
+            }
+            result
+        }
+
         let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
-        let rot = calculate_evaluations_over_boolean_hypercube_for_rot(&alpha, 1);
+        let expected_rot = calculate_evaluations_over_boolean_hypercube_for_rot(&alpha, 1);
+        let rot = derive_rot_evaluations_from_eq(&eq, 1);
+        assert_eq!(expected_rot, rot);
 
         let a = state.a.iter().map(|x| to_poly_xor_base(*x)).collect::<Vec<_>>();
 

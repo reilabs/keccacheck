@@ -14,6 +14,7 @@ mod verifier;
 
 // High-level tasks:
 // - TODO: support for multiple instances
+//     - TODO: derive_rot_evaluations_from_eq needs to be updated
 // - TODO: add benchmarks
 // - TODO: perf: use multithreaded sumcheck
 // - TODO: perf: reuse pi polynomials in sumcheck
