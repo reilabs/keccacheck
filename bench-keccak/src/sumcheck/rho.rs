@@ -27,6 +27,16 @@ pub fn calculate_evaluations_over_boolean_hypercube_for_rot(r: &[Fr], i: usize) 
     partial_eval_mle(&rot, r)
 }
 
+pub fn derive_rot_evaluations_from_eq(eq: &[Fr], size: usize) -> Vec<Fr> {
+    let mut result = vec![Fr::zero(); eq.len()];
+    for i in 0..(eq.len()) {
+        // TODO: this needs to be updated for multi-instance support
+        // Shift only 6 last variables (u64)
+        result[i] = eq[(i + size) % eq.len()];
+    }
+    result
+}
+
 pub struct RhoProof {
     pub sum: Fr,
     pub r: Vec<Fr>,
