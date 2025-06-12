@@ -152,6 +152,7 @@ mod test {
     use ark_bn254::Fr;
     use ark_ff::{One, Zero};
     use crate::reference::{keccak_round, ROUND_CONSTANTS};
+    use crate::sumcheck::rho::calculate_evaluations_over_boolean_hypercube_for_rot;
     use crate::sumcheck::theta_d::prove_theta_d;
     use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base};
     use crate::transcript::Prover;
@@ -174,40 +175,41 @@ mod test {
         let theta_c = state.c.iter().map(|x| to_poly_xor_base(*x)).collect::<Vec<_>>();
         let theta_rot_c = state.c.iter().map(|x| to_poly_xor_base(x.rotate_left(1))).collect::<Vec<_>>();
 
-        // TODO: make sure sum of theta_c matches
-        // TODO: make sure sum of theta_rot_c matches
+        // TODO: calculate rot from eq
         // TODO: implement sumcheck
 
         let mut real_theta_c_sum = Fr::zero();
         for i in 0..5 {
-            println!("c[{i}] = {}", beta_c[i] * eval_mle(&theta_c[i], &alpha));
-            println!("rot_c[{i}] = {}", beta_c[i] * eval_mle(&theta_c[i], &alpha));
-
-            real_theta_c_sum += beta_c[i] * eval_mle(&theta_c[i], &alpha);// + beta_rot_c[i] * eval_mle(&theta_rot_c[i], &alpha);
+            // println!("c[{i}] = {}", beta_c[i] * eval_mle(&theta_c[i], &alpha));
+            // println!("rot_c[{i}] = {}", beta_rot_c[i] * eval_mle(&theta_rot_c[i], &alpha));
+            real_theta_c_sum += beta_c[i] * eval_mle(&theta_c[i], &alpha) + beta_rot_c[i] * eval_mle(&theta_rot_c[i], &alpha);
         }
 
         println!("real_theta_c_sum: {}", real_theta_c_sum);
 
-        let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
+        let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
+        let rot = calculate_evaluations_over_boolean_hypercube_for_rot(&alpha, 1);
+
         let a = state.a.iter().map(|x| to_poly_xor_base(*x)).collect::<Vec<_>>();
 
         let mut a_sum = Fr::zero();
         for j in 0..5 {
             let mut a_product = Fr::zero();
+            let mut rot_product = Fr::zero();
 
             for x in 0..(1 << num_vars) {
                 let mut product = Fr::one();
-
                 for i in 0..5 {
                     product *= a[i * 5 + j][x];
                 }
-
                 a_product += beta_c[j] * eq[x] * product;
-               // c_sum += beta[j] * eq[x] * cs[(j+4)%5][x] * rot_c[(j+1)%5][x];
+                rot_product += beta_rot_c[j] * rot[x] * product;
             }
 
-            println!("a_product: {}", a_product);
-            a_sum += a_product;
+            // println!("a_product: {}", a_product);
+            // println!("rot_product: {}", rot_product);
+
+            a_sum += a_product + rot_product;
         }
         assert_eq!(a_sum, real_theta_c_sum);
 
