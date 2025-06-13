@@ -257,6 +257,9 @@ pub fn prove_sumcheck_theta_c(
     // check result
     #[cfg(debug_assertions)]
     {
+
+        //println!("eq {} beta {beta_c:?} rot {} beta {beta_rot_c:?} a: {:?}", eq[0], rot[0], aij);
+
         let mut checksum = Fr::zero();
         for j in 0..5 {
             let mut a_product = Fr::zero();
@@ -268,13 +271,6 @@ pub fn prove_sumcheck_theta_c(
             }
             a_product += beta_c[j] * eq[0] * product;
             rot_product += beta_rot_c[j] * rot[0] * product;
-
-            // println!("  a[{j}][alpha]: {} * {} * {}", beta_c[j], eq[0], product);
-            // println!(
-            //     "rot[{j}][alpha]: {} * {} * {}",
-            //     beta_rot_c[j], rot[0], product
-            // );
-
             checksum += a_product + rot_product;
         }
         assert_eq!(checksum, sum);

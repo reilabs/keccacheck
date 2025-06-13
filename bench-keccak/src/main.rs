@@ -30,6 +30,6 @@ fn main() {
 
     let num_vars = 6; // a single u64, one instance
     let proof = prove(num_vars, &layers);
-    verify(num_vars, &layers.iota, &layers.theta, &proof);
+    verify(num_vars, &layers.iota, &layers.a, &proof);
     println!("OK.")
 }

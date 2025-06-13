@@ -137,12 +137,13 @@ pub fn prove_sumcheck_theta(
         transcript.write(ai_rlc[j][0]);
         ai_subclaims.push(ai_rlc[j][0]);
     }
+
     let mut d_subclaims = Vec::with_capacity(ds.len());
     for j in 0..ds.len() {
         transcript.write(ds[j][0]);
         d_subclaims.push(ds[j][0]);
     }
-
+    
     // check result
     #[cfg(debug_assertions)]
     {
