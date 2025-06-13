@@ -7,6 +7,9 @@ use crate::sumcheck::util::{eval_mle, to_poly};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
+use crate::sumcheck::theta_a::prove_theta_a;
+use crate::sumcheck::theta_c::prove_theta_c;
+use crate::sumcheck::theta_d::prove_theta_d;
 
 pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
     let mut prover = Prover::new();
@@ -76,6 +79,7 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
         .map(|x| Fr::one() - x - x)
         .collect::<Vec<_>>();
     let mut sum = Fr::zero();
+    // we need that beta to combine with the last theta sumcheck!
     beta.iter_mut().enumerate().for_each(|(i, b)| {
         *b = prover.read();
         sum += *b * theta_xor_base[i];
@@ -90,6 +94,76 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
         &layers.d,
         &layers.a,
         sum,
+    );
+
+    // combine subclaims on theta d
+    let mut sum = Fr::zero();
+    let mut beta_d = vec![Fr::zero(); theta_proof.d.len()];
+    beta_d.iter_mut().enumerate().for_each(|(i, b)| {
+        *b = prover.read();
+        sum += *b * theta_proof.d[i];
+    });
+
+    // prove theta d
+    let theta_d_proof = prove_theta_d(
+        &mut prover,
+        num_vars,
+        &theta_proof.r,
+        &beta_d,
+        &layers.c,
+        sum,
+    );
+
+    // combine claims on theta c and rot_c
+    let mut sum = Fr::zero();
+    let mut beta_c = vec![Fr::zero(); theta_d_proof.c.len()];
+    let mut beta_rot_c = vec![Fr::zero(); theta_d_proof.rot_c.len()];
+    beta_c.iter_mut().enumerate().for_each(|(i, b)| {
+        *b = prover.read();
+        sum += *b * theta_d_proof.c[i];
+    });
+    beta_rot_c.iter_mut().enumerate().for_each(|(i, b)| {
+        *b = prover.read();
+        sum += *b * theta_d_proof.rot_c[i];
+    });
+
+    // prove theta c
+    let theta_c_proof = prove_theta_c(
+        &mut prover,
+        num_vars,
+        &theta_d_proof.r,
+        &beta_c,
+        &beta_rot_c,
+        &layers.a,
+        sum,
+    );
+
+    // combine claims on a from theta and theta c
+    let mut sum = Fr::zero();
+    let mut beta_a = vec![Fr::zero(); theta_c_proof.a.len()];
+
+    theta_proof.ai.iter().enumerate().for_each(|(i, b)| {
+        let b = prover.read();
+        for j in 0..5 {
+            beta[j * 5 + i] *= b;
+        }
+        sum += b * theta_proof.ai[i];
+    });
+    beta_a.iter_mut().enumerate().for_each(|(i, b)| {
+        *b = prover.read();
+        sum += *b * theta_c_proof.a[i];
+    });
+
+    // prove theta a
+    let theta_a_proof = prove_theta_a(
+        &mut prover,
+        num_vars,
+        &theta_proof.r,
+        &theta_c_proof.r,
+        &beta,
+        &beta_a,
+        &layers.a,
+        sum
     );
 
     // done

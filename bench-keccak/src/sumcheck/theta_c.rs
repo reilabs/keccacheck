@@ -269,11 +269,11 @@ pub fn prove_sumcheck_theta_c(
             a_product += beta_c[j] * eq[0] * product;
             rot_product += beta_rot_c[j] * rot[0] * product;
 
-            println!("  a[{j}][alpha]: {} * {} * {}", beta_c[j], eq[0], product);
-            println!(
-                "rot[{j}][alpha]: {} * {} * {}",
-                beta_rot_c[j], rot[0], product
-            );
+            // println!("  a[{j}][alpha]: {} * {} * {}", beta_c[j], eq[0], product);
+            // println!(
+            //     "rot[{j}][alpha]: {} * {} * {}",
+            //     beta_rot_c[j], rot[0], product
+            // );
 
             checksum += a_product + rot_product;
         }
