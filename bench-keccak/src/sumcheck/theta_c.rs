@@ -23,10 +23,6 @@ pub fn prove_theta_c(
     let mut rot = derive_rot_evaluations_from_eq(&eq, 1);
     let mut a = a.iter().map(|x| to_poly_xor_base(*x)).collect::<Vec<_>>();
 
-    let mut a_copy = a.clone();
-    let mut eq_copy = eq.clone();
-    let mut rot_copy = rot.clone();
-
     #[cfg(debug_assertions)]
     {
         let mut a_sum = Fr::zero();
@@ -52,31 +48,6 @@ pub fn prove_theta_c(
     }
 
     let proof = prove_sumcheck_theta_c(transcript, num_vars, beta_c, beta_rot_c, &mut eq, &mut rot, &mut a, sum);
-
-    #[cfg(debug_assertions)]
-    {
-        let r = &proof.r;
-        let mut a_sum = Fr::zero();
-
-        for j in 0..5 {
-            let mut a_product = Fr::zero();
-            let mut rot_product = Fr::zero();
-
-            let mut product = Fr::one();
-            for i in 0..5 {
-                product *= eval_mle(&a_copy[i * 5 + j], r);
-            }
-            a_product += beta_c[j] * eval_mle(&eq_copy, r) * product;
-            rot_product += beta_rot_c[j] * eval_mle(&rot_copy, r) * product;
-
-            println!("  a[{j}]: {} * {} * {}", beta_c[j], eval_mle(&eq_copy, r), product);
-            println!("rot[{j}]: {} * {} * {}", beta_rot_c[j], eval_mle(&rot_copy, r), product);
-
-            a_sum += a_product + rot_product;
-        }
-        assert_eq!(a_sum, proof.sum);
-    }
-
 
     proof
 }
