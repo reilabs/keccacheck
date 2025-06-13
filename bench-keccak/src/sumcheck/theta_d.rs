@@ -1,7 +1,9 @@
+use crate::sumcheck::util::{
+    HALF, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base, update,
+};
+use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::Zero;
-use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base, update, HALF};
-use crate::transcript::Prover;
 
 pub struct ThetaDProof {
     pub sum: Fr,
@@ -19,25 +21,25 @@ pub fn prove_theta_d(
     sum: Fr,
 ) -> ThetaDProof {
     let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
-    let mut cs = (0..5).map(|i| {
-        to_poly_xor_base(c[i])
-    }).collect::<Vec<_>>();
-    let mut rot_c = (0..5).map(|i| {
-        to_poly_xor_base(c[i].rotate_left(1))
-    }).collect::<Vec<_>>();
+    let mut cs = (0..5).map(|i| to_poly_xor_base(c[i])).collect::<Vec<_>>();
+    let mut rot_c = (0..5)
+        .map(|i| to_poly_xor_base(c[i].rotate_left(1)))
+        .collect::<Vec<_>>();
 
     #[cfg(debug_assertions)]
     {
         let mut c_sum = Fr::zero();
         for j in 0..cs.len() {
             for x in 0..(1 << num_vars) {
-                c_sum += beta[j] * eq[x] * cs[(j+4)%5][x] * rot_c[(j+1)%5][x];
+                c_sum += beta[j] * eq[x] * cs[(j + 4) % 5][x] * rot_c[(j + 1) % 5][x];
             }
         }
         assert_eq!(c_sum, sum);
     }
 
-    let proof = prove_sumcheck_theta_d(transcript, num_vars, beta, &mut eq, &mut cs, &mut rot_c, sum);
+    let proof = prove_sumcheck_theta_d(
+        transcript, num_vars, beta, &mut eq, &mut cs, &mut rot_c, sum,
+    );
 
     proof
 }
@@ -46,7 +48,7 @@ pub fn prove_sumcheck_theta_d(
     transcript: &mut Prover,
     size: usize,
     beta: &[Fr],
-    mut eq:  &mut [Fr],
+    mut eq: &mut [Fr],
     cs: &mut Vec<Vec<Fr>>,
     rot_cs: &mut Vec<Vec<Fr>>,
     mut sum: Fr,
@@ -83,13 +85,19 @@ pub fn prove_sumcheck_theta_d(
         for i in 0..c[0].0.len() {
             for j in 0..c.len() {
                 // Evaluation at 0
-                p0 += beta[j] * e0[i] * c[(j+4)%5].0[i] * rot_c[(j+1)%5].0[i];
+                p0 += beta[j] * e0[i] * c[(j + 4) % 5].0[i] * rot_c[(j + 1) % 5].0[i];
 
                 // Evaluation at -1
-                pem1 += beta[j] * (e0[i] + e0[i] - e1[i]) * (c[(j+4)%5].0[i] + c[(j+4)%5].0[i] - c[(j+4)%5].1[i]) * (rot_c[(j+1)%5].0[i] + rot_c[(j+1)%5].0[i] - rot_c[(j+1)%5].1[i]);
+                pem1 += beta[j]
+                    * (e0[i] + e0[i] - e1[i])
+                    * (c[(j + 4) % 5].0[i] + c[(j + 4) % 5].0[i] - c[(j + 4) % 5].1[i])
+                    * (rot_c[(j + 1) % 5].0[i] + rot_c[(j + 1) % 5].0[i] - rot_c[(j + 1) % 5].1[i]);
 
                 // Evaluation at ∞
-                p3 += beta[j] * (e1[i] - e0[i]) * (c[(j+4)%5].1[i] - c[(j+4)%5].0[i]) * (rot_c[(j+1)%5].1[i] - rot_c[(j+1)%5].0[i]);
+                p3 += beta[j]
+                    * (e1[i] - e0[i])
+                    * (c[(j + 4) % 5].1[i] - c[(j + 4) % 5].0[i])
+                    * (rot_c[(j + 1) % 5].1[i] - rot_c[(j + 1) % 5].0[i]);
             }
         }
 
@@ -135,7 +143,7 @@ pub fn prove_sumcheck_theta_d(
     {
         let mut checksum = Fr::zero();
         for j in 0..cs.len() {
-            checksum += beta[j] * eq[0] * cs[(j+4)%5][0] * rot_cs[(j+1)%5][0];
+            checksum += beta[j] * eq[0] * cs[(j + 4) % 5][0] * rot_cs[(j + 1) % 5][0];
         }
         assert_eq!(sum, checksum);
     }
@@ -150,16 +158,17 @@ pub fn prove_sumcheck_theta_d(
 
 #[cfg(test)]
 mod test {
-    use ark_bn254::Fr;
-    use crate::reference::{keccak_round, ROUND_CONSTANTS};
+    use crate::reference::{ROUND_CONSTANTS, keccak_round};
     use crate::sumcheck::theta_d::prove_theta_d;
     use crate::sumcheck::util::{eval_mle, to_poly_xor_base};
     use crate::transcript::Prover;
+    use ark_bn254::Fr;
 
     #[test]
     fn theta_d_no_recursion() {
         let input = [
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24,
         ];
         let mut buf = input;
         let state = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
@@ -170,7 +179,11 @@ mod test {
         let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
         let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
-        let theta_d = state.d.iter().map(|x| to_poly_xor_base(*x)).collect::<Vec<_>>();
+        let theta_d = state
+            .d
+            .iter()
+            .map(|x| to_poly_xor_base(*x))
+            .collect::<Vec<_>>();
         let real_theta_d_sum: Fr = theta_d
             .iter()
             .enumerate()

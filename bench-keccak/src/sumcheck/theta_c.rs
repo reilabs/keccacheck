@@ -1,8 +1,10 @@
+use crate::sumcheck::rho::derive_rot_evaluations_from_eq;
+use crate::sumcheck::util::{
+    HALF, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base, update,
+};
+use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{MontFp, One, Zero};
-use crate::sumcheck::rho::derive_rot_evaluations_from_eq;
-use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base, update, HALF};
-use crate::transcript::Prover;
 
 pub struct ThetaCProof {
     pub sum: Fr,
@@ -47,7 +49,9 @@ pub fn prove_theta_c(
         assert_eq!(a_sum, sum);
     }
 
-    let proof = prove_sumcheck_theta_c(transcript, num_vars, beta_c, beta_rot_c, &mut eq, &mut rot, &mut a, sum);
+    let proof = prove_sumcheck_theta_c(
+        transcript, num_vars, beta_c, beta_rot_c, &mut eq, &mut rot, &mut a, sum,
+    );
 
     proof
 }
@@ -57,8 +61,8 @@ pub fn prove_sumcheck_theta_c(
     size: usize,
     beta_c: &[Fr],
     beta_rot_c: &[Fr],
-    mut eq:  &mut [Fr],
-    mut rot:  &mut [Fr],
+    mut eq: &mut [Fr],
+    mut rot: &mut [Fr],
     aij: &mut Vec<Vec<Fr>>,
     mut sum: Fr,
 ) -> ThetaCProof {
@@ -107,35 +111,44 @@ pub fn prove_sumcheck_theta_c(
                 for k in 0..5 {
                     product *= a[k * 5 + j].0[i] + a[k * 5 + j].0[i] - a[k * 5 + j].1[i];
                 }
-                pem1 += beta_c[j] * (e0[i] + e0[i] - e1[i]) * product + beta_rot_c[j] * (rot0[i] + rot0[i] - rot1[i]) * product;
+                pem1 += beta_c[j] * (e0[i] + e0[i] - e1[i]) * product
+                    + beta_rot_c[j] * (rot0[i] + rot0[i] - rot1[i]) * product;
 
                 // Evaluation at -2
                 let mut product = Fr::one();
                 for k in 0..5 {
-                    product *= a[k * 5 + j].0[i] + a[k * 5 + j].0[i] + a[k * 5 + j].0[i] - a[k * 5 + j].1[i] - a[k * 5 + j].1[i];
+                    product *= a[k * 5 + j].0[i] + a[k * 5 + j].0[i] + a[k * 5 + j].0[i]
+                        - a[k * 5 + j].1[i]
+                        - a[k * 5 + j].1[i];
                 }
-                pem2 += beta_c[j] * (e0[i] + e0[i] + e0[i] - e1[i] - e1[i]) * product + beta_rot_c[j] * (rot0[i] + rot0[i] + rot0[i] - rot1[i] - rot1[i]) * product;
+                pem2 += beta_c[j] * (e0[i] + e0[i] + e0[i] - e1[i] - e1[i]) * product
+                    + beta_rot_c[j] * (rot0[i] + rot0[i] + rot0[i] - rot1[i] - rot1[i]) * product;
 
                 // Evaluation at 2
                 let mut product = Fr::one();
                 for k in 0..5 {
                     product *= a[k * 5 + j].1[i] + a[k * 5 + j].1[i] - a[k * 5 + j].0[i];
                 }
-                pe2 += beta_c[j] * (e1[i] + e1[i] - e0[i]) * product + beta_rot_c[j] * (rot1[i] + rot1[i] - rot0[i]) * product;
+                pe2 += beta_c[j] * (e1[i] + e1[i] - e0[i]) * product
+                    + beta_rot_c[j] * (rot1[i] + rot1[i] - rot0[i]) * product;
 
                 // Evaluation at 3
                 let mut product = Fr::one();
                 for k in 0..5 {
-                    product *= a[k * 5 + j].1[i] + a[k * 5 + j].1[i] + a[k * 5 + j].1[i] - a[k * 5 + j].0[i] - a[k * 5 + j].0[i];
+                    product *= a[k * 5 + j].1[i] + a[k * 5 + j].1[i] + a[k * 5 + j].1[i]
+                        - a[k * 5 + j].0[i]
+                        - a[k * 5 + j].0[i];
                 }
-                pe3 += beta_c[j] * (e1[i] + e1[i] + e1[i] - e0[i] - e0[i]) * product + beta_rot_c[j] * (rot1[i] + rot1[i] + rot1[i] - rot0[i] - rot0[i]) * product;
+                pe3 += beta_c[j] * (e1[i] + e1[i] + e1[i] - e0[i] - e0[i]) * product
+                    + beta_rot_c[j] * (rot1[i] + rot1[i] + rot1[i] - rot0[i] - rot0[i]) * product;
 
                 // Evaluation at ∞
                 let mut product = Fr::one();
                 for k in 0..5 {
                     product *= a[k * 5 + j].1[i] - a[k * 5 + j].0[i];
                 }
-                p6 += beta_c[j] * (e1[i] - e0[i]) * product + beta_rot_c[j] * (rot1[i] - rot0[i]) * product;
+                p6 += beta_c[j] * (e1[i] - e0[i]) * product
+                    + beta_rot_c[j] * (rot1[i] - rot0[i]) * product;
             }
         }
 
@@ -153,12 +166,19 @@ pub fn prove_sumcheck_theta_c(
         let p2 = add_p2_p4 - p4;
 
         assert_eq!(pe1 + pem1, (p0 + p2 + p4 + p6) * MontFp!("2"));
-        assert_eq!(pe2 + pem2, MontFp!("2") * p0 + MontFp!("8") * p2 + MontFp!("32") * p4 + MontFp!("128") * p6);
+        assert_eq!(
+            pe2 + pem2,
+            MontFp!("2") * p0 + MontFp!("8") * p2 + MontFp!("32") * p4 + MontFp!("128") * p6
+        );
 
         let add_p1_p3_p5 = HALF * (pe1 - pem1);
         let add_p1_4p3_16p5 = HALF * HALF * (pe2 - pem2);
-        let add_p1_9p3_81p5 = (pe3 - p0 - MontFp!("9") * p2 - MontFp!("81") * p4 - MontFp!("729") * p6) / MontFp!("3");
-        let p5 = (MontFp!("3") * add_p1_9p3_81p5 - MontFp!("8") * add_p1_4p3_16p5 + MontFp!("5") * add_p1_p3_p5) / MontFp!("120");
+        let add_p1_9p3_81p5 =
+            (pe3 - p0 - MontFp!("9") * p2 - MontFp!("81") * p4 - MontFp!("729") * p6)
+                / MontFp!("3");
+        let p5 = (MontFp!("3") * add_p1_9p3_81p5 - MontFp!("8") * add_p1_4p3_16p5
+            + MontFp!("5") * add_p1_p3_p5)
+            / MontFp!("120");
 
         let add_p1_p3 = add_p1_p3_p5 - p5;
         let add_p1_4p3 = add_p1_4p3_16p5 - MontFp!("16") * p5;
@@ -170,13 +190,37 @@ pub fn prove_sumcheck_theta_c(
         assert_eq!(add_p1_9p3_81p5, p1 + MontFp!("9") * p3 + MontFp!("81") * p5);
 
         assert_eq!(pe1 - pem1, (p1 + p3 + p5) * MontFp!("2"));
-        assert_eq!(pe2 - pem2, MontFp!("4") * p1 + MontFp!("16") * p3 + MontFp!("64") * p5);
+        assert_eq!(
+            pe2 - pem2,
+            MontFp!("4") * p1 + MontFp!("16") * p3 + MontFp!("64") * p5
+        );
 
         assert_eq!(sum, p0 + p0 + p1 + p2 + p3 + p4 + p5 + p6);
         assert_eq!(pem1, p0 - p1 + p2 - p3 + p4 - p5 + p6);
-        assert_eq!(pem2, p0 - MontFp!("2") * p1 + MontFp!("4") * p2 - MontFp!("8") * p3 + MontFp!("16") * p4 - MontFp!("32")  * p5 + MontFp!("64") * p6);
-        assert_eq!(pe2, p0 + MontFp!("2") * p1 + MontFp!("4") * p2 + MontFp!("8")  * p3 + MontFp!("16") * p4 + MontFp!("32")  * p5 + MontFp!("64") * p6);
-        assert_eq!(pe3, p0 + MontFp!("3") * p1 + MontFp!("9") * p2 + MontFp!("27") * p3 + MontFp!("81") * p4 + MontFp!("243") * p5 + MontFp!("729") * p6);
+        assert_eq!(
+            pem2,
+            p0 - MontFp!("2") * p1 + MontFp!("4") * p2 - MontFp!("8") * p3 + MontFp!("16") * p4
+                - MontFp!("32") * p5
+                + MontFp!("64") * p6
+        );
+        assert_eq!(
+            pe2,
+            p0 + MontFp!("2") * p1
+                + MontFp!("4") * p2
+                + MontFp!("8") * p3
+                + MontFp!("16") * p4
+                + MontFp!("32") * p5
+                + MontFp!("64") * p6
+        );
+        assert_eq!(
+            pe3,
+            p0 + MontFp!("3") * p1
+                + MontFp!("9") * p2
+                + MontFp!("27") * p3
+                + MontFp!("81") * p4
+                + MontFp!("243") * p5
+                + MontFp!("729") * p6
+        );
 
         // assert_eq!(pe2, p0 - p1 + p2 - p3 + p4 - p5 + p6);
         // assert_eq!(pe3, p0 - p1 + p2 - p3 + p4 - p5 + p6);
@@ -226,7 +270,10 @@ pub fn prove_sumcheck_theta_c(
             rot_product += beta_rot_c[j] * rot[0] * product;
 
             println!("  a[{j}][alpha]: {} * {} * {}", beta_c[j], eq[0], product);
-            println!("rot[{j}][alpha]: {} * {} * {}", beta_rot_c[j], rot[0], product);
+            println!(
+                "rot[{j}][alpha]: {} * {} * {}",
+                beta_rot_c[j], rot[0], product
+            );
 
             checksum += a_product + rot_product;
         }
@@ -242,19 +289,24 @@ pub fn prove_sumcheck_theta_c(
 
 #[cfg(test)]
 mod test {
-    use ark_bn254::Fr;
-    use ark_ff::{One, Zero};
-    use crate::reference::{keccak_round, ROUND_CONSTANTS};
-    use crate::sumcheck::rho::{calculate_evaluations_over_boolean_hypercube_for_rot, derive_rot_evaluations_from_eq};
+    use crate::reference::{ROUND_CONSTANTS, keccak_round};
+    use crate::sumcheck::rho::{
+        calculate_evaluations_over_boolean_hypercube_for_rot, derive_rot_evaluations_from_eq,
+    };
     use crate::sumcheck::theta_c::prove_theta_c;
     use crate::sumcheck::theta_d::prove_theta_d;
-    use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base};
+    use crate::sumcheck::util::{
+        calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base,
+    };
     use crate::transcript::Prover;
+    use ark_bn254::Fr;
+    use ark_ff::{One, Zero};
 
     #[test]
     fn theta_c_no_recursion() {
         let input = [
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24,
         ];
         let mut buf = input;
         let state = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
@@ -266,8 +318,16 @@ mod test {
         let beta_c = (0..5).map(|_| prover.read()).collect::<Vec<_>>();
         let beta_rot_c = (0..5).map(|_| prover.read()).collect::<Vec<_>>();
 
-        let theta_c = state.c.iter().map(|x| to_poly_xor_base(*x)).collect::<Vec<_>>();
-        let theta_rot_c = state.c.iter().map(|x| to_poly_xor_base(x.rotate_left(1))).collect::<Vec<_>>();
+        let theta_c = state
+            .c
+            .iter()
+            .map(|x| to_poly_xor_base(*x))
+            .collect::<Vec<_>>();
+        let theta_rot_c = state
+            .c
+            .iter()
+            .map(|x| to_poly_xor_base(x.rotate_left(1)))
+            .collect::<Vec<_>>();
 
         // TODO: implement sumcheck
 
@@ -275,7 +335,8 @@ mod test {
         for i in 0..5 {
             // println!("c[{i}] = {}", beta_c[i] * eval_mle(&theta_c[i], &alpha));
             // println!("rot_c[{i}] = {}", beta_rot_c[i] * eval_mle(&theta_rot_c[i], &alpha));
-            real_theta_c_sum += beta_c[i] * eval_mle(&theta_c[i], &alpha) + beta_rot_c[i] * eval_mle(&theta_rot_c[i], &alpha);
+            real_theta_c_sum += beta_c[i] * eval_mle(&theta_c[i], &alpha)
+                + beta_rot_c[i] * eval_mle(&theta_rot_c[i], &alpha);
         }
 
         println!("real_theta_c_sum: {}", real_theta_c_sum);

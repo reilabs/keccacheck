@@ -125,7 +125,7 @@ pub fn prove_sumcheck_iota(
             // Evaluation at ∞
             p3 += beta_m2 * (e.1 - e.0) * (a.1 - a.0) * (b.1 - b.0);
         });
-        
+
         // Compute p1 and p2 from
         //  p(0) + p(1) = 2 ⋅ p0 + p1 + p2 + p3
         //  p(-1) = p0 - p1 + p2 - p3

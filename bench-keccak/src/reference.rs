@@ -35,7 +35,7 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
 
     let mut result = KeccakRoundState::default();
     result.a = a.to_vec();
-    
+
     // Theta
     let mut c: [u64; 5] = [0; 5];
     for x in 0..5 {
@@ -45,7 +45,7 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
         }
     }
     result.c = c.to_vec();
- 
+
     let mut d: [u64; 5] = [0; 5];
     for x in 0..5 {
         d[x] = c[(x + 4) % 5] ^ c[(x + 1) % 5].rotate_left(1);

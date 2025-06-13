@@ -1,8 +1,10 @@
+use crate::reference::{ROUND_CONSTANTS, keccak_round};
+use crate::sumcheck::util::{
+    HALF, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base, update,
+};
+use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::Zero;
-use crate::reference::{keccak_round, ROUND_CONSTANTS};
-use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base, update, HALF};
-use crate::transcript::Prover;
 
 pub struct ThetaProof {
     pub sum: Fr,
@@ -21,20 +23,20 @@ pub fn prove_theta(
     sum: Fr,
 ) -> ThetaProof {
     let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
-    let mut d = (0..5).map(|i| {
-        to_poly_xor_base(d[i])
-    }).collect::<Vec<_>>();
-    let mut ai = (0..5).map(|i| {
-        let mut rlc = vec![Fr::zero(); 1 << num_vars];
-        for j in 0..5 {
-            let idx = j * 5 + i;
-            let poly = to_poly_xor_base(a[idx]);
-            for x in 0..(1<<num_vars) {
-                rlc[x] += beta[idx] * poly[x];
+    let mut d = (0..5).map(|i| to_poly_xor_base(d[i])).collect::<Vec<_>>();
+    let mut ai = (0..5)
+        .map(|i| {
+            let mut rlc = vec![Fr::zero(); 1 << num_vars];
+            for j in 0..5 {
+                let idx = j * 5 + i;
+                let poly = to_poly_xor_base(a[idx]);
+                for x in 0..(1 << num_vars) {
+                    rlc[x] += beta[idx] * poly[x];
+                }
             }
-        }
-        rlc
-    }).collect::<Vec<_>>();
+            rlc
+        })
+        .collect::<Vec<_>>();
 
     #[cfg(debug_assertions)]
     {
@@ -55,7 +57,7 @@ pub fn prove_theta(
 pub fn prove_sumcheck_theta(
     transcript: &mut Prover,
     size: usize,
-    mut eq:  &mut [Fr],
+    mut eq: &mut [Fr],
     ds: &mut Vec<Vec<Fr>>,
     ai_rlc: &mut Vec<Vec<Fr>>,
     mut sum: Fr,
@@ -95,7 +97,9 @@ pub fn prove_sumcheck_theta(
                 p0 += e0[i] * d[j].0[i] * ai[j].0[i];
 
                 // Evaluation at -1
-                pem1 += (e0[i] + e0[i] - e1[i]) * (d[j].0[i] + d[j].0[i] - d[j].1[i]) * (ai[j].0[i] + ai[j].0[i] - ai[j].1[i]);
+                pem1 += (e0[i] + e0[i] - e1[i])
+                    * (d[j].0[i] + d[j].0[i] - d[j].1[i])
+                    * (ai[j].0[i] + ai[j].0[i] - ai[j].1[i]);
 
                 // Evaluation at ∞
                 p3 += (e1[i] - e0[i]) * (d[j].1[i] - d[j].0[i]) * (ai[j].1[i] - ai[j].0[i]);
@@ -171,7 +175,11 @@ fn theta_no_recursion() {
     let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
     let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
-    let theta = state.theta.iter().map(|x| to_poly_xor_base(*x)).collect::<Vec<_>>();
+    let theta = state
+        .theta
+        .iter()
+        .map(|x| to_poly_xor_base(*x))
+        .collect::<Vec<_>>();
     let real_theta_sum: Fr = theta
         .iter()
         .enumerate()

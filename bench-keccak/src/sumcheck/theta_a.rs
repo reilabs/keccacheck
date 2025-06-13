@@ -1,9 +1,12 @@
+use crate::reference::RHO_OFFSETS;
+use crate::sumcheck::util::{
+    calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, partial_eval_mle, to_poly,
+    to_poly_xor_base,
+};
+use crate::{sumcheck::util::update, transcript::Prover};
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use itertools::assert_equal;
-use crate::reference::RHO_OFFSETS;
-use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, partial_eval_mle, to_poly, to_poly_xor_base};
-use crate::{sumcheck::util::update, transcript::Prover};
 
 pub struct ThetaAProof {
     pub sum: Fr,
@@ -36,7 +39,9 @@ pub fn prove_theta_a(
         assert_eq!(checksum, sum);
     }
 
-    prove_sumcheck_theta_a(transcript, num_vars, beta1, beta2, &mut eq1, &mut eq2, &mut a, sum)
+    prove_sumcheck_theta_a(
+        transcript, num_vars, beta1, beta2, &mut eq1, &mut eq2, &mut a, sum,
+    )
 }
 
 pub fn prove_sumcheck_theta_a(
@@ -79,7 +84,8 @@ pub fn prove_sumcheck_theta_a(
                 p0 += beta_a[j] * ea0[i] * a[j].0[i] + beta_b[j] * eb0[i] * a[j].0[i];
 
                 // Evaluation at ∞
-                p2 += beta_a[j] * (ea1[i] - ea0[i]) * (a[j].1[i] - a[j].0[i]) + beta_b[j] * (eb1[i] - eb0[i]) * (a[j].1[i] - a[j].0[i]);
+                p2 += beta_a[j] * (ea1[i] - ea0[i]) * (a[j].1[i] - a[j].0[i])
+                    + beta_b[j] * (eb1[i] - eb0[i]) * (a[j].1[i] - a[j].0[i]);
             }
         }
 
@@ -127,16 +133,17 @@ pub fn prove_sumcheck_theta_a(
 
 #[cfg(test)]
 mod test {
-    use ark_bn254::Fr;
-    use crate::reference::{keccak_round, ROUND_CONSTANTS};
+    use crate::reference::{ROUND_CONSTANTS, keccak_round};
     use crate::sumcheck::theta_a::prove_theta_a;
     use crate::sumcheck::util::{eval_mle, to_poly_xor_base};
     use crate::transcript::Prover;
+    use ark_bn254::Fr;
 
     #[test]
     fn theta_a_no_recursion() {
         let input = [
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24,
         ];
         let mut buf = input;
         let state = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
@@ -150,11 +157,17 @@ mod test {
         let beta_a = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
         let beta_b = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
-        let result = state.a.iter().map(|x| to_poly_xor_base(*x)).collect::<Vec<_>>();
+        let result = state
+            .a
+            .iter()
+            .map(|x| to_poly_xor_base(*x))
+            .collect::<Vec<_>>();
         let real_sum: Fr = result
             .iter()
             .enumerate()
-            .map(|(i, poly)| beta_a[i] * eval_mle(poly, &alpha_a) + beta_b[i] * eval_mle(poly, &alpha_b))
+            .map(|(i, poly)| {
+                beta_a[i] * eval_mle(poly, &alpha_a) + beta_b[i] * eval_mle(poly, &alpha_b)
+            })
             .sum();
 
         prove_theta_a(
