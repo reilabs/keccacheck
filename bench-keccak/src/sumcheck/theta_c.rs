@@ -1,5 +1,5 @@
 use ark_bn254::Fr;
-use ark_ff::{One, Zero};
+use ark_ff::{MontFp, One, Zero};
 use crate::sumcheck::rho::derive_rot_evaluations_from_eq;
 use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base, update, HALF};
 use crate::transcript::Prover;
@@ -22,6 +22,10 @@ pub fn prove_theta_c(
     let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
     let mut rot = derive_rot_evaluations_from_eq(&eq, 1);
     let mut a = a.iter().map(|x| to_poly_xor_base(*x)).collect::<Vec<_>>();
+
+    let mut a_copy = a.clone();
+    let mut eq_copy = eq.clone();
+    let mut rot_copy = rot.clone();
 
     #[cfg(debug_assertions)]
     {
@@ -47,118 +51,223 @@ pub fn prove_theta_c(
         assert_eq!(a_sum, sum);
     }
 
-    todo!();
+    let proof = prove_sumcheck_theta_c(transcript, num_vars, beta_c, beta_rot_c, &mut eq, &mut rot, &mut a, sum);
 
-    // let proof = prove_sumcheck_theta_d(transcript, num_vars, beta, &mut eq, &mut cs, &mut rot_c, sum);
-    //
-    // proof
+    #[cfg(debug_assertions)]
+    {
+        let r = &proof.r;
+        let mut a_sum = Fr::zero();
+
+        for j in 0..5 {
+            let mut a_product = Fr::zero();
+            let mut rot_product = Fr::zero();
+
+            let mut product = Fr::one();
+            for i in 0..5 {
+                product *= eval_mle(&a_copy[i * 5 + j], r);
+            }
+            a_product += beta_c[j] * eval_mle(&eq_copy, r) * product;
+            rot_product += beta_rot_c[j] * eval_mle(&rot_copy, r) * product;
+
+            println!("  a[{j}]: {} * {} * {}", beta_c[j], eval_mle(&eq_copy, r), product);
+            println!("rot[{j}]: {} * {} * {}", beta_rot_c[j], eval_mle(&rot_copy, r), product);
+
+            a_sum += a_product + rot_product;
+        }
+        assert_eq!(a_sum, proof.sum);
+    }
+
+
+    proof
 }
-//
-// pub fn prove_sumcheck_theta_d(
-//     transcript: &mut Prover,
-//     size: usize,
-//     beta: &[Fr],
-//     mut eq:  &mut [Fr],
-//     cs: &mut Vec<Vec<Fr>>,
-//     rot_cs: &mut Vec<Vec<Fr>>,
-//     mut sum: Fr,
-// ) -> ThetaDProof {
-//     #[cfg(debug_assertions)]
-//     {
-//         assert_eq!(eq.len(), 1 << size);
-//         assert_eq!(cs.len(), rot_cs.len());
-//         cs.iter().for_each(|d| {
-//             assert_eq!(d.len(), 1 << size);
-//         });
-//         rot_cs.iter().for_each(|ai| {
-//             assert_eq!(ai.len(), 1 << size);
-//         });
-//     }
-//
-//     let mut rs = Vec::with_capacity(size);
-//     for _ in 0..size {
-//         // p(x) = p0 + p1 ⋅ x + p2 ⋅ x^2 + p3 ⋅ x^3
-//         let mut p0 = Fr::zero();
-//         let mut pem1 = Fr::zero();
-//         let mut p3 = Fr::zero();
-//
-//         let (e0, e1) = eq.split_at(eq.len() / 2);
-//         let c = cs
-//             .iter()
-//             .map(|x| x.split_at(x.len() / 2))
-//             .collect::<Vec<_>>();
-//         let rot_c = rot_cs
-//             .iter()
-//             .map(|x| x.split_at(x.len() / 2))
-//             .collect::<Vec<_>>();
-//
-//         for i in 0..c[0].0.len() {
-//             for j in 0..c.len() {
-//                 // Evaluation at 0
-//                 p0 += beta[j] * e0[i] * c[(j+4)%5].0[i] * rot_c[(j+1)%5].0[i];
-//
-//                 // Evaluation at -1
-//                 pem1 += beta[j] * (e0[i] + e0[i] - e1[i]) * (c[(j+4)%5].0[i] + c[(j+4)%5].0[i] - c[(j+4)%5].1[i]) * (rot_c[(j+1)%5].0[i] + rot_c[(j+1)%5].0[i] - rot_c[(j+1)%5].1[i]);
-//
-//                 // Evaluation at ∞
-//                 p3 += beta[j] * (e1[i] - e0[i]) * (c[(j+4)%5].1[i] - c[(j+4)%5].0[i]) * (rot_c[(j+1)%5].1[i] - rot_c[(j+1)%5].0[i]);
-//             }
-//         }
-//
-//         // Compute p1 and p2 from
-//         //  p(0) + p(1) = 2 ⋅ p0 + p1 + p2 + p3
-//         //  p(-1) = p0 - p1 + p2 - p3
-//         let p2 = HALF * (sum + pem1 - p0) - p0;
-//         let p1 = sum - p0 - p0 - p3 - p2;
-//         assert_eq!(sum, p0 + p0 + p1 + p2 + p3);
-//         assert_eq!(pem1, p0 - p1 + p2 - p3);
-//
-//         transcript.write(p1);
-//         transcript.write(p2);
-//         transcript.write(p3);
-//
-//         let r = transcript.read();
-//         rs.push(r);
-//         // TODO: Fold update into evaluation loop.
-//         eq = update(eq, r);
-//         for j in 0..cs.len() {
-//             // TODO: unnecessary allocation
-//             cs[j] = update(&mut cs[j], r).to_vec();
-//             rot_cs[j] = update(&mut rot_cs[j], r).to_vec();
-//         }
-//
-//         // sum = p(r)
-//         sum = p0 + r * (p1 + r * (p2 + r * p3));
-//     }
-//
-//     let mut c_subclaims = Vec::with_capacity(cs.len());
-//     for j in 0..cs.len() {
-//         transcript.write(cs[j][0]);
-//         c_subclaims.push(cs[j][0]);
-//     }
-//     let mut rot_c_subclaims = Vec::with_capacity(rot_cs.len());
-//     for j in 0..rot_cs.len() {
-//         transcript.write(rot_cs[j][0]);
-//         rot_c_subclaims.push(rot_cs[j][0]);
-//     }
-//
-//     // check result
-//     #[cfg(debug_assertions)]
-//     {
-//         let mut checksum = Fr::zero();
-//         for j in 0..cs.len() {
-//             checksum += beta[j] * eq[0] * cs[(j+4)%5][0] * rot_cs[(j+1)%5][0];
-//         }
-//         assert_eq!(sum, checksum);
-//     }
-//
-//     ThetaDProof {
-//         sum,
-//         r: rs,
-//         c: c_subclaims,
-//         rot_c: rot_c_subclaims,
-//     }
-// }
+
+pub fn prove_sumcheck_theta_c(
+    transcript: &mut Prover,
+    size: usize,
+    beta_c: &[Fr],
+    beta_rot_c: &[Fr],
+    mut eq:  &mut [Fr],
+    mut rot:  &mut [Fr],
+    aij: &mut Vec<Vec<Fr>>,
+    mut sum: Fr,
+) -> ThetaCProof {
+    #[cfg(debug_assertions)]
+    {
+        assert_eq!(beta_c.len(), beta_rot_c.len());
+        assert_eq!(eq.len(), 1 << size);
+        assert_eq!(rot.len(), 1 << size);
+        assert_eq!(aij.len(), 25);
+        aij.iter().for_each(|a| {
+            assert_eq!(a.len(), 1 << size);
+        });
+    }
+
+    let mut rs = Vec::with_capacity(size);
+    for _ in 0..size {
+        // p(x) = p0 + p1 ⋅ x + p2 ⋅ x^2 + p3 ⋅ x^3 + p4 ⋅ x^4 + p5 ⋅ x^5 + p6 ⋅ x^6
+        let mut p0 = Fr::zero();
+        let mut pem1 = Fr::zero();
+        let mut pem2 = Fr::zero();
+        let mut pe2 = Fr::zero();
+        let mut pe3 = Fr::zero();
+        let mut p6 = Fr::zero();
+
+        let (e0, e1) = eq.split_at(eq.len() / 2);
+        let (rot0, rot1) = rot.split_at(rot.len() / 2);
+
+        let a = aij
+            .iter()
+            .map(|x| x.split_at(x.len() / 2))
+            .collect::<Vec<_>>();
+
+        for i in 0..e0.len() {
+            for j in 0..5 {
+                // TODO: no need to add so many times, partial results should be cached
+
+                // Evaluation at 0
+                let mut product = Fr::one();
+                for k in 0..5 {
+                    product *= a[k * 5 + j].0[i];
+                }
+                p0 += beta_c[j] * e0[i] * product + beta_rot_c[j] * rot0[i] * product;
+
+                // Evaluation at -1
+                let mut product = Fr::one();
+                for k in 0..5 {
+                    product *= a[k * 5 + j].0[i] + a[k * 5 + j].0[i] - a[k * 5 + j].1[i];
+                }
+                pem1 += beta_c[j] * (e0[i] + e0[i] - e1[i]) * product + beta_rot_c[j] * (rot0[i] + rot0[i] - rot1[i]) * product;
+
+                // Evaluation at -2
+                let mut product = Fr::one();
+                for k in 0..5 {
+                    product *= a[k * 5 + j].0[i] + a[k * 5 + j].0[i] + a[k * 5 + j].0[i] - a[k * 5 + j].1[i] - a[k * 5 + j].1[i];
+                }
+                pem2 += beta_c[j] * (e0[i] + e0[i] + e0[i] - e1[i] - e1[i]) * product + beta_rot_c[j] * (rot0[i] + rot0[i] + rot0[i] - rot1[i] - rot1[i]) * product;
+
+                // Evaluation at 2
+                let mut product = Fr::one();
+                for k in 0..5 {
+                    product *= a[k * 5 + j].1[i] + a[k * 5 + j].1[i] - a[k * 5 + j].0[i];
+                }
+                pe2 += beta_c[j] * (e1[i] + e1[i] - e0[i]) * product + beta_rot_c[j] * (rot1[i] + rot1[i] - rot0[i]) * product;
+
+                // Evaluation at 3
+                let mut product = Fr::one();
+                for k in 0..5 {
+                    product *= a[k * 5 + j].1[i] + a[k * 5 + j].1[i] + a[k * 5 + j].1[i] - a[k * 5 + j].0[i] - a[k * 5 + j].0[i];
+                }
+                pe3 += beta_c[j] * (e1[i] + e1[i] + e1[i] - e0[i] - e0[i]) * product + beta_rot_c[j] * (rot1[i] + rot1[i] + rot1[i] - rot0[i] - rot0[i]) * product;
+
+                // Evaluation at ∞
+                let mut product = Fr::one();
+                for k in 0..5 {
+                    product *= a[k * 5 + j].1[i] - a[k * 5 + j].0[i];
+                }
+                p6 += beta_c[j] * (e1[i] - e0[i]) * product + beta_rot_c[j] * (rot1[i] - rot0[i]) * product;
+            }
+        }
+
+        // Compute p1, p2, p3, p4, p5 from
+        //  p(0) + p(1) = 2 ⋅ p0 + p1 + p2 + p3 + p4 + p5 + p6
+        //  p(-1) = p0 - p1 + p2 - p3 + p4 - p5 + p6
+        //  p(-2) = p0 - 2 ⋅ p1 + 4 ⋅ p2 - 8 ⋅ p3 + 16 ⋅ p4
+        //  p(2) = p0 + 2 ⋅ p1 + 4 ⋅ p2 + 8 ⋅ p3 + 16 ⋅ p4
+        //  p(3) = p0 + 3 ⋅ p1 + 9 ⋅ p2 + 27 ⋅ p3 + 81 ⋅ p4
+        let pe1 = sum - p0;
+
+        let add_p2_p4 = HALF * (pe1 + pem1) - p0 - p6;
+        let add_p2_4p4 = (pe2 + pem2 - p0 - p0 - MontFp!("128") * p6) / MontFp!("8");
+        let p4 = (add_p2_4p4 - add_p2_p4) / MontFp!("3");
+        let p2 = add_p2_p4 - p4;
+
+        assert_eq!(pe1 + pem1, (p0 + p2 + p4 + p6) * MontFp!("2"));
+        assert_eq!(pe2 + pem2, MontFp!("2") * p0 + MontFp!("8") * p2 + MontFp!("32") * p4 + MontFp!("128") * p6);
+
+        let add_p1_p3_p5 = HALF * (pe1 - pem1);
+        let add_p1_4p3_16p5 = HALF * HALF * (pe2 - pem2);
+        let add_p1_9p3_81p5 = (pe3 - p0 - MontFp!("9") * p2 - MontFp!("81") * p4 - MontFp!("729") * p6) / MontFp!("3");
+        let p5 = (MontFp!("3") * add_p1_9p3_81p5 - MontFp!("8") * add_p1_4p3_16p5 + MontFp!("5") * add_p1_p3_p5) / MontFp!("120");
+
+        let add_p1_p3 = add_p1_p3_p5 - p5;
+        let add_p1_4p3 = add_p1_4p3_16p5 - MontFp!("16") * p5;
+        let p3 = (add_p1_4p3 - add_p1_p3) / MontFp!("3");
+        let p1 = add_p1_p3 - p3;
+
+        assert_eq!(add_p1_p3_p5, p1 + p3 + p5);
+        assert_eq!(add_p1_4p3_16p5, p1 + MontFp!("4") * p3 + MontFp!("16") * p5);
+        assert_eq!(add_p1_9p3_81p5, p1 + MontFp!("9") * p3 + MontFp!("81") * p5);
+
+        assert_eq!(pe1 - pem1, (p1 + p3 + p5) * MontFp!("2"));
+        assert_eq!(pe2 - pem2, MontFp!("4") * p1 + MontFp!("16") * p3 + MontFp!("64") * p5);
+
+        assert_eq!(sum, p0 + p0 + p1 + p2 + p3 + p4 + p5 + p6);
+        assert_eq!(pem1, p0 - p1 + p2 - p3 + p4 - p5 + p6);
+        assert_eq!(pem2, p0 - MontFp!("2") * p1 + MontFp!("4") * p2 - MontFp!("8") * p3 + MontFp!("16") * p4 - MontFp!("32")  * p5 + MontFp!("64") * p6);
+        assert_eq!(pe2, p0 + MontFp!("2") * p1 + MontFp!("4") * p2 + MontFp!("8")  * p3 + MontFp!("16") * p4 + MontFp!("32")  * p5 + MontFp!("64") * p6);
+        assert_eq!(pe3, p0 + MontFp!("3") * p1 + MontFp!("9") * p2 + MontFp!("27") * p3 + MontFp!("81") * p4 + MontFp!("243") * p5 + MontFp!("729") * p6);
+
+        // assert_eq!(pe2, p0 - p1 + p2 - p3 + p4 - p5 + p6);
+        // assert_eq!(pe3, p0 - p1 + p2 - p3 + p4 - p5 + p6);
+
+        assert_eq!(MontFp!("3"), Fr::one() + Fr::one() + Fr::one());
+
+        transcript.write(p1);
+        transcript.write(p2);
+        transcript.write(p3);
+        transcript.write(p4);
+        transcript.write(p5);
+        transcript.write(p6);
+
+        let r = transcript.read();
+        rs.push(r);
+        // TODO: Fold update into evaluation loop.
+        eq = update(eq, r);
+        rot = update(rot, r);
+        for j in 0..aij.len() {
+            // TODO: unnecessary allocation
+            aij[j] = update(&mut aij[j], r).to_vec();
+        }
+
+        // sum = p(r)
+        sum = p0 + r * (p1 + r * (p2 + r * (p3 + r * (p4 + r * (p5 + r * p6)))));
+    }
+
+    let mut subclaims = Vec::with_capacity(aij.len());
+    for j in 0..aij.len() {
+        transcript.write(aij[j][0]);
+        subclaims.push(aij[j][0]);
+    }
+
+    // check result
+    #[cfg(debug_assertions)]
+    {
+        let mut checksum = Fr::zero();
+        for j in 0..5 {
+            let mut a_product = Fr::zero();
+            let mut rot_product = Fr::zero();
+
+            let mut product = Fr::one();
+            for i in 0..5 {
+                product *= aij[i * 5 + j][0];
+            }
+            a_product += beta_c[j] * eq[0] * product;
+            rot_product += beta_rot_c[j] * rot[0] * product;
+
+            println!("  a[{j}][alpha]: {} * {} * {}", beta_c[j], eq[0], product);
+            println!("rot[{j}][alpha]: {} * {} * {}", beta_rot_c[j], rot[0], product);
+
+            checksum += a_product + rot_product;
+        }
+        assert_eq!(checksum, sum);
+    }
+
+    ThetaCProof {
+        sum,
+        r: rs,
+        a: subclaims,
+    }
+}
 
 #[cfg(test)]
 mod test {
