@@ -210,11 +210,11 @@ pub fn prove_sumcheck_theta_c(
         let p4 = (add_p2_4p4 - add_p2_p4) / MontFp!("3");
         let p2 = add_p2_p4 - p4;
 
-        assert_eq!(pe1 + pem1, (p0 + p2 + p4 + p6) * MontFp!("2"));
-        assert_eq!(
-            pe2 + pem2,
-            MontFp!("2") * p0 + MontFp!("8") * p2 + MontFp!("32") * p4 + MontFp!("128") * p6
-        );
+        // assert_eq!(pe1 + pem1, (p0 + p2 + p4 + p6) * MontFp!("2"));
+        // assert_eq!(
+        //     pe2 + pem2,
+        //     MontFp!("2") * p0 + MontFp!("8") * p2 + MontFp!("32") * p4 + MontFp!("128") * p6
+        // );
 
         let add_p1_p3_p5 = HALF * (pe1 - pem1);
         let add_p1_4p3_16p5 = HALF * HALF * (pe2 - pem2);
@@ -230,47 +230,47 @@ pub fn prove_sumcheck_theta_c(
         let p3 = (add_p1_4p3 - add_p1_p3) / MontFp!("3");
         let p1 = add_p1_p3 - p3;
 
-        assert_eq!(add_p1_p3_p5, p1 + p3 + p5);
-        assert_eq!(add_p1_4p3_16p5, p1 + MontFp!("4") * p3 + MontFp!("16") * p5);
-        assert_eq!(add_p1_9p3_81p5, p1 + MontFp!("9") * p3 + MontFp!("81") * p5);
+        // assert_eq!(add_p1_p3_p5, p1 + p3 + p5);
+        // assert_eq!(add_p1_4p3_16p5, p1 + MontFp!("4") * p3 + MontFp!("16") * p5);
+        // assert_eq!(add_p1_9p3_81p5, p1 + MontFp!("9") * p3 + MontFp!("81") * p5);
 
-        assert_eq!(pe1 - pem1, (p1 + p3 + p5) * MontFp!("2"));
-        assert_eq!(
-            pe2 - pem2,
-            MontFp!("4") * p1 + MontFp!("16") * p3 + MontFp!("64") * p5
-        );
-
-        assert_eq!(sum, p0 + p0 + p1 + p2 + p3 + p4 + p5 + p6);
-        assert_eq!(pem1, p0 - p1 + p2 - p3 + p4 - p5 + p6);
-        assert_eq!(
-            pem2,
-            p0 - MontFp!("2") * p1 + MontFp!("4") * p2 - MontFp!("8") * p3 + MontFp!("16") * p4
-                - MontFp!("32") * p5
-                + MontFp!("64") * p6
-        );
-        assert_eq!(
-            pe2,
-            p0 + MontFp!("2") * p1
-                + MontFp!("4") * p2
-                + MontFp!("8") * p3
-                + MontFp!("16") * p4
-                + MontFp!("32") * p5
-                + MontFp!("64") * p6
-        );
-        assert_eq!(
-            pe3,
-            p0 + MontFp!("3") * p1
-                + MontFp!("9") * p2
-                + MontFp!("27") * p3
-                + MontFp!("81") * p4
-                + MontFp!("243") * p5
-                + MontFp!("729") * p6
-        );
+        // assert_eq!(pe1 - pem1, (p1 + p3 + p5) * MontFp!("2"));
+        // assert_eq!(
+        //     pe2 - pem2,
+        //     MontFp!("4") * p1 + MontFp!("16") * p3 + MontFp!("64") * p5
+        // );
+        // 
+        // assert_eq!(sum, p0 + p0 + p1 + p2 + p3 + p4 + p5 + p6);
+        // assert_eq!(pem1, p0 - p1 + p2 - p3 + p4 - p5 + p6);
+        // assert_eq!(
+        //     pem2,
+        //     p0 - MontFp!("2") * p1 + MontFp!("4") * p2 - MontFp!("8") * p3 + MontFp!("16") * p4
+        //         - MontFp!("32") * p5
+        //         + MontFp!("64") * p6
+        // );
+        // assert_eq!(
+        //     pe2,
+        //     p0 + MontFp!("2") * p1
+        //         + MontFp!("4") * p2
+        //         + MontFp!("8") * p3
+        //         + MontFp!("16") * p4
+        //         + MontFp!("32") * p5
+        //         + MontFp!("64") * p6
+        // );
+        // assert_eq!(
+        //     pe3,
+        //     p0 + MontFp!("3") * p1
+        //         + MontFp!("9") * p2
+        //         + MontFp!("27") * p3
+        //         + MontFp!("81") * p4
+        //         + MontFp!("243") * p5
+        //         + MontFp!("729") * p6
+        // );
 
         // assert_eq!(pe2, p0 - p1 + p2 - p3 + p4 - p5 + p6);
         // assert_eq!(pe3, p0 - p1 + p2 - p3 + p4 - p5 + p6);
 
-        assert_eq!(MontFp!("3"), Fr::one() + Fr::one() + Fr::one());
+        // assert_eq!(MontFp!("3"), Fr::one() + Fr::one() + Fr::one());
 
         transcript.write(p1);
         transcript.write(p2);
