@@ -65,7 +65,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
 
     // verify rho
     let rot = (0..25)
-        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(&vrs, i))
+        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(num_vars, &vrs, i))
         .collect::<Vec<_>>();
 
     let (ve, vrs) = verify_sumcheck::<2>(&mut verifier, num_vars, expected_sum);

@@ -18,10 +18,9 @@ pub fn prove_theta_d(
     c: &[u64],
     sum: Fr,
 ) -> ThetaDProof {
-    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
-
     let instances = 1 << (num_vars - 6);
 
+    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
     let mut cs = c.chunks_exact(instances).map(|x| to_poly_xor_base_multi(x)).collect::<Vec<_>>();
     let mut rot_c = c.chunks_exact(instances)
         .map(|x| to_poly_xor_base_multi(&x.iter().map(|y| y.rotate_left(1)).collect::<Vec<_>>()))

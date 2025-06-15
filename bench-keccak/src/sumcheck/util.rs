@@ -29,7 +29,7 @@ pub fn calculate_evaluations_over_boolean_hypercube_for_eq(r: &[Fr]) -> Vec<Fr> 
 }
 
 /// List of evaluations for rot_i(r, x) over the boolean hypercube
-pub fn calculate_evaluations_over_boolean_hypercube_for_rot(r: &[Fr], i: usize) -> Vec<Fr> {
+pub fn calculate_evaluations_over_boolean_hypercube_for_rot(size: usize, r: &[Fr], i: usize) -> Vec<Fr> {
     let rot = rot_poly(RHO_OFFSETS[i] as usize);
     // println!("partial eval {} {}", rot.len(), r.len());
     partial_eval_mle(&rot, r)
@@ -68,6 +68,7 @@ fn eval_eq(eval: &[Fr], out: &mut [Fr], scalar: Fr) {
     }
 }
 
+// TODO: remove non-multi versions
 pub fn to_poly(x: u64) -> Vec<Fr> {
     let mut res = Vec::with_capacity(64);
     let mut k = 1;
@@ -78,6 +79,22 @@ pub fn to_poly(x: u64) -> Vec<Fr> {
             res.push(Fr::ZERO);
         }
         k <<= 1;
+    }
+    res
+}
+
+pub fn to_poly_multi(x: &[u64]) -> Vec<Fr> {
+    let mut res = Vec::with_capacity(x.len() * 64);
+    let mut k = 1;
+    for el in x {
+        for _ in 0..64 {
+            if *el & k > 0 {
+                res.push(Fr::ONE);
+            } else {
+                res.push(Fr::ZERO);
+            }
+            k <<= 1;
+        }
     }
     res
 }

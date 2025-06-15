@@ -1,8 +1,9 @@
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 
-use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_rot, eval_mle, to_poly};
+use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_rot, eval_mle, to_poly, to_poly_multi};
 use crate::{sumcheck::util::update, transcript::Prover};
+use crate::reference::{keccak_round, ROUND_CONSTANTS, STATE};
 
 // rotate input k bits left to
 pub fn rot_poly(k: usize) -> Vec<Fr> {
@@ -34,10 +35,12 @@ pub fn prove_rho(
     theta: &[u64],
     sum: Fr,
 ) -> RhoProof {
+    let instances = 1 << (num_vars - 6);
+
     let mut rots = (0..25)
-        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(r, i))
+        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(num_vars, r, i))
         .collect::<Vec<_>>();
-    let mut thetas = theta.iter().map(|u| to_poly(*u)).collect::<Vec<_>>();
+    let mut thetas = theta.chunks_exact(instances).map(|u| to_poly_multi(u)).collect::<Vec<_>>();
 
     let proof = prove_sumcheck_rho(transcript, num_vars, beta, &mut rots, &mut thetas, sum);
 
@@ -48,7 +51,7 @@ pub fn prove_rho(
             .enumerate()
             .map(|(i, theta)| {
                 let theta = to_poly(*theta);
-                let rot = calculate_evaluations_over_boolean_hypercube_for_rot(r, i);
+                let rot = calculate_evaluations_over_boolean_hypercube_for_rot(num_vars, r, i);
                 beta[i] * eval_mle(&theta, &proof.r) * eval_mle(&rot, &proof.r)
             })
             .sum();
@@ -141,4 +144,59 @@ pub fn prove_sumcheck_rho(
         r: rs,
         theta: subclaims,
     }
+}
+
+#[test]
+fn rho_no_recursion() {
+    let num_vars = 6; // two instances
+    let instances = 1usize << (num_vars - 6);
+
+    let mut data = (0..(instances * STATE)).map(|i| i as u64).collect::<Vec<_>>();
+    let state = keccak_round(&mut data, ROUND_CONSTANTS[0]);
+
+    let mut prover = Prover::new();
+    let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
+    let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+
+    let rho = state.rho.chunks_exact(instances).map(|x| to_poly_multi(x)).collect::<Vec<_>>();
+
+    let real_rho_sum: Fr = rho
+        .iter()
+        .enumerate()
+        .map(|(i, poly)| beta[i] * eval_mle(poly, &alpha))
+        .sum();
+
+    let proof = prove_rho(
+        &mut prover,
+        num_vars,
+        &alpha,
+        &beta,
+        &state.theta,
+        real_rho_sum,
+    );
+
+    let rot = (0..25)
+        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(num_vars, &alpha, i))
+        .collect::<Vec<_>>();
+    let theta = state.theta.iter().map(|x| to_poly(*x)).collect::<Vec<_>>();
+    //
+    // let mut theta_sum = Fr::zero();
+    // for i in 0..25 {
+    //     for k in 0..(1 << num_vars) {
+    //         theta_sum += beta[i] * rot[i][k] * theta[i][k];
+    //     }
+    // }
+    // assert_eq!(theta_sum, real_rho_sum);
+    //
+    // let proof = {
+    //     let mut rots = rot.clone();
+    //     let mut thetas = theta.clone();
+    //     prove_sumcheck_rho(&mut prover, num_vars, &beta, &mut rots, &mut thetas, real_rho_sum)
+    // };
+    //
+    let mut checksum = Fr::zero();
+    for i in 0..25 {
+        checksum += beta[i] * eval_mle(&rot[i], &proof.r) * eval_mle(&theta[i], &proof.r);
+    }
+    assert_eq!(checksum, proof.sum);
 }
