@@ -6,6 +6,7 @@ use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{MontFp, One, Zero};
 use tracing::instrument;
+use crate::poseidon::permute_3;
 
 pub struct ThetaCProof {
     pub sum: Fr,
@@ -102,6 +103,20 @@ pub fn prove_sumcheck_theta_c(
             .collect::<Vec<_>>();
 
         for j in 0..5 {
+            let mut p0_c = Fr::zero();
+            let mut pem1_c = Fr::zero();
+            let mut pem2_c = Fr::zero();
+            let mut pe2_c = Fr::zero();
+            let mut pe3_c = Fr::zero();
+            let mut p6_c = Fr::zero();
+
+            let mut p0_rot = Fr::zero();
+            let mut pem1_rot = Fr::zero();
+            let mut pem2_rot = Fr::zero();
+            let mut pe2_rot = Fr::zero();
+            let mut pe3_rot = Fr::zero();
+            let mut p6_rot = Fr::zero();
+
             for i in 0..e0.len() {
                 // TODO: no need to add so many times, partial results should be cached
 
@@ -110,16 +125,16 @@ pub fn prove_sumcheck_theta_c(
                 for k in 0..5 {
                     product *= a[k * 5 + j].0[i];
                 }
-                p0 += (beta_c[j] * e0[i] + beta_rot_c[j] * rot0[i]) * product;
+                p0_c += product * e0[i];
+                p0_rot += product * rot0[i];
 
                 // Evaluation at -1
                 let mut product = Fr::one();
                 for k in 0..5 {
                     product *= a[k * 5 + j].0[i] + a[k * 5 + j].0[i] - a[k * 5 + j].1[i];
                 }
-                pem1 += (beta_c[j] * (e0[i] + e0[i] - e1[i])
-                    + beta_rot_c[j] * (rot0[i] + rot0[i] - rot1[i]))
-                    * product;
+                pem1_c += product * (e0[i] + e0[i] - e1[i]);
+                pem1_rot += product * (rot0[i] + rot0[i] - rot1[i]);
 
                 // Evaluation at -2
                 let mut product = Fr::one();
@@ -128,18 +143,16 @@ pub fn prove_sumcheck_theta_c(
                         - a[k * 5 + j].1[i]
                         - a[k * 5 + j].1[i];
                 }
-                pem2 += (beta_c[j] * (e0[i] + e0[i] + e0[i] - e1[i] - e1[i])
-                    + beta_rot_c[j] * (rot0[i] + rot0[i] + rot0[i] - rot1[i] - rot1[i]))
-                    * product;
+                pem2_c += product * (e0[i] + e0[i] + e0[i] - e1[i] - e1[i]);
+                pem2_rot += product * (rot0[i] + rot0[i] + rot0[i] - rot1[i] - rot1[i]);
 
                 // Evaluation at 2
                 let mut product = Fr::one();
                 for k in 0..5 {
                     product *= a[k * 5 + j].1[i] + a[k * 5 + j].1[i] - a[k * 5 + j].0[i];
                 }
-                pe2 += (beta_c[j] * (e1[i] + e1[i] - e0[i])
-                    + beta_rot_c[j] * (rot1[i] + rot1[i] - rot0[i]))
-                    * product;
+                pe2_c += product * (e1[i] + e1[i] - e0[i]);
+                pe2_rot += product * (rot1[i] + rot1[i] - rot0[i]);
 
                 // Evaluation at 3
                 let mut product = Fr::one();
@@ -148,17 +161,24 @@ pub fn prove_sumcheck_theta_c(
                         - a[k * 5 + j].0[i]
                         - a[k * 5 + j].0[i];
                 }
-                pe3 += (beta_c[j] * (e1[i] + e1[i] + e1[i] - e0[i] - e0[i])
-                    + beta_rot_c[j] * (rot1[i] + rot1[i] + rot1[i] - rot0[i] - rot0[i]))
-                    * product;
+                pe3_c += product * (e1[i] + e1[i] + e1[i] - e0[i] - e0[i]);
+                pe3_rot += product * (rot1[i] + rot1[i] + rot1[i] - rot0[i] - rot0[i]);
 
                 // Evaluation at ∞
                 let mut product = Fr::one();
                 for k in 0..5 {
                     product *= a[k * 5 + j].1[i] - a[k * 5 + j].0[i];
                 }
-                p6 += (beta_c[j] * (e1[i] - e0[i]) + beta_rot_c[j] * (rot1[i] - rot0[i])) * product;
+                p6_c += product * (e1[i] - e0[i]);
+                p6_rot += product * (rot1[i] - rot0[i]);
             }
+
+            p0 += p0_c * beta_c[j] + p0_rot * beta_rot_c[j];
+            pem1 += pem1_c * beta_c[j] + pem1_rot * beta_rot_c[j];
+            pem2 += pem2_c * beta_c[j] + pem2_rot * beta_rot_c[j];
+            pe2 += pe2_c * beta_c[j] + pe2_rot * beta_rot_c[j];
+            pe3 += pe3_c * beta_c[j] + pe3_rot * beta_rot_c[j];
+            p6 += p6_c * beta_c[j] + p6_rot * beta_rot_c[j];
         }
 
         // Compute p1, p2, p3, p4, p5 from

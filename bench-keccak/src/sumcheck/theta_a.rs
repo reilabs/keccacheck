@@ -90,14 +90,24 @@ pub fn prove_sumcheck_theta_a(
             let bb = beta_b[j];
             let a = a[j].0.iter().zip(a[j].1);
 
+            let mut p0_a = Fr::zero();
+            let mut p0_b = Fr::zero();
+            let mut p2_a = Fr::zero();
+            let mut p2_b = Fr::zero();
+
             for (i, (a0, a1)) in a.enumerate() {
                 // Evaluation at 0
-                p0 += (ba * ea0[i] + bb * eb0[i]) * a0;
+                p0_a += ea0[i] * a0;
+                p0_b += eb0[i] * a0;
 
                 // Evaluation at ∞
                 let v = a1 - a0;
-                p2 += (ba * (ea1[i] - ea0[i]) + bb * (eb1[i] - eb0[i])) * v;
+                p2_a += (ea1[i] - ea0[i]) * v;
+                p2_b += (eb1[i] - eb0[i]) * v;
             }
+
+            p0 += ba * p0_a + bb * p0_b;
+            p2 += ba * p2_a + bb * p2_b;
         }
 
         // Compute p1 from
