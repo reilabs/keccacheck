@@ -2,6 +2,7 @@ use crate::sumcheck::util::{HALF, calculate_evaluations_over_boolean_hypercube_f
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{MontFp, One, Zero};
+use tracing::instrument;
 
 pub struct ThetaCProof {
     pub sum: Fr,
@@ -9,6 +10,7 @@ pub struct ThetaCProof {
     pub a: Vec<Fr>,
 }
 
+#[instrument(skip_all)]
 pub fn prove_theta_c(
     transcript: &mut Prover,
     num_vars: usize,

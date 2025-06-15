@@ -3,7 +3,9 @@ use crate::sumcheck::util::{add_col, calculate_evaluations_over_boolean_hypercub
 use crate::transcript::Verifier;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
+use tracing::instrument;
 
+#[instrument(skip_all)]
 pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     let instances = 1usize << (num_vars - 6);
 

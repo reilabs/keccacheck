@@ -1,3 +1,5 @@
+use tracing::instrument;
+
 pub const COLUMNS: usize = 5;
 pub const ROWS: usize = 5;
 pub const STATE: usize = COLUMNS * ROWS;
@@ -66,6 +68,7 @@ pub struct KeccakRoundState {
     pub a: Vec<u64>,      // input, should be equal to iota from the previous round
 }
 
+#[instrument(skip_all)]
 pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
     assert_eq!(a.len() % STATE, 0);
     let instances = a.len() / STATE;

@@ -7,10 +7,12 @@ use crate::sumcheck::util::{eval_mle, to_poly, to_poly_multi};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
+use tracing::instrument;
 use crate::sumcheck::theta_a::prove_theta_a;
 use crate::sumcheck::theta_c::prove_theta_c;
 use crate::sumcheck::theta_d::prove_theta_d;
 
+#[instrument(skip(layers))]
 pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
     let instances = 1usize << (num_vars - 6);
 

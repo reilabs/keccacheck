@@ -2,6 +2,7 @@ use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq,
 use crate::{sumcheck::util::update, transcript::Prover};
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
+use tracing::instrument;
 
 pub struct ThetaAProof {
     pub sum: Fr,
@@ -9,6 +10,7 @@ pub struct ThetaAProof {
     pub iota: Vec<Fr>,
 }
 
+#[instrument(skip_all)]
 pub fn prove_theta_a(
     transcript: &mut Prover,
     num_vars: usize,

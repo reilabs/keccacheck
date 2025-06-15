@@ -1,3 +1,4 @@
+use std::env;
 use crate::prover::prove;
 use crate::reference::{ROUND_CONSTANTS, keccak_round, STATE};
 use crate::verifier::verify;
@@ -11,8 +12,6 @@ mod prover;
 mod verifier;
 
 // High-level tasks:
-// - TODO: support for multiple instances
-//     - TODO: derive_rot_evaluations_from_eq needs to be updated
 // - TODO: add benchmarks
 // - TODO: perf: use multithreaded sumcheck
 // - TODO: perf: reuse pi polynomials in sumcheck
@@ -20,7 +19,16 @@ mod verifier;
 // - TODO: perf: remove unnecessary allocations
 
 fn main() {
-    let num_vars = 7; // two instances
+    tracing_forest::init();
+
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() != 2 {
+        eprintln!("Usage: {} <number>", args[0]);
+        std::process::exit(1);
+    }
+    let num_vars = args[1].parse().unwrap();
+    
     let instances = 1usize << (num_vars - 6);
 
     let mut data = (0..(instances * STATE)).map(|i| i as u64).collect::<Vec<_>>();

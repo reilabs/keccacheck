@@ -1,7 +1,7 @@
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use std::str::FromStr;
-
+use tracing::instrument;
 use crate::reference::{apply_pi, apply_pi_t, keccak_round, ROUND_CONSTANTS, STATE};
 use crate::sumcheck::util::{add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly, to_poly_multi};
 use crate::{
@@ -15,6 +15,7 @@ pub struct ChiProof {
     pub pi: Vec<Fr>,
 }
 
+#[instrument(skip_all)]
 pub fn prove_chi(
     transcript: &mut Prover,
     num_vars: usize,
@@ -58,7 +59,7 @@ pub fn prove_chi(
     proof
 }
 
-/// Sumcheck for $\sum_x e(x) ⋅ (\sum_ij \beta_ij ⋅ xor(\pi_{ij}, not(\pi_{i+1,j}) ⋅ \pi_{i+2, j}))$.
+#[instrument(skip_all)]
 pub fn prove_sumcheck_chi(
     transcript: &mut Prover,
     size: usize,

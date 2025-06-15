@@ -1,6 +1,6 @@
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
-
+use tracing::instrument;
 use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_rot, eval_mle, to_poly, to_poly_multi};
 use crate::{sumcheck::util::update, transcript::Prover};
 use crate::reference::{keccak_round, ROUND_CONSTANTS, STATE};
@@ -28,6 +28,7 @@ pub struct RhoProof {
     pub theta: Vec<Fr>,
 }
 
+#[instrument(skip_all)]
 pub fn prove_rho(
     transcript: &mut Prover,
     num_vars: usize,

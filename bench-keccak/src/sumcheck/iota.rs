@@ -1,7 +1,7 @@
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use itertools::izip;
-
+use tracing::instrument;
 use crate::reference::{keccak_round, ROUND_CONSTANTS, STATE};
 use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly, to_poly_multi};
 use crate::{
@@ -16,6 +16,7 @@ pub struct IotaProof {
     pub chi_rlc: Fr,
 }
 
+#[instrument(skip_all)]
 pub fn prove_iota(
     transcript: &mut Prover,
     num_vars: usize,
