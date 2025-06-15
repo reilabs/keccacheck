@@ -1,3 +1,4 @@
+use crate::poseidon::permute_3;
 use crate::sumcheck::util::{
     HALF, calculate_evaluations_over_boolean_hypercube_for_eq, derive_rot_evaluations_from_eq,
     to_poly_xor_base, update,
@@ -6,7 +7,6 @@ use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{MontFp, One, Zero};
 use tracing::instrument;
-use crate::poseidon::permute_3;
 
 pub struct ThetaCProof {
     pub sum: Fr,
@@ -118,12 +118,32 @@ pub fn prove_sumcheck_theta_c(
             let mut p6_rot = Fr::zero();
 
             for i in 0..e0.len() {
-                // TODO: no need to add so many times, partial results should be cached
+                let ax = (0..5)
+                    .map(|k| {
+                        let a0 = a[k * 5 + j].0[i];
+                        let a0_2 = a0 + a0;
+                        let a0_3 = a0_2 + a0;
+                        let a1 = a[k * 5 + j].1[i];
+                        let a1_2 = a1 + a1;
+                        let a1_3 = a1_2 + a1;
+                        ((a0, a0_2, a0_3), (a1, a1_2, a1_3))
+                    })
+                    .collect::<Vec<_>>();
+
+                let e0_1 = e0[i] + e0[i];
+                let e0_2 = e0_1 + e0[i];
+                let e1_1 = e1[i] + e1[i];
+                let e1_2 = e1_1 + e1[i];
+
+                let rot0_1 = rot0[i] + rot0[i];
+                let rot0_2 = rot0_1 + rot0[i];
+                let rot1_1 = rot1[i] + rot1[i];
+                let rot1_2 = rot1_1 + rot1[i];
 
                 // Evaluation at 0
                 let mut product = Fr::one();
                 for k in 0..5 {
-                    product *= a[k * 5 + j].0[i];
+                    product *= ax[k].0.0;
                 }
                 p0_c += product * e0[i];
                 p0_rot += product * rot0[i];
@@ -131,43 +151,39 @@ pub fn prove_sumcheck_theta_c(
                 // Evaluation at -1
                 let mut product = Fr::one();
                 for k in 0..5 {
-                    product *= a[k * 5 + j].0[i] + a[k * 5 + j].0[i] - a[k * 5 + j].1[i];
+                    product *= ax[k].0.1 - ax[k].1.0;
                 }
-                pem1_c += product * (e0[i] + e0[i] - e1[i]);
-                pem1_rot += product * (rot0[i] + rot0[i] - rot1[i]);
+                pem1_c += product * (e0_1 - e1[i]);
+                pem1_rot += product * (rot0_1 - rot1[i]);
 
                 // Evaluation at -2
                 let mut product = Fr::one();
                 for k in 0..5 {
-                    product *= a[k * 5 + j].0[i] + a[k * 5 + j].0[i] + a[k * 5 + j].0[i]
-                        - a[k * 5 + j].1[i]
-                        - a[k * 5 + j].1[i];
+                    product *= ax[k].0.2 - ax[k].1.1;
                 }
-                pem2_c += product * (e0[i] + e0[i] + e0[i] - e1[i] - e1[i]);
-                pem2_rot += product * (rot0[i] + rot0[i] + rot0[i] - rot1[i] - rot1[i]);
+                pem2_c += product * (e0_2 - e1_1);
+                pem2_rot += product * (rot0_2 - rot1_1);
 
                 // Evaluation at 2
                 let mut product = Fr::one();
                 for k in 0..5 {
-                    product *= a[k * 5 + j].1[i] + a[k * 5 + j].1[i] - a[k * 5 + j].0[i];
+                    product *= ax[k].1.1 - ax[k].0.0;
                 }
-                pe2_c += product * (e1[i] + e1[i] - e0[i]);
-                pe2_rot += product * (rot1[i] + rot1[i] - rot0[i]);
+                pe2_c += product * (e1_1 - e0[i]);
+                pe2_rot += product * (rot1_1 - rot0[i]);
 
                 // Evaluation at 3
                 let mut product = Fr::one();
                 for k in 0..5 {
-                    product *= a[k * 5 + j].1[i] + a[k * 5 + j].1[i] + a[k * 5 + j].1[i]
-                        - a[k * 5 + j].0[i]
-                        - a[k * 5 + j].0[i];
+                    product *= ax[k].1.2 - ax[k].0.1;
                 }
-                pe3_c += product * (e1[i] + e1[i] + e1[i] - e0[i] - e0[i]);
-                pe3_rot += product * (rot1[i] + rot1[i] + rot1[i] - rot0[i] - rot0[i]);
+                pe3_c += product * (e1_2 - e0_1);
+                pe3_rot += product * (rot1_2 - rot0_1);
 
                 // Evaluation at ∞
                 let mut product = Fr::one();
                 for k in 0..5 {
-                    product *= a[k * 5 + j].1[i] - a[k * 5 + j].0[i];
+                    product *= ax[k].1.0 - ax[k].0.0;
                 }
                 p6_c += product * (e1[i] - e0[i]);
                 p6_rot += product * (rot1[i] - rot0[i]);
