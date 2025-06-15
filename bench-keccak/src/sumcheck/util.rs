@@ -1,6 +1,7 @@
 use ark_bn254::Fr;
 use ark_ff::{AdditiveGroup, Field, MontFp, One, Zero};
-
+use crate::reference::RHO_OFFSETS;
+use crate::sumcheck::rho::rot_poly;
 use crate::transcript::Verifier;
 
 #[inline(always)]
@@ -24,6 +25,27 @@ pub const fn workload_size<T: Sized>() -> usize {
 pub fn calculate_evaluations_over_boolean_hypercube_for_eq(r: &[Fr]) -> Vec<Fr> {
     let mut result = vec![Fr::zero(); 1 << r.len()];
     eval_eq(r, &mut result, Fr::one());
+    result
+}
+
+/// List of evaluations for rot_i(r, x) over the boolean hypercube
+pub fn calculate_evaluations_over_boolean_hypercube_for_rot(r: &[Fr], i: usize) -> Vec<Fr> {
+    let rot = rot_poly(RHO_OFFSETS[i] as usize);
+    // println!("partial eval {} {}", rot.len(), r.len());
+    partial_eval_mle(&rot, r)
+}
+
+pub fn derive_rot_evaluations_from_eq(eq: &[Fr], size: usize) -> Vec<Fr> {
+    let mut result = vec![Fr::zero(); eq.len()];
+    let instances = eq.len() / 64;
+    for instance in 0..instances {
+        for i in 0..64 {
+            // Shift only 6 last variables (u64)
+            result[instance * 64 + i] = eq[instance * 64 + (i + size) % 64];
+            // println!("translating {} into {}", instance * 64 + i, instance * 64 + (i + size) % 64);
+        }
+
+    }
     result
 }
 
@@ -70,6 +92,23 @@ pub fn to_poly_xor_base(x: u64) -> Vec<Fr> {
             res.push(Fr::ONE);
         }
         k <<= 1;
+    }
+    res
+}
+
+// low bits are elements, high bits are instances
+pub fn to_poly_xor_base_multi(x: &[u64]) -> Vec<Fr> {
+    let mut res = Vec::with_capacity(x.len() * 64);
+    for el in x {
+        let mut k = 1;
+        for _ in 0..64 {
+            if *el & k > 0 {
+                res.push(-Fr::ONE);
+            } else {
+                res.push(Fr::ONE);
+            }
+            k <<= 1;
+        }
     }
     res
 }

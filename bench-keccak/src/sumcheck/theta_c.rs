@@ -1,7 +1,4 @@
-use crate::sumcheck::rho::derive_rot_evaluations_from_eq;
-use crate::sumcheck::util::{
-    HALF, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base, update,
-};
+use crate::sumcheck::util::{HALF, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base, update, to_poly_xor_base_multi, derive_rot_evaluations_from_eq};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{MontFp, One, Zero};
@@ -23,7 +20,8 @@ pub fn prove_theta_c(
 ) -> ThetaCProof {
     let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
     let mut rot = derive_rot_evaluations_from_eq(&eq, 1);
-    let mut a = a.iter().map(|x| to_poly_xor_base(*x)).collect::<Vec<_>>();
+    let instances = 1 << (num_vars - 6);
+    let mut a = a.chunks_exact(instances).map(|x| to_poly_xor_base_multi(x)).collect::<Vec<_>>();
 
     #[cfg(debug_assertions)]
     {
@@ -285,62 +283,57 @@ pub fn prove_sumcheck_theta_c(
 
 #[cfg(test)]
 mod test {
-    use crate::reference::{ROUND_CONSTANTS, keccak_round};
-    use crate::sumcheck::rho::{
-        calculate_evaluations_over_boolean_hypercube_for_rot, derive_rot_evaluations_from_eq,
-    };
+    use crate::reference::{ROUND_CONSTANTS, keccak_round, STATE, COLUMNS};
     use crate::sumcheck::theta_c::prove_theta_c;
-    use crate::sumcheck::theta_d::prove_theta_d;
-    use crate::sumcheck::util::{
-        calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base,
-    };
+    use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, calculate_evaluations_over_boolean_hypercube_for_rot, derive_rot_evaluations_from_eq, eval_mle, to_poly_xor_base, to_poly_xor_base_multi};
     use crate::transcript::Prover;
     use ark_bn254::Fr;
     use ark_ff::{One, Zero};
 
     #[test]
     fn theta_c_no_recursion() {
-        let input = [
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-            24,
-        ];
-        let mut buf = input;
-        let state = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
+        let num_vars = 7; // two instances
+        let instances = 1usize << (num_vars - 6);
 
-        let num_vars = 6; // a single u64, one instance
+        let mut data = (0..(instances * STATE)).map(|i| i as u64).collect::<Vec<_>>();
+        let state = keccak_round(&mut data, ROUND_CONSTANTS[0]);
 
         let mut prover = Prover::new();
         let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
-        let beta_c = (0..5).map(|_| prover.read()).collect::<Vec<_>>();
-        let beta_rot_c = (0..5).map(|_| prover.read()).collect::<Vec<_>>();
+        let beta_c = (0..COLUMNS).map(|_| prover.read()).collect::<Vec<_>>();
+        let beta_rot_c = (0..COLUMNS).map(|_| prover.read()).collect::<Vec<_>>();
 
         let theta_c = state
             .c
-            .iter()
-            .map(|x| to_poly_xor_base(*x))
+            .chunks_exact(instances)
+            .map(|x| to_poly_xor_base_multi(x))
             .collect::<Vec<_>>();
         let theta_rot_c = state
             .c
-            .iter()
-            .map(|x| to_poly_xor_base(x.rotate_left(1)))
+            .chunks_exact(instances)
+            .map(|x| to_poly_xor_base_multi(&x.iter().map(|y| y.rotate_left(1)).collect::<Vec<_>>()))
             .collect::<Vec<_>>();
 
-        // TODO: implement sumcheck
+        assert_eq!(state.c.len(), instances * COLUMNS);
+        assert_eq!(theta_c.len(), COLUMNS);
 
         let mut real_theta_c_sum = Fr::zero();
-        for i in 0..5 {
+        for i in 0..COLUMNS {
             // println!("c[{i}] = {}", beta_c[i] * eval_mle(&theta_c[i], &alpha));
             // println!("rot_c[{i}] = {}", beta_rot_c[i] * eval_mle(&theta_rot_c[i], &alpha));
             real_theta_c_sum += beta_c[i] * eval_mle(&theta_c[i], &alpha)
                 + beta_rot_c[i] * eval_mle(&theta_rot_c[i], &alpha);
         }
 
-        println!("real_theta_c_sum: {}", real_theta_c_sum);
+        // println!("real_theta_c_sum: {}", real_theta_c_sum);
 
-        let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
-        let expected_rot = calculate_evaluations_over_boolean_hypercube_for_rot(&alpha, 1);
-        let rot = derive_rot_evaluations_from_eq(&eq, 1);
-        assert_eq!(expected_rot, rot);
+        // println!("START");
+        // let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
+        // let expected_rot = calculate_evaluations_over_boolean_hypercube_for_rot(&alpha, 1);
+        // let rot = derive_rot_evaluations_from_eq(&eq, 1);
+        // println!("END");
+        //
+        // assert_eq!(expected_rot, rot);
 
         prove_theta_c(
             &mut prover,

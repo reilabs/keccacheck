@@ -1,6 +1,5 @@
 use crate::reference::{ROUND_CONSTANTS, strip_pi};
-use crate::sumcheck::rho::{calculate_evaluations_over_boolean_hypercube_for_rot, derive_rot_evaluations_from_eq};
-use crate::sumcheck::util::{add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly, verify_sumcheck, xor, HALF};
+use crate::sumcheck::util::{add_col, calculate_evaluations_over_boolean_hypercube_for_eq, calculate_evaluations_over_boolean_hypercube_for_rot, derive_rot_evaluations_from_eq, eval_mle, to_poly, verify_sumcheck, xor, HALF};
 use crate::transcript::Verifier;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
@@ -14,8 +13,6 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
         .collect::<Vec<_>>();
     let mut beta = (0..25).map(|_| verifier.generate()).collect::<Vec<_>>();
 
-    // TODO: we can maybe skip this step and only depend on the sum in the transcript
-    // correct sum is required to recover sumcheck polynomials
     let expected_sum = (0..25)
         .map(|i| beta[i] * eval_mle(&to_poly(output[i]), &alpha))
         .sum();

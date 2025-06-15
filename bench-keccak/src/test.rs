@@ -1,16 +1,12 @@
 use crate::reference::{ROUND_CONSTANTS, apply_pi, keccak_round};
 use crate::sumcheck::chi::prove_sumcheck_chi;
 use crate::sumcheck::iota::prove_sumcheck_iota;
-use crate::sumcheck::rho::{calculate_evaluations_over_boolean_hypercube_for_rot, prove_rho};
-use crate::sumcheck::theta::{prove_sumcheck_theta, prove_theta};
-use crate::sumcheck::util::{
-    add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
-    to_poly_xor_base, xor,
-};
+use crate::sumcheck::util::{add_col, calculate_evaluations_over_boolean_hypercube_for_eq, calculate_evaluations_over_boolean_hypercube_for_rot, eval_mle, to_poly, to_poly_xor_base, xor};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use std::str::FromStr;
+use crate::sumcheck::rho::prove_rho;
 
 #[test]
 fn iota_no_recursion() {

@@ -1,8 +1,7 @@
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 
-use crate::reference::RHO_OFFSETS;
-use crate::sumcheck::util::{eval_mle, partial_eval_mle, to_poly};
+use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_rot, eval_mle, to_poly};
 use crate::{sumcheck::util::update, transcript::Prover};
 
 // rotate input k bits left to
@@ -17,22 +16,6 @@ pub fn rot_poly(k: usize) -> Vec<Fr> {
                 result.push(Fr::zero());
             }
         }
-    }
-    result
-}
-
-/// List of evaluations for rot_i(r, x) over the boolean hypercube
-pub fn calculate_evaluations_over_boolean_hypercube_for_rot(r: &[Fr], i: usize) -> Vec<Fr> {
-    let rot = rot_poly(RHO_OFFSETS[i] as usize);
-    partial_eval_mle(&rot, r)
-}
-
-pub fn derive_rot_evaluations_from_eq(eq: &[Fr], size: usize) -> Vec<Fr> {
-    let mut result = vec![Fr::zero(); eq.len()];
-    for i in 0..(eq.len()) {
-        // TODO: this needs to be updated for multi-instance support
-        // Shift only 6 last variables (u64)
-        result[i] = eq[(i + size) % eq.len()];
     }
     result
 }

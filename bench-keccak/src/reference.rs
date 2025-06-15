@@ -1,3 +1,7 @@
+pub const COLUMNS: usize = 5;
+pub const ROWS: usize = 5;
+pub const STATE: usize = COLUMNS * ROWS;
+
 pub fn apply_pi<T: Copy>(rho: &[T], pi: &mut [T]) {
     // Position (0,0) doesn't change
     // For all other positions, use the PI mapping
@@ -31,65 +35,112 @@ pub struct KeccakRoundState {
 }
 
 pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
-    assert_eq!(a.len(), 25);
+    assert_eq!(a.len() % STATE, 0);
+    let instances = a.len() / STATE;
 
     let mut result = KeccakRoundState::default();
-    result.a = a.to_vec();
+    result.a = vec![0; a.len()];
+    // transpose a
+    for i in 0..instances {
+        for x in 0..STATE {
+            result.a[instances * x + i] = a[i * STATE + x];
+        }
+    }
+
+    println!("a: {a:?}");
+    println!("t: {:?}", result.a);
 
     // Theta
-    let mut c: [u64; 5] = [0; 5];
-    for x in 0..5 {
-        for y_count in 0..5 {
-            let y = y_count * 5;
-            c[x] ^= a[x + y];
+    let mut c = vec![0; COLUMNS * instances];
+    for i in 0..instances {
+        for x in 0..COLUMNS {
+            for y_count in 0..ROWS {
+                let y = y_count * COLUMNS;
+                c[instances * x + i] ^= a[i * STATE + x + y];
+            }
         }
     }
-    result.c = c.to_vec();
+    result.c = c.clone();
+    println!("c: {:?}", result.c);
 
-    let mut d: [u64; 5] = [0; 5];
-    for x in 0..5 {
-        d[x] = c[(x + 4) % 5] ^ c[(x + 1) % 5].rotate_left(1);
-        for y_count in 0..5 {
-            let y = y_count * 5;
-            a[y + x] ^= d[x];
+    let mut d = vec![0; COLUMNS * instances];
+    for i in 0..instances {
+        for x in 0..5 {
+            d[x * instances + i] = c[((x + 4) % 5) * instances + i] ^ c[((x + 1) % 5) * instances + i].rotate_left(1);
+            for y_count in 0..5 {
+                let y = y_count * 5;
+                a[i * STATE + y + x] ^= d[x * instances + i];
+            }
         }
     }
-    result.d = d.to_vec();
-    result.theta = a.to_vec();
+    result.d = d.clone();
+    println!("d: {:?}", result.d);
+
+    // transpose a
+    result.theta = vec![0; a.len()];
+    for i in 0..instances {
+        for x in 0..STATE {
+            result.theta[instances * x + i] = a[i * STATE + x];
+        }
+    }
+    println!("theta: {:?}", result.theta);
 
     // Rho
     // Apply rotation to each lane
-    for x in 1..25 {
-        // Skip position (0,0) - it doesn't rotate
-        a[x] = a[x].rotate_left(RHO_OFFSETS[x]);
+    for i in 0..instances {
+        for x in 1..25 {
+            // Skip position (0,0) - it doesn't rotate
+            a[i * STATE + x] = a[i * STATE + x].rotate_left(RHO_OFFSETS[x]);
+        }
     }
-
-    result.rho = a.to_vec();
+    result.rho = vec![0; a.len()];
+    for i in 0..instances {
+        for x in 0..STATE {
+            result.rho[instances * x + i] = a[i * STATE + x];
+        }
+    }
+    println!("rho: {:?}", result.rho);
 
     // Pi
     // Permute the positions of lanes
     let state_copy = a.to_owned();
-    apply_pi(&state_copy, a);
-
-    // Chi
-    for y_step in 0..5 {
-        let y = y_step * 5;
-
-        for x in 0..5 {
-            c[x] = a[y + x];
-        }
-
-        for x in 0..5 {
-            a[y + x] = c[x] ^ ((!c[(x + 1) % 5]) & (c[(x + 2) % 5]));
-        }
+    for i in 0..instances {
+        apply_pi(&state_copy[i * STATE..(i + 1) * STATE], &mut a[i * STATE..(i + 1) * STATE]);
     }
 
-    result.pi_chi = a.to_vec();
+    // Chi
+    for i in 0..instances {
+        for y_step in 0..5 {
+            let y = y_step * 5;
+
+            for x in 0..5 {
+                c[x * instances + i] = a[i * STATE + y + x];
+            }
+
+            for x in 0..5 {
+                a[i * STATE + y + x] = c[x * instances + i] ^ ((!c[((x + 1) % 5) * instances + i]) & (c[((x + 2) % 5) * instances + i]));
+            }
+        }
+    }
+    result.pi_chi = vec![0; a.len()];
+    for i in 0..instances {
+        for x in 0..STATE {
+            result.pi_chi[instances * x + i] = a[i * STATE + x];
+        }
+    }
+    println!("pi_chi: {:?}", result.pi_chi);
 
     // Iota
-    a[0] ^= rc;
-
-    result.iota = a.to_vec();
+    for i in 0..instances {
+        a[i * STATE] ^= rc;
+    }
+    result.iota = vec![0; a.len()];
+    for i in 0..instances {
+        for x in 0..STATE {
+            result.iota[instances * x + i] = a[i * STATE + x];
+        }
+    }
+    println!("iota: {:?}", result.iota);
 
     result
 }
