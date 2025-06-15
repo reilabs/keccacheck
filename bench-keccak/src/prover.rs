@@ -1,9 +1,9 @@
-use crate::reference::{KeccakRoundState, strip_pi};
+use crate::reference::{KeccakRoundState, strip_pi, strip_pi_t};
 use crate::sumcheck::chi::prove_chi;
 use crate::sumcheck::iota::prove_iota;
 use crate::sumcheck::rho::prove_rho;
 use crate::sumcheck::theta::prove_theta;
-use crate::sumcheck::util::{eval_mle, to_poly};
+use crate::sumcheck::util::{eval_mle, to_poly, to_poly_multi};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
@@ -12,6 +12,8 @@ use crate::sumcheck::theta_c::prove_theta_c;
 use crate::sumcheck::theta_d::prove_theta_d;
 
 pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
+    let instances = 1usize << (num_vars - 6);
+
     let mut prover = Prover::new();
 
     // TODO: feed output to the prover before obtaining alpha
@@ -21,10 +23,10 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
     // write final output sum
     let sum: Fr = layers
         .iota
-        .iter()
+        .chunks_exact(instances)
         .enumerate()
         .map(|(i, x)| {
-            let poly = to_poly(*x);
+            let poly = to_poly_multi(x);
             beta[i] * eval_mle(&poly, &alpha)
         })
         .sum();
@@ -53,7 +55,7 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
 
     // strip pi to get rho
     let mut rho = pi_chi_proof.pi.clone();
-    strip_pi(&pi_chi_proof.pi, &mut rho);
+    strip_pi_t(&pi_chi_proof.pi, &mut rho);
 
     // combine subclaims on rho
     let mut sum = Fr::zero();

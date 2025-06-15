@@ -1,8 +1,8 @@
 use crate::reference::{ROUND_CONSTANTS, keccak_round, STATE};
-use crate::sumcheck::util::{HALF, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base, update, to_poly_xor_base_multi};
+use crate::sumcheck::util::{HALF, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base, update, to_poly_xor_base_multi, to_poly_multi};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
-use ark_ff::Zero;
+use ark_ff::{One, Zero};
 
 pub struct ThetaProof {
     pub sum: Fr,
@@ -175,15 +175,14 @@ fn theta_no_recursion() {
     let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
     let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
-    let theta = state
+    let real_theta_sum: Fr = state
         .theta
         .chunks_exact(instances)
-        .map(|x| to_poly_xor_base_multi(x))
-        .collect::<Vec<_>>();
-    let real_theta_sum: Fr = theta
-        .iter()
+        .map(|x| to_poly_multi(x))
+        .map(|poly| eval_mle(&poly, &alpha) )
+        .map(|x| Fr::one() - x - x)
         .enumerate()
-        .map(|(i, poly)| beta[i] * eval_mle(poly, &alpha))
+        .map(|(i, x)| beta[i] * x)
         .sum();
 
     prove_theta(

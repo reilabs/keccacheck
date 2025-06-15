@@ -21,6 +21,7 @@ pub fn rot_poly(k: usize) -> Vec<Fr> {
     result
 }
 
+#[derive(Debug)]
 pub struct RhoProof {
     pub sum: Fr,
     pub r: Vec<Fr>,

@@ -1,5 +1,5 @@
 use crate::prover::prove;
-use crate::reference::{ROUND_CONSTANTS, keccak_round};
+use crate::reference::{ROUND_CONSTANTS, keccak_round, STATE};
 use crate::verifier::verify;
 
 mod poseidon;
@@ -8,8 +8,6 @@ mod sumcheck;
 mod transcript;
 
 mod prover;
-#[cfg(test)]
-mod test;
 mod verifier;
 
 // High-level tasks:
@@ -22,14 +20,13 @@ mod verifier;
 // - TODO: perf: remove unnecessary allocations
 
 fn main() {
-    let input = [
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-    ];
-    let mut buf = input;
-    let layers = keccak_round(&mut buf, ROUND_CONSTANTS[0]);
+    let num_vars = 7; // two instances
+    let instances = 1usize << (num_vars - 6);
 
-    let num_vars = 6; // a single u64, one instance
-    let proof = prove(num_vars, &layers);
-    verify(num_vars, &layers.iota, &layers.a, &proof);
+    let mut data = (0..(instances * STATE)).map(|i| i as u64).collect::<Vec<_>>();
+    let state = keccak_round(&mut data, ROUND_CONSTANTS[0]);
+
+    let proof = prove(num_vars, &state);
+    verify(num_vars, &state.iota, &state.a, &proof);
     println!("OK.")
 }

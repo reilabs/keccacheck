@@ -87,8 +87,8 @@ pub fn to_poly(x: u64) -> Vec<Fr> {
 
 pub fn to_poly_multi(x: &[u64]) -> Vec<Fr> {
     let mut res = Vec::with_capacity(x.len() * 64);
-    let mut k = 1;
     for el in x {
+        let mut k = 1;
         for _ in 0..64 {
             if *el & k > 0 {
                 res.push(Fr::ONE);

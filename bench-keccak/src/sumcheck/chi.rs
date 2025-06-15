@@ -40,9 +40,9 @@ pub fn prove_chi(
         let e_eq = eval_mle(&eq, &proof.r); // TODO: can evaluate eq faster
 
         let pi = pi
-            .iter()
+            .chunks_exact(instances)
             .map(|u| {
-                let poly = to_poly(*u);
+                let poly = to_poly_multi(u);
                 eval_mle(&poly, &proof.r)
             })
             .collect::<Vec<_>>();

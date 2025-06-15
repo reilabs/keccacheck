@@ -1,10 +1,12 @@
-use crate::reference::{ROUND_CONSTANTS, strip_pi};
-use crate::sumcheck::util::{add_col, calculate_evaluations_over_boolean_hypercube_for_eq, calculate_evaluations_over_boolean_hypercube_for_rot, derive_rot_evaluations_from_eq, eval_mle, to_poly, verify_sumcheck, xor, HALF};
+use crate::reference::{ROUND_CONSTANTS, strip_pi, strip_pi_t};
+use crate::sumcheck::util::{add_col, calculate_evaluations_over_boolean_hypercube_for_eq, calculate_evaluations_over_boolean_hypercube_for_rot, derive_rot_evaluations_from_eq, eval_mle, to_poly, to_poly_multi, verify_sumcheck, xor, HALF};
 use crate::transcript::Verifier;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 
 pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
+    let instances = 1usize << (num_vars - 6);
+
     let mut verifier = Verifier::new(proof);
 
     // TODO: feed output to the verifier before obtaining alpha
@@ -14,14 +16,14 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     let mut beta = (0..25).map(|_| verifier.generate()).collect::<Vec<_>>();
 
     let expected_sum = (0..25)
-        .map(|i| beta[i] * eval_mle(&to_poly(output[i]), &alpha))
+        .map(|i| beta[i] * eval_mle(&to_poly_multi(&output[(i*instances)..(i*instances+instances)]), &alpha))
         .sum();
     let sum = verifier.read();
     assert_eq!(sum, expected_sum);
 
     // verify iota
     let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
-    let rc = to_poly(ROUND_CONSTANTS[0]);
+    let rc = to_poly_multi(&vec![ROUND_CONSTANTS[0]; instances]);
 
     let (ve, vrs) = verify_sumcheck::<3>(&mut verifier, num_vars, sum);
     let chi_00 = verifier.read();
@@ -54,7 +56,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
 
     // strip pi to get rho
     let mut rho = pi.clone();
-    strip_pi(&pi, &mut rho);
+    strip_pi_t(&pi, &mut rho);
 
     // combine subclaims on rho
     let mut expected_sum = Fr::zero();
@@ -194,6 +196,6 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
 
     // for a single round keccak, this was the last step. make sure inputs match
     for i in 0..25 {
-        assert_eq!(eval_mle(&to_poly(input[i]), &vrs), iota[i]);
+        assert_eq!(eval_mle(&to_poly_multi(&input[(i*instances)..(i*instances+instances)]), &vrs), iota[i]);
     }
 }

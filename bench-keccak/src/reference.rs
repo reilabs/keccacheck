@@ -38,6 +38,22 @@ pub fn strip_pi<T: Copy>(pi: &[T], rho: &mut [T]) {
     }
 }
 
+pub fn strip_pi_t<T: Copy>(pi: &[T], rho: &mut [T]) {
+    assert_eq!(rho.len(), pi.len());
+    assert_eq!(rho.len() % STATE, 0);
+    let instances = rho.len() / STATE;
+
+    // Position (0,0) doesn't change
+    // For all other positions, use the PI mapping
+    for i in 0..24 {
+        // i+1 is the source position (skipping 0,0)
+        // PI[i] is the target position
+        rho[(instances*(i + 1)..(instances * (i+2)))].copy_from_slice(&pi[(instances * PI[i])..(instances * (PI[i] + 1))]);
+        // rho[i + 1] = pi[PI[i]];
+    }
+}
+
+
 // TODO: all state should be slicing into global state array with many keccak instances
 #[derive(Debug, Default)]
 pub struct KeccakRoundState {
@@ -63,8 +79,8 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
         }
     }
 
-    println!("a: {a:?}");
-    println!("t: {:?}", result.a);
+    // println!("a: {a:?}");
+    // println!("t: {:?}", result.a);
 
     // Theta
     let mut c = vec![0; COLUMNS * instances];
@@ -77,7 +93,7 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
         }
     }
     result.c = c.clone();
-    println!("c: {:?}", result.c);
+    // println!("c: {:?}", result.c);
 
     let mut d = vec![0; COLUMNS * instances];
     for i in 0..instances {
@@ -90,7 +106,7 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
         }
     }
     result.d = d.clone();
-    println!("d: {:?}", result.d);
+    // println!("d: {:?}", result.d);
 
     // transpose a
     result.theta = vec![0; a.len()];
@@ -99,7 +115,7 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
             result.theta[instances * x + i] = a[i * STATE + x];
         }
     }
-    println!("theta: {:?}", result.theta);
+    // println!("theta: {:?}", result.theta);
 
     // Rho
     // Apply rotation to each lane
@@ -115,7 +131,7 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
             result.rho[instances * x + i] = a[i * STATE + x];
         }
     }
-    println!("rho: {:?}", result.rho);
+    // println!("rho: {:?}", result.rho);
 
     // Pi
     // Permute the positions of lanes
@@ -144,7 +160,7 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
             result.pi_chi[instances * x + i] = a[i * STATE + x];
         }
     }
-    println!("pi_chi: {:?}", result.pi_chi);
+    // println!("pi_chi: {:?}", result.pi_chi);
 
     // Iota
     for i in 0..instances {
@@ -156,7 +172,7 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
             result.iota[instances * x + i] = a[i * STATE + x];
         }
     }
-    println!("iota: {:?}", result.iota);
+    // println!("iota: {:?}", result.iota);
 
     result
 }
