@@ -1,5 +1,5 @@
 use crate::sumcheck::util::{
-    calculate_evaluations_over_boolean_hypercube_for_rot, eval_mle, to_poly_multi,
+    calculate_evaluations_over_boolean_hypercube_for_rot, eval_mle, to_poly,
 };
 use crate::{sumcheck::util::update, transcript::Prover};
 use ark_bn254::Fr;
@@ -41,11 +41,11 @@ pub fn prove_rho(
     let instances = 1 << (num_vars - 6);
 
     let mut rots = (0..25)
-        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(num_vars, r, i))
+        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(r, i))
         .collect::<Vec<_>>();
     let mut thetas = theta
         .chunks_exact(instances)
-        .map(|u| to_poly_multi(u))
+        .map(|u| to_poly(u))
         .collect::<Vec<_>>();
 
     let proof = prove_sumcheck_rho(transcript, num_vars, beta, &mut rots, &mut thetas, sum);
@@ -56,8 +56,8 @@ pub fn prove_rho(
             .chunks_exact(instances)
             .enumerate()
             .map(|(i, theta)| {
-                let theta = to_poly_multi(theta);
-                let rot = calculate_evaluations_over_boolean_hypercube_for_rot(num_vars, r, i);
+                let theta = to_poly(theta);
+                let rot = calculate_evaluations_over_boolean_hypercube_for_rot(r, i);
                 beta[i] * eval_mle(&theta, &proof.r) * eval_mle(&rot, &proof.r)
             })
             .sum();
@@ -162,7 +162,6 @@ pub fn prove_sumcheck_rho(
 mod tests {
     use super::*;
     use crate::reference::{ROUND_CONSTANTS, STATE, keccak_round};
-    use crate::sumcheck::util::to_poly;
 
     #[test]
     fn rho_no_recursion() {
@@ -181,7 +180,7 @@ mod tests {
         let real_rho_sum: Fr = state
             .rho
             .chunks_exact(instances)
-            .map(|x| to_poly_multi(x))
+            .map(|x| to_poly(x))
             .enumerate()
             .map(|(i, poly)| beta[i] * eval_mle(&poly, &alpha))
             .sum();

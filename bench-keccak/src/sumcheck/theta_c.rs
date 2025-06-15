@@ -1,6 +1,6 @@
 use crate::sumcheck::util::{
     HALF, calculate_evaluations_over_boolean_hypercube_for_eq, derive_rot_evaluations_from_eq,
-    to_poly_xor_base_multi, update,
+    to_poly_xor_base, update,
 };
 use crate::transcript::Prover;
 use ark_bn254::Fr;
@@ -28,7 +28,7 @@ pub fn prove_theta_c(
     let instances = 1 << (num_vars - 6);
     let mut a = a
         .chunks_exact(instances)
-        .map(|x| to_poly_xor_base_multi(x))
+        .map(|x| to_poly_xor_base(x))
         .collect::<Vec<_>>();
 
     #[cfg(debug_assertions)]
@@ -298,7 +298,7 @@ mod test {
     use crate::sumcheck::util::{
         calculate_evaluations_over_boolean_hypercube_for_eq,
         calculate_evaluations_over_boolean_hypercube_for_rot, derive_rot_evaluations_from_eq,
-        eval_mle, to_poly_xor_base_multi,
+        eval_mle, to_poly_xor_base,
     };
     use crate::transcript::Prover;
     use ark_bn254::Fr;
@@ -322,14 +322,12 @@ mod test {
         let theta_c = state
             .c
             .chunks_exact(instances)
-            .map(|x| to_poly_xor_base_multi(x))
+            .map(|x| to_poly_xor_base(x))
             .collect::<Vec<_>>();
         let theta_rot_c = state
             .c
             .chunks_exact(instances)
-            .map(|x| {
-                to_poly_xor_base_multi(&x.iter().map(|y| y.rotate_left(1)).collect::<Vec<_>>())
-            })
+            .map(|x| to_poly_xor_base(&x.iter().map(|y| y.rotate_left(1)).collect::<Vec<_>>()))
             .collect::<Vec<_>>();
 
         assert_eq!(state.c.len(), instances * COLUMNS);
@@ -346,8 +344,7 @@ mod test {
         // println!("real_theta_c_sum: {}", real_theta_c_sum);
 
         let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
-        let expected_rot =
-            calculate_evaluations_over_boolean_hypercube_for_rot(num_vars, &alpha, 1);
+        let expected_rot = calculate_evaluations_over_boolean_hypercube_for_rot(&alpha, 1);
         let rot = derive_rot_evaluations_from_eq(&eq, 1);
         assert_eq!(expected_rot, rot);
 

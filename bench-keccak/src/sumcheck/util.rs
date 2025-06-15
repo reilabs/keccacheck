@@ -28,16 +28,9 @@ pub fn calculate_evaluations_over_boolean_hypercube_for_eq(r: &[Fr]) -> Vec<Fr> 
 }
 
 /// List of evaluations for rot_i(r, x) over the boolean hypercube
-pub fn calculate_evaluations_over_boolean_hypercube_for_rot(
-    size: usize,
-    r: &[Fr],
-    i: usize,
-) -> Vec<Fr> {
+pub fn calculate_evaluations_over_boolean_hypercube_for_rot(r: &[Fr], i: usize) -> Vec<Fr> {
     let eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
     derive_rot_evaluations_from_eq(&eq, RHO_OFFSETS[i] as usize)
-    // let rot = rot_poly(RHO_OFFSETS[i] as usize);
-    // println!("partial eval {} {}", rot.len(), r.len());
-    // partial_eval_mle(&rot, r)
 }
 
 pub fn derive_rot_evaluations_from_eq(eq: &[Fr], size: usize) -> Vec<Fr> {
@@ -72,22 +65,7 @@ fn eval_eq(eval: &[Fr], out: &mut [Fr], scalar: Fr) {
     }
 }
 
-// TODO: remove non-multi versions
-pub fn to_poly(x: u64) -> Vec<Fr> {
-    let mut res = Vec::with_capacity(64);
-    let mut k = 1;
-    for _ in 0..64 {
-        if x & k > 0 {
-            res.push(Fr::ONE);
-        } else {
-            res.push(Fr::ZERO);
-        }
-        k <<= 1;
-    }
-    res
-}
-
-pub fn to_poly_multi(x: &[u64]) -> Vec<Fr> {
+pub fn to_poly(x: &[u64]) -> Vec<Fr> {
     let mut res = Vec::with_capacity(x.len() * 64);
     for el in x {
         let mut k = 1;
@@ -103,22 +81,8 @@ pub fn to_poly_multi(x: &[u64]) -> Vec<Fr> {
     res
 }
 
-pub fn to_poly_xor_base(x: u64) -> Vec<Fr> {
-    let mut res = Vec::with_capacity(64);
-    let mut k = 1;
-    for _ in 0..64 {
-        if x & k > 0 {
-            res.push(-Fr::ONE);
-        } else {
-            res.push(Fr::ONE);
-        }
-        k <<= 1;
-    }
-    res
-}
-
 // low bits are elements, high bits are instances
-pub fn to_poly_xor_base_multi(x: &[u64]) -> Vec<Fr> {
+pub fn to_poly_xor_base(x: &[u64]) -> Vec<Fr> {
     let mut res = Vec::with_capacity(x.len() * 64);
     for el in x {
         let mut k = 1;
@@ -175,20 +139,6 @@ pub fn eval_mle(coefficients: &[Fr], eval: &[Fr]) -> Fr {
         (Fr::one() - x) * eval_mle(c0, tail) + x * eval_mle(c1, tail)
     } else {
         coefficients[0]
-    }
-}
-
-pub fn partial_eval_mle(coefficients: &[Fr], eval: &[Fr]) -> Vec<Fr> {
-    //debug_assert_eq!(coefficients.len(), 1 << eval.len());
-    if let Some((&x, tail)) = eval.split_first() {
-        let (c0, c1) = coefficients.split_at(coefficients.len() / 2);
-        partial_eval_mle(c0, tail)
-            .iter()
-            .zip(partial_eval_mle(c1, tail))
-            .map(|(c0, c1)| (Fr::one() - x) * c0 + x * c1)
-            .collect()
-    } else {
-        coefficients.to_vec()
     }
 }
 

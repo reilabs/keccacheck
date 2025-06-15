@@ -2,7 +2,7 @@ use crate::reference::{ROUND_CONSTANTS, strip_pi_t};
 use crate::sumcheck::util::{
     HALF, add_col, calculate_evaluations_over_boolean_hypercube_for_eq,
     calculate_evaluations_over_boolean_hypercube_for_rot, derive_rot_evaluations_from_eq, eval_mle,
-    to_poly_multi, verify_sumcheck, xor,
+    to_poly, verify_sumcheck, xor,
 };
 use crate::transcript::Verifier;
 use ark_bn254::Fr;
@@ -25,7 +25,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
         .map(|i| {
             beta[i]
                 * eval_mle(
-                    &to_poly_multi(&output[(i * instances)..(i * instances + instances)]),
+                    &to_poly(&output[(i * instances)..(i * instances + instances)]),
                     &alpha,
                 )
         })
@@ -35,7 +35,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
 
     // verify iota
     let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
-    let rc = to_poly_multi(&vec![ROUND_CONSTANTS[0]; instances]);
+    let rc = to_poly(&vec![ROUND_CONSTANTS[0]; instances]);
 
     let (ve, vrs) = verify_sumcheck::<3>(&mut verifier, num_vars, sum);
     let chi_00 = verifier.read();
@@ -79,7 +79,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
 
     // verify rho
     let rot = (0..25)
-        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(num_vars, &vrs, i))
+        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(&vrs, i))
         .collect::<Vec<_>>();
 
     let (ve, vrs) = verify_sumcheck::<2>(&mut verifier, num_vars, expected_sum);
@@ -207,7 +207,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     for i in 0..25 {
         assert_eq!(
             eval_mle(
-                &to_poly_multi(&input[(i * instances)..(i * instances + instances)]),
+                &to_poly(&input[(i * instances)..(i * instances + instances)]),
                 &vrs
             ),
             iota[i]

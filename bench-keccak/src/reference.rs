@@ -30,16 +30,6 @@ pub fn apply_pi_t<T: Copy>(rho: &[T], pi: &mut [T]) {
     }
 }
 
-pub fn strip_pi<T: Copy>(pi: &[T], rho: &mut [T]) {
-    // Position (0,0) doesn't change
-    // For all other positions, use the PI mapping
-    for i in 0..24 {
-        // i+1 is the source position (skipping 0,0)
-        // PI[i] is the target position
-        rho[i + 1] = pi[PI[i]];
-    }
-}
-
 pub fn strip_pi_t<T: Copy>(pi: &[T], rho: &mut [T]) {
     assert_eq!(rho.len(), pi.len());
     assert_eq!(rho.len() % STATE, 0);

@@ -1,5 +1,5 @@
 use crate::sumcheck::util::{
-    HALF, calculate_evaluations_over_boolean_hypercube_for_eq, to_poly_xor_base_multi, update,
+    HALF, calculate_evaluations_over_boolean_hypercube_for_eq, to_poly_xor_base, update,
 };
 use crate::transcript::Prover;
 use ark_bn254::Fr;
@@ -27,11 +27,11 @@ pub fn prove_theta_d(
     let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
     let mut cs = c
         .chunks_exact(instances)
-        .map(|x| to_poly_xor_base_multi(x))
+        .map(|x| to_poly_xor_base(x))
         .collect::<Vec<_>>();
     let mut rot_c = c
         .chunks_exact(instances)
-        .map(|x| to_poly_xor_base_multi(&x.iter().map(|y| y.rotate_left(1)).collect::<Vec<_>>()))
+        .map(|x| to_poly_xor_base(&x.iter().map(|y| y.rotate_left(1)).collect::<Vec<_>>()))
         .collect::<Vec<_>>();
 
     #[cfg(debug_assertions)]
@@ -174,7 +174,7 @@ pub fn prove_sumcheck_theta_d(
 mod test {
     use crate::reference::{ROUND_CONSTANTS, STATE, keccak_round};
     use crate::sumcheck::theta_d::prove_theta_d;
-    use crate::sumcheck::util::{eval_mle, to_poly_xor_base_multi};
+    use crate::sumcheck::util::{eval_mle, to_poly_xor_base};
     use crate::transcript::Prover;
     use ark_bn254::Fr;
 
@@ -195,7 +195,7 @@ mod test {
         let theta_d = state
             .d
             .chunks_exact(instances)
-            .map(|x| to_poly_xor_base_multi(x))
+            .map(|x| to_poly_xor_base(x))
             .collect::<Vec<_>>();
         let real_theta_d_sum: Fr = theta_d
             .iter()

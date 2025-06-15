@@ -1,6 +1,6 @@
 use crate::reference::ROUND_CONSTANTS;
 use crate::sumcheck::util::{
-    calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_multi,
+    calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
 };
 use crate::{
     sumcheck::util::{HALF, update, xor},
@@ -30,13 +30,13 @@ pub fn prove_iota(
     let instances = 1 << (num_vars - 6);
 
     let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
-    let mut chi_00 = to_poly_multi(&chi[0..instances]);
-    let mut rc = to_poly_multi(&vec![ROUND_CONSTANTS[0]; instances]);
+    let mut chi_00 = to_poly(&chi[0..instances]);
+    let mut rc = to_poly(&vec![ROUND_CONSTANTS[0]; instances]);
     let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
     // iterating from 1 to skip the first state element (i, j) = (0, 0)
     for el in 1..25 {
         let slice = &chi[(el * instances)..(el * instances + instances)];
-        let poly = to_poly_multi(slice);
+        let poly = to_poly(slice);
         for x in 0..(1 << num_vars) {
             chi_rlc[x] += beta[el] * poly[x];
         }
@@ -57,12 +57,12 @@ pub fn prove_iota(
     {
         // sumcheck consumed all polynomials. create again
         let eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
-        let chi_00 = to_poly_multi(&chi[0..instances]);
-        let rc = to_poly_multi(&vec![ROUND_CONSTANTS[0]; instances]);
+        let chi_00 = to_poly(&chi[0..instances]);
+        let rc = to_poly(&vec![ROUND_CONSTANTS[0]; instances]);
         let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
         for el in 1..25 {
             let slice = &chi[(el * instances)..(el * instances + instances)];
-            let poly = to_poly_multi(slice);
+            let poly = to_poly(slice);
             for x in 0..(1 << num_vars) {
                 chi_rlc[x] += beta[el] * poly[x];
             }
@@ -185,13 +185,13 @@ mod tests {
         let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
         let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
-        let chi_00 = to_poly_multi(&state.pi_chi[0..instances]);
-        let rc = to_poly_multi(&vec![ROUND_CONSTANTS[0]; instances]);
+        let chi_00 = to_poly(&state.pi_chi[0..instances]);
+        let rc = to_poly(&vec![ROUND_CONSTANTS[0]; instances]);
         let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
         for el in 1..25 {
             // iterating from 1 to skip the first state element (i, j) = (0, 0)
             let slice = &state.pi_chi[(el * instances)..(el * instances + instances)];
-            let poly = to_poly_multi(slice);
+            let poly = to_poly(slice);
             for x in 0..(1 << num_vars) {
                 chi_rlc[x] += beta[el] * poly[x];
             }
@@ -199,12 +199,12 @@ mod tests {
         let chi = state
             .pi_chi
             .chunks_exact(instances)
-            .map(|x| to_poly_multi(x))
+            .map(|x| to_poly(x))
             .collect::<Vec<_>>();
         let iota = state
             .iota
             .chunks_exact(instances)
-            .map(|x| to_poly_multi(x))
+            .map(|x| to_poly(x))
             .collect::<Vec<_>>();
 
         let real_iota_sum: Fr = iota
@@ -242,7 +242,7 @@ mod tests {
             let mut p = [Fr::zero(); 4];
             for i in 0..iota.len() {
                 for k in 0..(1 << (num_vars - step - 1)) {
-                    let under_sum = to_poly(k)[0..(num_vars - step - 1)].to_vec();
+                    let under_sum = to_poly(&[k])[0..(num_vars - step - 1)].to_vec();
                     let mut eval = vec![Fr::zero(); step + 1];
                     for k in 0..step {
                         eval[k] = prs[k];

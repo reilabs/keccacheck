@@ -1,5 +1,5 @@
 use crate::sumcheck::util::{
-    HALF, calculate_evaluations_over_boolean_hypercube_for_eq, to_poly_xor_base_multi, update,
+    HALF, calculate_evaluations_over_boolean_hypercube_for_eq, to_poly_xor_base, update,
 };
 use crate::transcript::Prover;
 use ark_bn254::Fr;
@@ -28,7 +28,7 @@ pub fn prove_theta(
     let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
     let mut d = d
         .chunks_exact(instances)
-        .map(|x| to_poly_xor_base_multi(x))
+        .map(|x| to_poly_xor_base(x))
         .collect::<Vec<_>>();
     let mut ai = (0..5)
         .map(|i| {
@@ -36,7 +36,7 @@ pub fn prove_theta(
             for j in 0..5 {
                 let id = j * 5 + i;
                 let idx = id * instances;
-                let poly = to_poly_xor_base_multi(&a[idx..(idx + instances)]);
+                let poly = to_poly_xor_base(&a[idx..(idx + instances)]);
                 for x in 0..(1 << num_vars) {
                     rlc[x] += beta[id] * poly[x];
                 }
@@ -173,7 +173,7 @@ pub fn prove_sumcheck_theta(
 mod tests {
     use super::*;
     use crate::reference::{ROUND_CONSTANTS, STATE, keccak_round};
-    use crate::sumcheck::util::{eval_mle, to_poly, to_poly_multi};
+    use crate::sumcheck::util::{eval_mle, to_poly};
     use ark_ff::One;
     #[test]
     fn theta_no_recursion() {
@@ -192,7 +192,7 @@ mod tests {
         let real_theta_sum: Fr = state
             .theta
             .chunks_exact(instances)
-            .map(|x| to_poly_multi(x))
+            .map(|x| to_poly(x))
             .map(|poly| eval_mle(&poly, &alpha))
             .map(|x| Fr::one() - x - x)
             .enumerate()

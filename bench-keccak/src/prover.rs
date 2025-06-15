@@ -6,7 +6,7 @@ use crate::sumcheck::theta::prove_theta;
 use crate::sumcheck::theta_a::prove_theta_a;
 use crate::sumcheck::theta_c::prove_theta_c;
 use crate::sumcheck::theta_d::prove_theta_d;
-use crate::sumcheck::util::{eval_mle, to_poly_multi};
+use crate::sumcheck::util::{eval_mle, to_poly};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
@@ -28,7 +28,7 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
         .chunks_exact(instances)
         .enumerate()
         .map(|(i, x)| {
-            let poly = to_poly_multi(x);
+            let poly = to_poly(x);
             beta[i] * eval_mle(&poly, &alpha)
         })
         .sum();
@@ -159,7 +159,7 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
     });
 
     // prove theta a
-    let theta_a_proof = prove_theta_a(
+    let _theta_a_proof = prove_theta_a(
         &mut prover,
         num_vars,
         &theta_proof.r,

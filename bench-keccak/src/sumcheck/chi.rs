@@ -1,6 +1,6 @@
 use crate::reference::apply_pi_t;
 use crate::sumcheck::util::{
-    add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_multi,
+    add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
 };
 use crate::{
     sumcheck::util::{HALF, update, xor},
@@ -34,7 +34,7 @@ pub fn prove_chi(
     let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
     let mut pis = pi
         .chunks_exact(instances)
-        .map(|x| to_poly_multi(x))
+        .map(|x| to_poly(x))
         .collect::<Vec<_>>();
 
     let proof = prove_sumcheck_chi(transcript, num_vars, beta, &mut eq, &mut pis, sum);
@@ -48,7 +48,7 @@ pub fn prove_chi(
         let pi = pi
             .chunks_exact(instances)
             .map(|u| {
-                let poly = to_poly_multi(u);
+                let poly = to_poly(u);
                 eval_mle(&poly, &proof.r)
             })
             .collect::<Vec<_>>();
@@ -91,10 +91,14 @@ pub fn prove_sumcheck_chi(
             .collect::<Vec<_>>();
 
         for j in 0..pi.len() {
+            let mut p0t = Fr::zero();
+            let mut pem1t = Fr::zero();
+            let mut p4t = Fr::zero();
+            let mut pe2t = Fr::zero();
+
             for i in 0..e0.len() {
                 // Evaluation at 0
-                p0 += e0[i]
-                    * beta[j]
+                p0t += e0[i]
                     * xor(
                         pi[j].0[i],
                         (Fr::one() - pi[add_col(j, 1)].0[i]) * pi[add_col(j, 2)].0[i],
@@ -108,12 +112,10 @@ pub fn prove_sumcheck_chi(
                     pi[add_col(j, 1)].0[i] + pi[add_col(j, 1)].0[i] - pi[add_col(j, 1)].1[i];
                 let piem1_10 =
                     pi[add_col(j, 2)].0[i] + pi[add_col(j, 2)].0[i] - pi[add_col(j, 2)].1[i];
-                pem1 += eem1 * beta[j] * xor(piem1, (Fr::one() - piem1_5) * piem1_10);
+                pem1t += eem1 * xor(piem1, (Fr::one() - piem1_5) * piem1_10);
 
                 // Evaluation at ∞
-                let beta_m2 = -beta[j] - beta[j];
-                p4 += beta_m2
-                    * (e1[i] - e0[i])
+                p4t += (e1[i] - e0[i])
                     * (pi[j].1[i] - pi[j].0[i])
                     * (pi[add_col(j, 1)].0[i] - pi[add_col(j, 1)].1[i])
                     * (pi[add_col(j, 2)].1[i] - pi[add_col(j, 2)].0[i]);
@@ -125,8 +127,13 @@ pub fn prove_sumcheck_chi(
                     pi[add_col(j, 1)].1[i] + pi[add_col(j, 1)].1[i] - pi[add_col(j, 1)].0[i];
                 let pie2_10 =
                     pi[add_col(j, 2)].1[i] + pi[add_col(j, 2)].1[i] - pi[add_col(j, 2)].0[i];
-                pe2 += ee2 * beta[j] * xor(pie2, (Fr::one() - pie2_5) * pie2_10);
+                pe2t += ee2 * xor(pie2, (Fr::one() - pie2_5) * pie2_10);
             }
+            p0 += beta[j] * p0t;
+            pem1 += beta[j] * pem1t;
+            p4t = -p4t - p4t;
+            p4 += beta[j] * p4t;
+            pe2 += beta[j] * pe2t;
         }
 
         // Compute p1, p2, p3 from
@@ -192,7 +199,6 @@ pub fn prove_sumcheck_chi(
 mod tests {
     use super::*;
     use crate::reference::{ROUND_CONSTANTS, STATE, keccak_round};
-    use crate::sumcheck::util::to_poly;
 
     #[test]
     fn pi_chi_no_recursion() {
@@ -213,12 +219,12 @@ mod tests {
         apply_pi_t(&state.rho, &mut pi);
         let pi = pi
             .chunks_exact(instances)
-            .map(|x| to_poly_multi(x))
+            .map(|x| to_poly(x))
             .collect::<Vec<_>>();
         let chi = state
             .pi_chi
             .chunks_exact(instances)
-            .map(|x| to_poly_multi(x))
+            .map(|x| to_poly(x))
             .collect::<Vec<_>>();
 
         let real_chi_sum: Fr = chi
@@ -256,7 +262,7 @@ mod tests {
 
             for i in 0..chi.len() {
                 for k in 0..(1 << (num_vars - step - 1)) {
-                    let under_sum = to_poly(k)[0..(num_vars - step - 1)].to_vec();
+                    let under_sum = to_poly(&[k])[0..(num_vars - step - 1)].to_vec();
                     let mut eval = vec![Fr::zero(); step + 1];
                     for k in 0..step {
                         eval[k] = proof.r[k];
