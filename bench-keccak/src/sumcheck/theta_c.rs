@@ -327,13 +327,10 @@ mod test {
 
         // println!("real_theta_c_sum: {}", real_theta_c_sum);
 
-        // println!("START");
-        // let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
-        // let expected_rot = calculate_evaluations_over_boolean_hypercube_for_rot(&alpha, 1);
-        // let rot = derive_rot_evaluations_from_eq(&eq, 1);
-        // println!("END");
-        //
-        // assert_eq!(expected_rot, rot);
+        let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
+        let expected_rot = calculate_evaluations_over_boolean_hypercube_for_rot(num_vars, &alpha, 1);
+        let rot = derive_rot_evaluations_from_eq(&eq, 1);
+        assert_eq!(expected_rot, rot);
 
         prove_theta_c(
             &mut prover,

@@ -30,9 +30,11 @@ pub fn calculate_evaluations_over_boolean_hypercube_for_eq(r: &[Fr]) -> Vec<Fr> 
 
 /// List of evaluations for rot_i(r, x) over the boolean hypercube
 pub fn calculate_evaluations_over_boolean_hypercube_for_rot(size: usize, r: &[Fr], i: usize) -> Vec<Fr> {
-    let rot = rot_poly(RHO_OFFSETS[i] as usize);
+    let eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
+    derive_rot_evaluations_from_eq(&eq, RHO_OFFSETS[i] as usize)
+    // let rot = rot_poly(RHO_OFFSETS[i] as usize);
     // println!("partial eval {} {}", rot.len(), r.len());
-    partial_eval_mle(&rot, r)
+    // partial_eval_mle(&rot, r)
 }
 
 pub fn derive_rot_evaluations_from_eq(eq: &[Fr], size: usize) -> Vec<Fr> {
