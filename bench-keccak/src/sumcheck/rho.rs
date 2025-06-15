@@ -97,14 +97,20 @@ pub fn prove_sumcheck_rho(
             .map(|x| x.split_at(x.len() / 2))
             .collect::<Vec<_>>();
 
-        for i in 0..rot[0].0.len() {
-            for j in 0..theta.len() {
+        for j in 0..theta.len() {
+            let mut p0t = Fr::zero();
+            let mut p2t = Fr::zero();
+
+            for i in 0..rot[0].0.len() {
                 // Evaluation at 0
-                p0 += beta[j] * rot[j].0[i] * theta[j].0[i];
+                p0t += rot[j].0[i] * theta[j].0[i];
 
                 // Evaluation at ∞
-                p2 += beta[j] * (rot[j].1[i] - rot[j].0[i]) * (theta[j].1[i] - theta[j].0[i]);
+                p2t += (rot[j].1[i] - rot[j].0[i]) * (theta[j].1[i] - theta[j].0[i]);
             }
+
+            p0 += beta[j] * p0t;
+            p2 += beta[j] * p2t;
         }
 
         // Compute p1 from

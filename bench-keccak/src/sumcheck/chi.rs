@@ -59,7 +59,6 @@ pub fn prove_chi(
     proof
 }
 
-#[instrument(skip_all)]
 pub fn prove_sumcheck_chi(
     transcript: &mut Prover,
     size: usize,
@@ -86,8 +85,8 @@ pub fn prove_sumcheck_chi(
             .map(|x| x.split_at(x.len() / 2))
             .collect::<Vec<_>>();
 
-        for i in 0..e0.len() {
-            for j in 0..pi.len() {
+        for j in 0..pi.len() {
+            for i in 0..e0.len() {
                 // Evaluation at 0
                 p0 += e0[i]
                     * beta[j]

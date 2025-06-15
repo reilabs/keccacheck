@@ -2,7 +2,7 @@ use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq,
 use crate::{sumcheck::util::update, transcript::Prover};
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
-use tracing::instrument;
+use tracing::{instrument, span, Level};
 
 pub struct ThetaAProof {
     pub sum: Fr,
@@ -54,6 +54,7 @@ pub fn prove_sumcheck_theta_a(
 ) -> ThetaAProof {
     #[cfg(debug_assertions)]
     {
+        println!("shouldn't run");
         assert_eq!(beta_a.len(), beta_b.len());
         assert_eq!(beta_a.len(), aij.len());
         assert_eq!(eq_a.len(), 1 << size);
@@ -73,17 +74,24 @@ pub fn prove_sumcheck_theta_a(
         let (eb0, eb1) = eq_b.split_at(eq_b.len() / 2);
         let a = aij
             .iter()
-            .map(|x| x.split_at(x.len() / 2))
+            .map(|x| {
+                let (a, _) = x.split_at(eq_a.len());
+                a.split_at(ea0.len())
+            })
             .collect::<Vec<_>>();
 
-        for i in 0..ea0.len() {
-            for j in 0..a.len() {
+        for j in 0..a.len() {
+            let ba = beta_a[j];
+            let bb = beta_b[j];
+            let a = a[j].0.iter().zip(a[j].1);
+
+            for (i, (a0, a1)) in a.enumerate() {
                 // Evaluation at 0
-                p0 += beta_a[j] * ea0[i] * a[j].0[i] + beta_b[j] * eb0[i] * a[j].0[i];
+                p0 += (ba * ea0[i] + bb * eb0[i]) * a0;
 
                 // Evaluation at ∞
-                p2 += beta_a[j] * (ea1[i] - ea0[i]) * (a[j].1[i] - a[j].0[i])
-                    + beta_b[j] * (eb1[i] - eb0[i]) * (a[j].1[i] - a[j].0[i]);
+                let v = a1 - a0;
+                p2 += (ba * (ea1[i] - ea0[i]) + bb * (eb1[i] - eb0[i])) * v;
             }
         }
 
@@ -97,15 +105,17 @@ pub fn prove_sumcheck_theta_a(
 
         let r = transcript.read();
         rs.push(r);
+
         // TODO: Fold update into evaluation loop.
+        let len = eq_a.len();
         eq_a = update(eq_a, r);
         eq_b = update(eq_b, r);
         for j in 0..aij.len() {
-            // TODO: unnecessary allocation
-            aij[j] = update(&mut aij[j], r).to_vec();
+            update(&mut aij[j][0..len], r);
         }
         sum = p0 + r * (p1 + r * p2);
     }
+
     let mut subclaims = Vec::with_capacity(aij.len());
     for j in 0..aij.len() {
         transcript.write(aij[j][0]);
@@ -115,6 +125,7 @@ pub fn prove_sumcheck_theta_a(
     // check result
     #[cfg(debug_assertions)]
     {
+        println!("shouldn't run");
         let mut checksum = Fr::zero();
         for j in 0..aij.len() {
             checksum += beta_a[j] * eq_a[0] * aij[j][0] + beta_b[j] * eq_b[0] * aij[j][0];

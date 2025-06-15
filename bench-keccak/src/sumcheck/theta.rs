@@ -94,8 +94,8 @@ pub fn prove_sumcheck_theta(
             .map(|x| x.split_at(x.len() / 2))
             .collect::<Vec<_>>();
 
-        for i in 0..d[0].0.len() {
-            for j in 0..d.len() {
+        for j in 0..d.len() {
+            for i in 0..d[0].0.len() {
                 // Evaluation at 0
                 p0 += e0[i] * d[j].0[i] * ai[j].0[i];
 

@@ -95,8 +95,8 @@ pub fn prove_sumcheck_theta_c(
             .map(|x| x.split_at(x.len() / 2))
             .collect::<Vec<_>>();
 
-        for i in 0..e0.len() {
-            for j in 0..5 {
+        for j in 0..5 {
+            for i in 0..e0.len() {
                 // TODO: no need to add so many times, partial results should be cached
 
                 // Evaluation at 0
@@ -104,15 +104,15 @@ pub fn prove_sumcheck_theta_c(
                 for k in 0..5 {
                     product *= a[k * 5 + j].0[i];
                 }
-                p0 += beta_c[j] * e0[i] * product + beta_rot_c[j] * rot0[i] * product;
+                p0 += (beta_c[j] * e0[i] + beta_rot_c[j] * rot0[i]) * product;
 
                 // Evaluation at -1
                 let mut product = Fr::one();
                 for k in 0..5 {
                     product *= a[k * 5 + j].0[i] + a[k * 5 + j].0[i] - a[k * 5 + j].1[i];
                 }
-                pem1 += beta_c[j] * (e0[i] + e0[i] - e1[i]) * product
-                    + beta_rot_c[j] * (rot0[i] + rot0[i] - rot1[i]) * product;
+                pem1 += (beta_c[j] * (e0[i] + e0[i] - e1[i])
+                    + beta_rot_c[j] * (rot0[i] + rot0[i] - rot1[i])) * product;
 
                 // Evaluation at -2
                 let mut product = Fr::one();
@@ -121,16 +121,16 @@ pub fn prove_sumcheck_theta_c(
                         - a[k * 5 + j].1[i]
                         - a[k * 5 + j].1[i];
                 }
-                pem2 += beta_c[j] * (e0[i] + e0[i] + e0[i] - e1[i] - e1[i]) * product
-                    + beta_rot_c[j] * (rot0[i] + rot0[i] + rot0[i] - rot1[i] - rot1[i]) * product;
+                pem2 += (beta_c[j] * (e0[i] + e0[i] + e0[i] - e1[i] - e1[i])
+                    + beta_rot_c[j] * (rot0[i] + rot0[i] + rot0[i] - rot1[i] - rot1[i])) * product;
 
                 // Evaluation at 2
                 let mut product = Fr::one();
                 for k in 0..5 {
                     product *= a[k * 5 + j].1[i] + a[k * 5 + j].1[i] - a[k * 5 + j].0[i];
                 }
-                pe2 += beta_c[j] * (e1[i] + e1[i] - e0[i]) * product
-                    + beta_rot_c[j] * (rot1[i] + rot1[i] - rot0[i]) * product;
+                pe2 += (beta_c[j] * (e1[i] + e1[i] - e0[i])
+                    + beta_rot_c[j] * (rot1[i] + rot1[i] - rot0[i])) * product;
 
                 // Evaluation at 3
                 let mut product = Fr::one();
@@ -139,16 +139,16 @@ pub fn prove_sumcheck_theta_c(
                         - a[k * 5 + j].0[i]
                         - a[k * 5 + j].0[i];
                 }
-                pe3 += beta_c[j] * (e1[i] + e1[i] + e1[i] - e0[i] - e0[i]) * product
-                    + beta_rot_c[j] * (rot1[i] + rot1[i] + rot1[i] - rot0[i] - rot0[i]) * product;
+                pe3 += (beta_c[j] * (e1[i] + e1[i] + e1[i] - e0[i] - e0[i])
+                    + beta_rot_c[j] * (rot1[i] + rot1[i] + rot1[i] - rot0[i] - rot0[i])) * product;
 
                 // Evaluation at ∞
                 let mut product = Fr::one();
                 for k in 0..5 {
                     product *= a[k * 5 + j].1[i] - a[k * 5 + j].0[i];
                 }
-                p6 += beta_c[j] * (e1[i] - e0[i]) * product
-                    + beta_rot_c[j] * (rot1[i] - rot0[i]) * product;
+                p6 += (beta_c[j] * (e1[i] - e0[i])
+                    + beta_rot_c[j] * (rot1[i] - rot0[i])) * product;
             }
         }
 

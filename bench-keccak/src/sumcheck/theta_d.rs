@@ -84,23 +84,29 @@ pub fn prove_sumcheck_theta_d(
             .map(|x| x.split_at(x.len() / 2))
             .collect::<Vec<_>>();
 
-        for i in 0..c[0].0.len() {
-            for j in 0..c.len() {
+        for j in 0..c.len() {
+            let mut p0t = Fr::zero();
+            let mut pem1t = Fr::zero();
+            let mut p3t = Fr::zero();
+
+            for i in 0..c[0].0.len() {
                 // Evaluation at 0
-                p0 += beta[j] * e0[i] * c[(j + 4) % 5].0[i] * rot_c[(j + 1) % 5].0[i];
+                p0t += e0[i] * c[(j + 4) % 5].0[i] * rot_c[(j + 1) % 5].0[i];
 
                 // Evaluation at -1
-                pem1 += beta[j]
-                    * (e0[i] + e0[i] - e1[i])
+                pem1t += (e0[i] + e0[i] - e1[i])
                     * (c[(j + 4) % 5].0[i] + c[(j + 4) % 5].0[i] - c[(j + 4) % 5].1[i])
                     * (rot_c[(j + 1) % 5].0[i] + rot_c[(j + 1) % 5].0[i] - rot_c[(j + 1) % 5].1[i]);
 
                 // Evaluation at ∞
-                p3 += beta[j]
-                    * (e1[i] - e0[i])
+                p3t += (e1[i] - e0[i])
                     * (c[(j + 4) % 5].1[i] - c[(j + 4) % 5].0[i])
                     * (rot_c[(j + 1) % 5].1[i] - rot_c[(j + 1) % 5].0[i]);
             }
+
+            p0 += beta[j] * p0t;
+            pem1 += beta[j] * pem1t;
+            p3 += beta[j] * p3t;
         }
 
         // Compute p1 and p2 from
