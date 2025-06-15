@@ -1,8 +1,7 @@
+use crate::reference::RHO_OFFSETS;
+use crate::transcript::Verifier;
 use ark_bn254::Fr;
 use ark_ff::{AdditiveGroup, Field, MontFp, One, Zero};
-use crate::reference::RHO_OFFSETS;
-use crate::sumcheck::rho::rot_poly;
-use crate::transcript::Verifier;
 
 #[inline(always)]
 pub fn xor(a: Fr, b: Fr) -> Fr {
@@ -29,7 +28,11 @@ pub fn calculate_evaluations_over_boolean_hypercube_for_eq(r: &[Fr]) -> Vec<Fr> 
 }
 
 /// List of evaluations for rot_i(r, x) over the boolean hypercube
-pub fn calculate_evaluations_over_boolean_hypercube_for_rot(size: usize, r: &[Fr], i: usize) -> Vec<Fr> {
+pub fn calculate_evaluations_over_boolean_hypercube_for_rot(
+    size: usize,
+    r: &[Fr],
+    i: usize,
+) -> Vec<Fr> {
     let eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
     derive_rot_evaluations_from_eq(&eq, RHO_OFFSETS[i] as usize)
     // let rot = rot_poly(RHO_OFFSETS[i] as usize);
@@ -46,7 +49,6 @@ pub fn derive_rot_evaluations_from_eq(eq: &[Fr], size: usize) -> Vec<Fr> {
             result[instance * 64 + i] = eq[instance * 64 + (i + size) % 64];
             // println!("translating {} into {}", instance * 64 + i, instance * 64 + (i + size) % 64);
         }
-
     }
     result
 }

@@ -1,5 +1,9 @@
-use crate::reference::{ROUND_CONSTANTS, strip_pi, strip_pi_t};
-use crate::sumcheck::util::{add_col, calculate_evaluations_over_boolean_hypercube_for_eq, calculate_evaluations_over_boolean_hypercube_for_rot, derive_rot_evaluations_from_eq, eval_mle, to_poly, to_poly_multi, verify_sumcheck, xor, HALF};
+use crate::reference::{ROUND_CONSTANTS, strip_pi_t};
+use crate::sumcheck::util::{
+    HALF, add_col, calculate_evaluations_over_boolean_hypercube_for_eq,
+    calculate_evaluations_over_boolean_hypercube_for_rot, derive_rot_evaluations_from_eq, eval_mle,
+    to_poly_multi, verify_sumcheck, xor,
+};
 use crate::transcript::Verifier;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
@@ -18,7 +22,13 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     let mut beta = (0..25).map(|_| verifier.generate()).collect::<Vec<_>>();
 
     let expected_sum = (0..25)
-        .map(|i| beta[i] * eval_mle(&to_poly_multi(&output[(i*instances)..(i*instances+instances)]), &alpha))
+        .map(|i| {
+            beta[i]
+                * eval_mle(
+                    &to_poly_multi(&output[(i * instances)..(i * instances + instances)]),
+                    &alpha,
+                )
+        })
         .sum();
     let sum = verifier.read();
     assert_eq!(sum, expected_sum);
@@ -83,10 +93,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     assert_eq!(checksum, ve);
 
     // combine subclaims on theta, change base
-    let theta_xor_base = theta
-        .iter()
-        .map(|x| Fr::one() - x - x)
-        .collect::<Vec<_>>();
+    let theta_xor_base = theta.iter().map(|x| Fr::one() - x - x).collect::<Vec<_>>();
     let mut expected_sum = Fr::zero();
     // we'll need this beta to combine with the last theta sumcheck!
     beta.iter_mut().enumerate().for_each(|(i, b)| {
@@ -198,6 +205,12 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
 
     // for a single round keccak, this was the last step. make sure inputs match
     for i in 0..25 {
-        assert_eq!(eval_mle(&to_poly_multi(&input[(i*instances)..(i*instances+instances)]), &vrs), iota[i]);
+        assert_eq!(
+            eval_mle(
+                &to_poly_multi(&input[(i * instances)..(i * instances + instances)]),
+                &vrs
+            ),
+            iota[i]
+        );
     }
 }

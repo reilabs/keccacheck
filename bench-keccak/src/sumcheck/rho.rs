@@ -1,9 +1,10 @@
+use crate::sumcheck::util::{
+    calculate_evaluations_over_boolean_hypercube_for_rot, eval_mle, to_poly_multi,
+};
+use crate::{sumcheck::util::update, transcript::Prover};
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use tracing::instrument;
-use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_rot, eval_mle, to_poly, to_poly_multi};
-use crate::{sumcheck::util::update, transcript::Prover};
-use crate::reference::{keccak_round, ROUND_CONSTANTS, STATE};
 
 // rotate input k bits left to
 pub fn rot_poly(k: usize) -> Vec<Fr> {
@@ -42,7 +43,10 @@ pub fn prove_rho(
     let mut rots = (0..25)
         .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(num_vars, r, i))
         .collect::<Vec<_>>();
-    let mut thetas = theta.chunks_exact(instances).map(|u| to_poly_multi(u)).collect::<Vec<_>>();
+    let mut thetas = theta
+        .chunks_exact(instances)
+        .map(|u| to_poly_multi(u))
+        .collect::<Vec<_>>();
 
     let proof = prove_sumcheck_rho(transcript, num_vars, beta, &mut rots, &mut thetas, sum);
 
@@ -154,29 +158,41 @@ pub fn prove_sumcheck_rho(
     }
 }
 
-#[test]
-fn rho_no_recursion() {
-    let num_vars = 7; // two instances
-    let instances = 1usize << (num_vars - 6);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::reference::{ROUND_CONSTANTS, STATE, keccak_round};
+    use crate::sumcheck::util::to_poly;
 
-    let mut data = (0..(instances * STATE)).map(|i| i as u64).collect::<Vec<_>>();
-    let state = keccak_round(&mut data, ROUND_CONSTANTS[0]);
+    #[test]
+    fn rho_no_recursion() {
+        let num_vars = 7; // two instances
+        let instances = 1usize << (num_vars - 6);
 
-    let mut prover = Prover::new();
-    let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
-    let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+        let mut data = (0..(instances * STATE))
+            .map(|i| i as u64)
+            .collect::<Vec<_>>();
+        let state = keccak_round(&mut data, ROUND_CONSTANTS[0]);
 
-    let real_rho_sum: Fr = state.rho.chunks_exact(instances).map(|x| to_poly_multi(x))
-        .enumerate()
-        .map(|(i, poly)| beta[i] * eval_mle(&poly, &alpha))
-        .sum();
+        let mut prover = Prover::new();
+        let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
+        let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
-    prove_rho(
-        &mut prover,
-        num_vars,
-        &alpha,
-        &beta,
-        &state.theta,
-        real_rho_sum,
-    );
+        let real_rho_sum: Fr = state
+            .rho
+            .chunks_exact(instances)
+            .map(|x| to_poly_multi(x))
+            .enumerate()
+            .map(|(i, poly)| beta[i] * eval_mle(&poly, &alpha))
+            .sum();
+
+        prove_rho(
+            &mut prover,
+            num_vars,
+            &alpha,
+            &beta,
+            &state.theta,
+            real_rho_sum,
+        );
+    }
 }

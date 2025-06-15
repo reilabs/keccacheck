@@ -1,8 +1,9 @@
-use crate::reference::{ROUND_CONSTANTS, keccak_round, STATE};
-use crate::sumcheck::util::{HALF, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_xor_base, update, to_poly_xor_base_multi, to_poly_multi};
+use crate::sumcheck::util::{
+    HALF, calculate_evaluations_over_boolean_hypercube_for_eq, to_poly_xor_base_multi, update,
+};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
-use ark_ff::{One, Zero};
+use ark_ff::Zero;
 use tracing::instrument;
 
 pub struct ThetaProof {
@@ -25,12 +26,15 @@ pub fn prove_theta(
     let instances = 1 << (num_vars - 6);
 
     let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
-    let mut d = d.chunks_exact(instances).map(|x| to_poly_xor_base_multi(x)).collect::<Vec<_>>();
+    let mut d = d
+        .chunks_exact(instances)
+        .map(|x| to_poly_xor_base_multi(x))
+        .collect::<Vec<_>>();
     let mut ai = (0..5)
         .map(|i| {
             let mut rlc = vec![Fr::zero(); 1 << num_vars];
             for j in 0..5 {
-                let id = (j * 5 + i);
+                let id = j * 5 + i;
                 let idx = id * instances;
                 let poly = to_poly_xor_base_multi(&a[idx..(idx + instances)]);
                 for x in 0..(1 << num_vars) {
@@ -146,7 +150,7 @@ pub fn prove_sumcheck_theta(
         transcript.write(ds[j][0]);
         d_subclaims.push(ds[j][0]);
     }
-    
+
     // check result
     #[cfg(debug_assertions)]
     {
@@ -165,35 +169,44 @@ pub fn prove_sumcheck_theta(
     }
 }
 
-#[test]
-fn theta_no_recursion() {
-    let num_vars = 7; // two instances
-    let instances = 1usize << (num_vars - 6);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::reference::{ROUND_CONSTANTS, STATE, keccak_round};
+    use crate::sumcheck::util::{eval_mle, to_poly, to_poly_multi};
+    use ark_ff::One;
+    #[test]
+    fn theta_no_recursion() {
+        let num_vars = 7; // two instances
+        let instances = 1usize << (num_vars - 6);
 
-    let mut data = (0..(instances * STATE)).map(|i| i as u64).collect::<Vec<_>>();
-    let state = keccak_round(&mut data, ROUND_CONSTANTS[0]);
+        let mut data = (0..(instances * STATE))
+            .map(|i| i as u64)
+            .collect::<Vec<_>>();
+        let state = keccak_round(&mut data, ROUND_CONSTANTS[0]);
 
-    let mut prover = Prover::new();
-    let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
-    let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+        let mut prover = Prover::new();
+        let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
+        let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
-    let real_theta_sum: Fr = state
-        .theta
-        .chunks_exact(instances)
-        .map(|x| to_poly_multi(x))
-        .map(|poly| eval_mle(&poly, &alpha) )
-        .map(|x| Fr::one() - x - x)
-        .enumerate()
-        .map(|(i, x)| beta[i] * x)
-        .sum();
+        let real_theta_sum: Fr = state
+            .theta
+            .chunks_exact(instances)
+            .map(|x| to_poly_multi(x))
+            .map(|poly| eval_mle(&poly, &alpha))
+            .map(|x| Fr::one() - x - x)
+            .enumerate()
+            .map(|(i, x)| beta[i] * x)
+            .sum();
 
-    prove_theta(
-        &mut prover,
-        num_vars,
-        &alpha,
-        &beta,
-        &state.d,
-        &state.a,
-        real_theta_sum,
-    );
+        prove_theta(
+            &mut prover,
+            num_vars,
+            &alpha,
+            &beta,
+            &state.d,
+            &state.a,
+            real_theta_sum,
+        );
+    }
 }

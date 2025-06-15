@@ -1,16 +1,16 @@
-use crate::reference::{KeccakRoundState, strip_pi, strip_pi_t};
+use crate::reference::{KeccakRoundState, strip_pi_t};
 use crate::sumcheck::chi::prove_chi;
 use crate::sumcheck::iota::prove_iota;
 use crate::sumcheck::rho::prove_rho;
 use crate::sumcheck::theta::prove_theta;
-use crate::sumcheck::util::{eval_mle, to_poly, to_poly_multi};
+use crate::sumcheck::theta_a::prove_theta_a;
+use crate::sumcheck::theta_c::prove_theta_c;
+use crate::sumcheck::theta_d::prove_theta_d;
+use crate::sumcheck::util::{eval_mle, to_poly_multi};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use tracing::instrument;
-use crate::sumcheck::theta_a::prove_theta_a;
-use crate::sumcheck::theta_c::prove_theta_c;
-use crate::sumcheck::theta_d::prove_theta_d;
 
 #[instrument(skip(layers))]
 pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
@@ -167,7 +167,7 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
         &beta,
         &beta_a,
         &layers.a,
-        sum
+        sum,
     );
 
     // done

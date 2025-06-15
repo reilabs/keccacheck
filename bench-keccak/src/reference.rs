@@ -24,11 +24,11 @@ pub fn apply_pi_t<T: Copy>(rho: &[T], pi: &mut [T]) {
     for i in 0..24 {
         // i+1 is the source position (skipping 0,0)
         // PI[i] is the target position
-        pi[(instances * PI[i])..(instances * (PI[i] + 1))].copy_from_slice(&rho[(instances*(i + 1)..(instances * (i+2)))]);
+        pi[(instances * PI[i])..(instances * (PI[i] + 1))]
+            .copy_from_slice(&rho[instances * (i + 1)..(instances * (i + 2))]);
         // pi[PI[i]] = rho[i + 1];
     }
 }
-
 
 pub fn strip_pi<T: Copy>(pi: &[T], rho: &mut [T]) {
     // Position (0,0) doesn't change
@@ -50,11 +50,11 @@ pub fn strip_pi_t<T: Copy>(pi: &[T], rho: &mut [T]) {
     for i in 0..24 {
         // i+1 is the source position (skipping 0,0)
         // PI[i] is the target position
-        rho[(instances*(i + 1)..(instances * (i+2)))].copy_from_slice(&pi[(instances * PI[i])..(instances * (PI[i] + 1))]);
+        rho[instances * (i + 1)..(instances * (i + 2))]
+            .copy_from_slice(&pi[(instances * PI[i])..(instances * (PI[i] + 1))]);
         // rho[i + 1] = pi[PI[i]];
     }
 }
-
 
 // TODO: all state should be slicing into global state array with many keccak instances
 #[derive(Debug, Default)]
@@ -101,7 +101,8 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
     let mut d = vec![0; COLUMNS * instances];
     for i in 0..instances {
         for x in 0..5 {
-            d[x * instances + i] = c[((x + 4) % 5) * instances + i] ^ c[((x + 1) % 5) * instances + i].rotate_left(1);
+            d[x * instances + i] =
+                c[((x + 4) % 5) * instances + i] ^ c[((x + 1) % 5) * instances + i].rotate_left(1);
             for y_count in 0..5 {
                 let y = y_count * 5;
                 a[i * STATE + y + x] ^= d[x * instances + i];
@@ -140,7 +141,10 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
     // Permute the positions of lanes
     let state_copy = a.to_owned();
     for i in 0..instances {
-        apply_pi(&state_copy[i * STATE..(i + 1) * STATE], &mut a[i * STATE..(i + 1) * STATE]);
+        apply_pi(
+            &state_copy[i * STATE..(i + 1) * STATE],
+            &mut a[i * STATE..(i + 1) * STATE],
+        );
     }
 
     // Chi
@@ -153,7 +157,8 @@ pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
             }
 
             for x in 0..5 {
-                a[i * STATE + y + x] = c[x * instances + i] ^ ((!c[((x + 1) % 5) * instances + i]) & (c[((x + 2) % 5) * instances + i]));
+                a[i * STATE + y + x] = c[x * instances + i]
+                    ^ ((!c[((x + 1) % 5) * instances + i]) & (c[((x + 2) % 5) * instances + i]));
             }
         }
     }

@@ -1,13 +1,15 @@
-use ark_bn254::Fr;
-use ark_ff::{One, Zero};
-use itertools::izip;
-use tracing::instrument;
-use crate::reference::{keccak_round, ROUND_CONSTANTS, STATE};
-use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly, to_poly_multi};
+use crate::reference::ROUND_CONSTANTS;
+use crate::sumcheck::util::{
+    calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly_multi,
+};
 use crate::{
     sumcheck::util::{HALF, update, xor},
     transcript::Prover,
 };
+use ark_bn254::Fr;
+use ark_ff::Zero;
+use itertools::izip;
+use tracing::instrument;
 
 pub struct IotaProof {
     pub sum: Fr,
@@ -33,7 +35,7 @@ pub fn prove_iota(
     let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
     // iterating from 1 to skip the first state element (i, j) = (0, 0)
     for el in 1..25 {
-        let slice = &chi[(el*instances)..(el*instances + instances)];
+        let slice = &chi[(el * instances)..(el * instances + instances)];
         let poly = to_poly_multi(slice);
         for x in 0..(1 << num_vars) {
             chi_rlc[x] += beta[el] * poly[x];
@@ -59,7 +61,7 @@ pub fn prove_iota(
         let rc = to_poly_multi(&vec![ROUND_CONSTANTS[0]; instances]);
         let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
         for el in 1..25 {
-            let slice = &chi[(el*instances)..(el*instances + instances)];
+            let slice = &chi[(el * instances)..(el * instances + instances)];
             let poly = to_poly_multi(slice);
             for x in 0..(1 << num_vars) {
                 chi_rlc[x] += beta[el] * poly[x];
@@ -161,99 +163,113 @@ pub fn prove_sumcheck_iota(
     }
 }
 
-#[test]
-fn iota_no_recursion() {
-    let num_vars = 7; // two instances
-    let instances = 1usize << (num_vars - 6);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::reference::{ROUND_CONSTANTS, STATE, keccak_round};
+    use crate::sumcheck::util::to_poly;
+    use ark_ff::One;
 
-    let mut data = (0..(instances * STATE)).map(|i| i as u64).collect::<Vec<_>>();
-    let state = keccak_round(&mut data, ROUND_CONSTANTS[0]);
+    #[test]
+    fn iota_no_recursion() {
+        let num_vars = 7; // two instances
+        let instances = 1usize << (num_vars - 6);
 
-    let mut prover = Prover::new();
-    let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
-    let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+        let mut data = (0..(instances * STATE))
+            .map(|i| i as u64)
+            .collect::<Vec<_>>();
+        let state = keccak_round(&mut data, ROUND_CONSTANTS[0]);
 
-    let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
-    let chi_00 = to_poly_multi(&state.pi_chi[0..instances]);
-    let rc = to_poly_multi(&vec![ROUND_CONSTANTS[0]; instances]);
-    let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
-    for el in 1..25 {
-        // iterating from 1 to skip the first state element (i, j) = (0, 0)
-        let slice = &state.pi_chi[(el*instances)..(el*instances + instances)];
-        let poly = to_poly_multi(slice);
-        for x in 0..(1 << num_vars) {
-            chi_rlc[x] += beta[el] * poly[x];
-        }
-    }
-    let chi = state
-        .pi_chi
-        .chunks_exact(instances)
-        .map(|x| to_poly_multi(x))
-        .collect::<Vec<_>>();
-    let iota = state.iota.chunks_exact(instances).map(|x| to_poly_multi(x)).collect::<Vec<_>>();
+        let mut prover = Prover::new();
+        let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
+        let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
-    let real_iota_sum: Fr = iota
-        .iter()
-        .enumerate()
-        .map(|(i, poly)| beta[i] * eval_mle(poly, &alpha))
-        .sum();
-
-    let (pe, prs) = {
-        let mut eq = eq.clone();
-        let mut chi_00 = chi_00.clone();
-        let mut rc = rc.clone();
-        let mut chi_rlc = chi_rlc.clone();
-        let proof = prove_sumcheck_iota(
-            &mut prover,
-            num_vars,
-            beta[0],
-            &mut eq,
-            &mut chi_00,
-            &mut rc,
-            &mut chi_rlc,
-            real_iota_sum,
-        );
-        (proof.sum, proof.r)
-    };
-    let e_eq = eval_mle(&eq, &prs); // TODO: can evaluate eq faster
-    let e_chi_00 = eval_mle(&chi_00, &prs);
-    let e_rc = eval_mle(&rc, &prs);
-    let e_chi_rlc = eval_mle(&chi_rlc, &prs);
-    assert_eq!(e_eq * (beta[0] * xor(e_chi_00, e_rc) + e_chi_rlc), pe);
-
-    println!();
-
-    for step in 0..num_vars {
-        let mut p = [Fr::zero(); 4];
-        for i in 0..iota.len() {
-            for k in 0..(1 << (num_vars - step - 1)) {
-                let under_sum = to_poly(k)[0..(num_vars - step - 1)].to_vec();
-                let mut eval = vec![Fr::zero(); step + 1];
-                for k in 0..step {
-                    eval[k] = prs[k];
-                }
-                eval[step] = Fr::zero();
-                eval.extend_from_slice(&under_sum);
-                assert_eq!(eval.len(), num_vars);
-                // println!("eval st {step} i {i} @ 0: {eval:?}");
-
-                let val = if i == 0 {
-                    xor(eval_mle(&chi[i], &eval), eval_mle(&rc, &eval))
-                } else {
-                    eval_mle(&chi[i], &eval)
-                };
-                p[0] += beta[i] * eval_mle(&eq, &eval) * val;
-
-                eval[step] = -Fr::one();
-                let val = if i == 0 {
-                    xor(eval_mle(&chi[i], &eval), eval_mle(&rc, &eval))
-                } else {
-                    eval_mle(&chi[i], &eval)
-                };
-                p[1] += beta[i] * eval_mle(&eq, &eval) * val;
+        let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
+        let chi_00 = to_poly_multi(&state.pi_chi[0..instances]);
+        let rc = to_poly_multi(&vec![ROUND_CONSTANTS[0]; instances]);
+        let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
+        for el in 1..25 {
+            // iterating from 1 to skip the first state element (i, j) = (0, 0)
+            let slice = &state.pi_chi[(el * instances)..(el * instances + instances)];
+            let poly = to_poly_multi(slice);
+            for x in 0..(1 << num_vars) {
+                chi_rlc[x] += beta[el] * poly[x];
             }
         }
-        println!("step {step} v(0) = {}", p[0]);
-        println!("step {step} v(-1) = {}", p[1]);
+        let chi = state
+            .pi_chi
+            .chunks_exact(instances)
+            .map(|x| to_poly_multi(x))
+            .collect::<Vec<_>>();
+        let iota = state
+            .iota
+            .chunks_exact(instances)
+            .map(|x| to_poly_multi(x))
+            .collect::<Vec<_>>();
+
+        let real_iota_sum: Fr = iota
+            .iter()
+            .enumerate()
+            .map(|(i, poly)| beta[i] * eval_mle(poly, &alpha))
+            .sum();
+
+        let (pe, prs) = {
+            let mut eq = eq.clone();
+            let mut chi_00 = chi_00.clone();
+            let mut rc = rc.clone();
+            let mut chi_rlc = chi_rlc.clone();
+            let proof = prove_sumcheck_iota(
+                &mut prover,
+                num_vars,
+                beta[0],
+                &mut eq,
+                &mut chi_00,
+                &mut rc,
+                &mut chi_rlc,
+                real_iota_sum,
+            );
+            (proof.sum, proof.r)
+        };
+        let e_eq = eval_mle(&eq, &prs); // TODO: can evaluate eq faster
+        let e_chi_00 = eval_mle(&chi_00, &prs);
+        let e_rc = eval_mle(&rc, &prs);
+        let e_chi_rlc = eval_mle(&chi_rlc, &prs);
+        assert_eq!(e_eq * (beta[0] * xor(e_chi_00, e_rc) + e_chi_rlc), pe);
+
+        println!();
+
+        for step in 0..num_vars {
+            let mut p = [Fr::zero(); 4];
+            for i in 0..iota.len() {
+                for k in 0..(1 << (num_vars - step - 1)) {
+                    let under_sum = to_poly(k)[0..(num_vars - step - 1)].to_vec();
+                    let mut eval = vec![Fr::zero(); step + 1];
+                    for k in 0..step {
+                        eval[k] = prs[k];
+                    }
+                    eval[step] = Fr::zero();
+                    eval.extend_from_slice(&under_sum);
+                    assert_eq!(eval.len(), num_vars);
+                    // println!("eval st {step} i {i} @ 0: {eval:?}");
+
+                    let val = if i == 0 {
+                        xor(eval_mle(&chi[i], &eval), eval_mle(&rc, &eval))
+                    } else {
+                        eval_mle(&chi[i], &eval)
+                    };
+                    p[0] += beta[i] * eval_mle(&eq, &eval) * val;
+
+                    eval[step] = -Fr::one();
+                    let val = if i == 0 {
+                        xor(eval_mle(&chi[i], &eval), eval_mle(&rc, &eval))
+                    } else {
+                        eval_mle(&chi[i], &eval)
+                    };
+                    p[1] += beta[i] * eval_mle(&eq, &eval) * val;
+                }
+            }
+            println!("step {step} v(0) = {}", p[0]);
+            println!("step {step} v(-1) = {}", p[1]);
+        }
     }
 }
