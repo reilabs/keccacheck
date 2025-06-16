@@ -39,7 +39,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
 
     // verify iota
     let span = tracing::span!(Level::INFO, "verify_iota").entered();
-    // TODO: this should be faster
+    // TODO: no need to materialize this polynomial
     let rc = to_poly(&vec![ROUND_CONSTANTS[0]; instances]);
 
     let (ve, vrs_iota) = verify_sumcheck::<3>(&mut verifier, num_vars, sum);
@@ -94,11 +94,8 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     let span = tracing::span!(Level::INFO, "verify_rho").entered();
     let (ve, vrs_rho) = verify_sumcheck::<2>(&mut verifier, num_vars, expected_sum);
     let theta = (0..25).map(|_| verifier.read()).collect::<Vec<_>>();
-
-    // TODO: this needs to be faster
     let e_rot = (0..25)
-        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(&vrs_chi, i))
-        .map(|poly| eval_mle(&poly, &vrs_rho))
+        .map(|i| util::rot(i, &vrs_chi, &vrs_rho))
         .collect::<Vec<_>>();
     let checksum = (0..25).map(|i| beta[i] * e_rot[i] * theta[i]).sum::<Fr>();
     assert_eq!(checksum, ve);

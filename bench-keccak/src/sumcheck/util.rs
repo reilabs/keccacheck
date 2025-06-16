@@ -152,7 +152,7 @@ pub fn rot(n: usize, a: &[Fr], b: &[Fr]) -> Fr {
     let len = a.len();
     let prefix = len - 6;
 
-    let r = calculate_evaluations_over_boolean_hypercube_for_rot(&a[prefix..len], 1);
+    let r = calculate_evaluations_over_boolean_hypercube_for_rot(&a[prefix..len], n);
     let result = eval_mle(&r, &b[prefix..len]);
     result * a.into_iter().take(prefix).zip(b.into_iter().take(prefix)).map(|(&x, &y)| {
         x * y + (Fr::one() - x) * (Fr::one() - y)
