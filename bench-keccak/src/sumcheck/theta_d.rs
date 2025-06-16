@@ -14,7 +14,7 @@ pub struct ThetaDProof {
     pub rot_c: Vec<Fr>,
 }
 
-#[instrument(skip_all)]
+// #[instrument(skip_all)]
 pub fn prove_theta_d(
     transcript: &mut Prover,
     num_vars: usize,

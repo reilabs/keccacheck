@@ -14,7 +14,7 @@ pub struct ThetaProof {
     pub ai: Vec<Fr>,
 }
 
-#[instrument(skip_all)]
+// #[instrument(skip_all)]
 pub fn prove_theta(
     transcript: &mut Prover,
     num_vars: usize,

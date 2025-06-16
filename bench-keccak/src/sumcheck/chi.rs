@@ -20,7 +20,7 @@ pub struct ChiProof {
     pub pi: Vec<Fr>,
 }
 
-#[instrument(skip_all)]
+// #[instrument(skip_all)]
 pub fn prove_chi(
     transcript: &mut Prover,
     num_vars: usize,

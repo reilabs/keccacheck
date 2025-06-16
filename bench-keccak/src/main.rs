@@ -27,7 +27,7 @@ fn main() {
     let data = (0..(instances * STATE))
         .map(|i| i as u64)
         .collect::<Vec<_>>();
-    let proof = prove(&data);
-    // verify(num_vars, &state.iota, &state.a, &proof);
+    let (proof, input, output) = prove(&data);
+    verify(num_vars, &output, &input, &proof);
     println!("OK.")
 }

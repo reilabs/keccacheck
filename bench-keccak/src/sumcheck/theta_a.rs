@@ -11,10 +11,9 @@ pub struct ThetaAProof {
     pub _sum: Fr,
     pub r: Vec<Fr>,
     pub iota_hat: Vec<Fr>,
-    pub coeffs: Vec<Fr>,
 }
 
-#[instrument(skip_all)]
+// #[instrument(skip_all)]
 pub fn prove_theta_a(
     transcript: &mut Prover,
     num_vars: usize,
@@ -154,12 +153,10 @@ pub fn prove_sumcheck_theta_a(
         sum = p0 + r * (p1 + r * p2);
     }
 
-    let mut coeffs = Vec::with_capacity(aij.len());
     let mut subclaims = Vec::with_capacity(aij.len());
     for j in 0..aij.len() {
         transcript.write(aij[j][0]);
         subclaims.push(aij[j][0]);
-        coeffs.push(beta_a[j] * eq_a[0] + beta_b[j] * eq_b[0]);
     }
 
     // check result
@@ -167,10 +164,8 @@ pub fn prove_sumcheck_theta_a(
     {
         let mut checksum = Fr::zero();
         for j in 0..aij.len() {
-            checksum += coeffs[j] * subclaims[j];
-            // println!("{} * {}", coeffs[j], subclaims[j]);
+            checksum += (beta_a[j] * eq_a[0] + beta_b[j] * eq_b[0]) * subclaims[j];
         }
-        // println!("sum {}", checksum);
         assert_eq!(sum, checksum);
     }
 
@@ -178,7 +173,6 @@ pub fn prove_sumcheck_theta_a(
         _sum: sum,
         r: rs,
         iota_hat: subclaims,
-        coeffs
     }
 }
 

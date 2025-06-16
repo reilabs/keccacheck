@@ -19,7 +19,7 @@ pub struct IotaProof {
     pub chi_rlc: Fr,
 }
 
-#[instrument(skip_all)]
+// #[instrument(skip_all)]
 pub fn prove_iota(
     transcript: &mut Prover,
     num_vars: usize,

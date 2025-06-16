@@ -13,7 +13,7 @@ use ark_ff::{One, Zero};
 use tracing::instrument;
 
 #[instrument(skip_all, fields(num_vars=(6 + (data.len() / 25).ilog2())))]
-pub fn prove(data: &[u64]) -> Vec<Fr> {
+pub fn prove(data: &[u64]) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     let instances = data.len() / 25;
     let num_vars = 6 + instances.ilog2() as usize;
 
@@ -29,6 +29,8 @@ pub fn prove(data: &[u64]) -> Vec<Fr> {
 
     let mut prover = Prover::new();
 
+    let span = tracing::span!(tracing::Level::INFO, "prove all rounds").entered();
+    
     // TODO: feed output to the prover before obtaining alpha
     let mut r = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
     let mut beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
@@ -57,11 +59,12 @@ pub fn prove(data: &[u64]) -> Vec<Fr> {
             });
         }
     }
+    span.exit();
 
-    prover.finish()
+    (prover.finish(), state[0].a.clone(), state[23].iota.clone())
 }
 
-#[instrument(skip_all)]
+// #[instrument(skip_all)]
 pub fn prove_round(prover: &mut Prover, num_vars: usize, layers: &KeccakRoundState, alpha: &[Fr], beta: &mut [Fr], sum: Fr, rc: u64) -> ThetaAProof {
     // prove iota
     let iota_proof = prove_iota(prover, num_vars, &alpha, &beta, &layers.pi_chi, sum, rc);

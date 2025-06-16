@@ -14,7 +14,7 @@ pub struct RhoProof {
     pub theta: Vec<Fr>,
 }
 
-#[instrument(skip_all)]
+// #[instrument(skip_all)]
 pub fn prove_rho(
     transcript: &mut Prover,
     num_vars: usize,
