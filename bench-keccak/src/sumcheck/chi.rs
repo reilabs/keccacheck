@@ -97,11 +97,14 @@ pub fn prove_sumcheck_chi(
             let mut pe2t = Fr::zero();
 
             for i in 0..e0.len() {
+                let pi_p1 = pi[add_col(j, 1)];
+                let pi_p2 = pi[add_col(j, 2)];
+
                 // Evaluation at 0
                 p0t += e0[i]
                     * xor(
                         pi[j].0[i],
-                        (Fr::one() - pi[add_col(j, 1)].0[i]) * pi[add_col(j, 2)].0[i],
+                        (Fr::one() - pi_p1.0[i]) * pi_p2.0[i],
                     );
 
                 // Evaluation at -1
@@ -109,29 +112,29 @@ pub fn prove_sumcheck_chi(
                 // TODO: these values can be calculated once
                 let piem1 = pi[j].0[i] + pi[j].0[i] - pi[j].1[i];
                 let piem1_5 =
-                    pi[add_col(j, 1)].0[i] + pi[add_col(j, 1)].0[i] - pi[add_col(j, 1)].1[i];
+                    pi_p1.0[i] + pi_p1.0[i] - pi_p1.1[i];
                 let piem1_10 =
-                    pi[add_col(j, 2)].0[i] + pi[add_col(j, 2)].0[i] - pi[add_col(j, 2)].1[i];
+                    pi_p2.0[i] + pi_p2.0[i] - pi_p2.1[i];
                 pem1t += eem1 * xor(piem1, (Fr::one() - piem1_5) * piem1_10);
 
                 // Evaluation at ∞
                 p4t += (e1[i] - e0[i])
                     * (pi[j].1[i] - pi[j].0[i])
-                    * (pi[add_col(j, 1)].0[i] - pi[add_col(j, 1)].1[i])
-                    * (pi[add_col(j, 2)].1[i] - pi[add_col(j, 2)].0[i]);
+                    * (pi_p1.1[i] - pi_p1.0[i])
+                    * (pi_p2.1[i] - pi_p2.0[i]);
 
                 // Evaluation at 2
                 let ee2 = e1[i] + e1[i] - e0[i];
                 let pie2 = pi[j].1[i] + pi[j].1[i] - pi[j].0[i];
                 let pie2_5 =
-                    pi[add_col(j, 1)].1[i] + pi[add_col(j, 1)].1[i] - pi[add_col(j, 1)].0[i];
+                    pi_p1.1[i] + pi_p1.1[i] - pi_p1.0[i];
                 let pie2_10 =
-                    pi[add_col(j, 2)].1[i] + pi[add_col(j, 2)].1[i] - pi[add_col(j, 2)].0[i];
+                    pi_p2.1[i] + pi_p2.1[i] - pi_p2.0[i];
                 pe2t += ee2 * xor(pie2, (Fr::one() - pie2_5) * pie2_10);
             }
             p0 += beta[j] * p0t;
             pem1 += beta[j] * pem1t;
-            p4t = -p4t - p4t;
+            p4t = p4t + p4t;
             p4 += beta[j] * p4t;
             pe2 += beta[j] * pe2t;
         }
