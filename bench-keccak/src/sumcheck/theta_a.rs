@@ -59,7 +59,6 @@ pub fn prove_sumcheck_theta_a(
 ) -> ThetaAProof {
     #[cfg(debug_assertions)]
     {
-        println!("shouldn't run");
         assert_eq!(beta_a.len(), beta_b.len());
         assert_eq!(beta_a.len(), aij.len());
         assert_eq!(eq_a.len(), 1 << size);
@@ -140,7 +139,6 @@ pub fn prove_sumcheck_theta_a(
     // check result
     #[cfg(debug_assertions)]
     {
-        println!("shouldn't run");
         let mut checksum = Fr::zero();
         for j in 0..aij.len() {
             checksum += beta_a[j] * eq_a[0] * aij[j][0] + beta_b[j] * eq_b[0] * aij[j][0];
