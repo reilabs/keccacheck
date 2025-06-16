@@ -8,6 +8,8 @@ use crate::{
 use ark_bn254::Fr;
 use ark_ff::Zero;
 use itertools::izip;
+use rayon::prelude::*;
+use tracing::instrument;
 
 pub struct IotaProof {
     pub _sum: Fr,
@@ -16,7 +18,7 @@ pub struct IotaProof {
     pub chi_rlc: Fr,
 }
 
-// #[instrument(skip_all)]
+#[instrument(skip_all)]
 pub fn prove_iota(
     transcript: &mut Prover,
     num_vars: usize,
@@ -135,24 +137,45 @@ pub fn prove_sumcheck_iota(
         let (c0, c1) = c.split_at(c.len() / 2);
 
         // TODO: this should be parallelized ProveKit style
-        izip!(
-            e0.iter().zip(e1),
-            a0.iter().zip(a1),
-            b0.iter().zip(b1),
-            c0.iter().zip(c1)
-        )
-        .for_each(|(e, a, b, c)| {
-            // Evaluation at 0
-            p0 += *e.0 * (beta_00 * xor(*a.0, *b.0) + c.0);
-            // Evaluation at -1
-            let eem1 = e.0 + e.0 - e.1; // e(-1)
-            let aem1 = a.0 + a.0 - a.1; // a(-1)
-            let bem1 = b.0 + b.0 - b.1; // b(-1)
-            let cem1 = c.0 + c.0 - c.1; // c(-1)
-            pem1 += eem1 * (beta_00 * xor(aem1, bem1) + cem1);
-            // Evaluation at ∞
-            p3 += beta_m2 * (e.1 - e.0) * (a.1 - a.0) * (b.1 - b.0);
-        });
+
+        // (0..e0.len()).into_par_iter().chunks(1024).map(|j| {
+        //
+        // }).reduce_with(|a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2))
+        //     .unwrap();
+
+        let chunk = 1024;
+
+        let (p0t, pem1t, p3t) = e0.par_chunks(chunk).zip(e1.par_chunks(chunk)).zip(
+            a0.par_chunks(chunk).zip(a1.par_chunks(chunk))
+        ).zip(
+        b0.par_chunks(chunk).zip(b1.par_chunks(chunk)).zip(
+            c0.par_chunks(chunk).zip(c1.par_chunks(chunk))
+        ))
+        .map(|x| {
+            let (((e0, e1), (a0, a1)), ((b0, b1), (c0, c1))) = x;
+            let mut p0 = Fr::zero();
+            let mut pem1 = Fr::zero();
+            let mut p3 = Fr::zero();
+            for i in 0..e0.len() {
+                // Evaluation at 0
+                p0 += e0[i] * (beta_00 * xor(a0[i], b[i]) + c0[i]);
+                // Evaluation at -1
+                let eem1 = e0[i] + e0[i] - e1[i]; // e(-1)
+                let aem1 = a0[i] + a0[i] - a1[i]; // a(-1)
+                let bem1 = b0[i] + b0[i] - b1[i]; // b(-1)
+                let cem1 = c0[i] + c0[i] - c1[i]; // c(-1)
+                pem1 += eem1 * (beta_00 * xor(aem1, bem1) + cem1);
+                // Evaluation at ∞
+                p3 += beta_m2 * (e1[i] - e0[i]) * (a1[i] - a0[i]) * (b1[i] - b0[i]);
+            }
+            (p0, pem1, p3)
+        })
+        .reduce_with(|a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2))
+        .unwrap();
+
+        p0 += p0t;
+        pem1 += pem1t;
+        p3 += p3t;
 
         // Compute p1 and p2 from
         //  p(0) + p(1) = 2 ⋅ p0 + p1 + p2 + p3
