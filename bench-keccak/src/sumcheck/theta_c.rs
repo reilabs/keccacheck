@@ -1,4 +1,3 @@
-use crate::poseidon::permute_3;
 use crate::sumcheck::util::{
     HALF, calculate_evaluations_over_boolean_hypercube_for_eq, derive_rot_evaluations_from_eq,
     to_poly_xor_base, update,
@@ -9,7 +8,7 @@ use ark_ff::{MontFp, One, Zero};
 use tracing::instrument;
 
 pub struct ThetaCProof {
-    pub sum: Fr,
+    pub _sum: Fr,
     pub r: Vec<Fr>,
     pub a: Vec<Fr>,
 }
@@ -239,7 +238,7 @@ pub fn prove_sumcheck_theta_c(
         //     pe2 - pem2,
         //     MontFp!("4") * p1 + MontFp!("16") * p3 + MontFp!("64") * p5
         // );
-        // 
+        //
         // assert_eq!(sum, p0 + p0 + p1 + p2 + p3 + p4 + p5 + p6);
         // assert_eq!(pem1, p0 - p1 + p2 - p3 + p4 - p5 + p6);
         // assert_eq!(
@@ -321,7 +320,7 @@ pub fn prove_sumcheck_theta_c(
     }
 
     ThetaCProof {
-        sum,
+        _sum: sum,
         r: rs,
         a: subclaims,
     }

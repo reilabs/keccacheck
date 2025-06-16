@@ -146,12 +146,12 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
     let mut sum = Fr::zero();
     let mut beta_a = vec![Fr::zero(); theta_c_proof.a.len()];
 
-    theta_proof.ai.iter().enumerate().for_each(|(i, b)| {
+    theta_proof.ai.iter().enumerate().for_each(|(i, ai)| {
         let b = prover.read();
         for j in 0..5 {
             beta[j * 5 + i] *= b;
         }
-        sum += b * theta_proof.ai[i];
+        sum += b * *ai;
     });
     beta_a.iter_mut().enumerate().for_each(|(i, b)| {
         *b = prover.read();

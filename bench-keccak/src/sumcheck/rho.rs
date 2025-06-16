@@ -1,30 +1,14 @@
-use crate::sumcheck::util::{
-    calculate_evaluations_over_boolean_hypercube_for_rot, eval_mle, to_poly,
-};
+#[cfg(debug_assertions)]
+use crate::sumcheck::util::eval_mle;
+use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_rot, to_poly};
 use crate::{sumcheck::util::update, transcript::Prover};
 use ark_bn254::Fr;
-use ark_ff::{One, Zero};
+use ark_ff::Zero;
 use tracing::instrument;
-
-// rotate input k bits left to
-pub fn rot_poly(k: usize) -> Vec<Fr> {
-    let mut result = Vec::with_capacity(1 << 12);
-    // a is output, b is input
-    for a in 0..(1 << 6) {
-        for b in 0..(1 << 6) {
-            if a == (b + k) % 64 {
-                result.push(Fr::one());
-            } else {
-                result.push(Fr::zero());
-            }
-        }
-    }
-    result
-}
 
 #[derive(Debug)]
 pub struct RhoProof {
-    pub sum: Fr,
+    pub _sum: Fr,
     pub r: Vec<Fr>,
     pub theta: Vec<Fr>,
 }
@@ -61,7 +45,7 @@ pub fn prove_rho(
                 beta[i] * eval_mle(&theta, &proof.r) * eval_mle(&rot, &proof.r)
             })
             .sum();
-        assert_eq!(checksum, proof.sum);
+        assert_eq!(checksum, proof._sum);
     }
 
     proof
@@ -152,7 +136,7 @@ pub fn prove_sumcheck_rho(
     }
 
     RhoProof {
-        sum,
+        _sum: sum,
         r: rs,
         theta: subclaims,
     }

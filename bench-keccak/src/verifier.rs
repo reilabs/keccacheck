@@ -173,12 +173,12 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     let mut expected_sum = Fr::zero();
     let mut beta_a = vec![Fr::zero(); a.len()];
 
-    ai.iter().enumerate().for_each(|(i, b)| {
+    ai.iter().enumerate().for_each(|(i, a)| {
         let b = verifier.generate();
         for j in 0..5 {
             beta[j * 5 + i] *= b;
         }
-        expected_sum += b * ai[i];
+        expected_sum += b * *a;
     });
     beta_a.iter_mut().enumerate().for_each(|(i, b)| {
         *b = verifier.generate();

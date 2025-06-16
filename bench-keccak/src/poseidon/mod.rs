@@ -18,7 +18,7 @@
 // https://hackmd.io/@hackmdhl/B1DdpVmK2
 // https://extgit.iaik.tugraz.at/krypto/zkfriendlyhashzoo/-/blob/master/plain_impls/src/poseidon2/poseidon2_instance_bn256.rs?ref_type=heads
 // https://eprint.iacr.org/2024/310.pdf
-
+#![allow(dead_code)]
 mod constants;
 
 use {

@@ -1,7 +1,7 @@
 use crate::reference::ROUND_CONSTANTS;
-use crate::sumcheck::util::{
-    calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
-};
+#[cfg(debug_assertions)]
+use crate::sumcheck::util::eval_mle;
+use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, to_poly};
 use crate::{
     sumcheck::util::{HALF, update, xor},
     transcript::Prover,
@@ -12,7 +12,7 @@ use itertools::izip;
 use tracing::instrument;
 
 pub struct IotaProof {
-    pub sum: Fr,
+    pub _sum: Fr,
     pub r: Vec<Fr>,
     pub chi_00: Fr,
     pub chi_rlc: Fr,
@@ -76,7 +76,7 @@ pub fn prove_iota(
         assert_eq!(proof.chi_rlc, e_chi_rlc);
         assert_eq!(
             e_eq * (beta[0] * xor(e_chi_00, e_rc) + e_chi_rlc),
-            proof.sum
+            proof._sum
         );
     }
 
@@ -156,7 +156,7 @@ pub fn prove_sumcheck_iota(
     assert_eq!(e[0] * (beta_00 * xor(a[0], b[0]) + c[0]), sum);
 
     IotaProof {
-        sum,
+        _sum: sum,
         r: rs,
         chi_00: a[0],
         chi_rlc: c[0],
@@ -228,7 +228,7 @@ mod tests {
                 &mut chi_rlc,
                 real_iota_sum,
             );
-            (proof.sum, proof.r)
+            (proof._sum, proof.r)
         };
         let e_eq = eval_mle(&eq, &prs); // TODO: can evaluate eq faster
         let e_chi_00 = eval_mle(&chi_00, &prs);

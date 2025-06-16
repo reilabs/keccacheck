@@ -7,7 +7,7 @@ use ark_ff::Zero;
 use tracing::instrument;
 
 pub struct ThetaProof {
-    pub sum: Fr,
+    pub _sum: Fr,
     pub r: Vec<Fr>,
     pub d: Vec<Fr>,
     pub ai: Vec<Fr>,
@@ -162,7 +162,7 @@ pub fn prove_sumcheck_theta(
     }
 
     ThetaProof {
-        sum,
+        _sum: sum,
         r: rs,
         d: d_subclaims,
         ai: ai_subclaims,
