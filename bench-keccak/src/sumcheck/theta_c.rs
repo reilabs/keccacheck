@@ -23,12 +23,12 @@ pub fn prove_theta_c(
     a: &[u64],
     sum: Fr,
 ) -> ThetaCProof {
-    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
+    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
     let mut rot = derive_rot_evaluations_from_eq(&eq, 1);
     let instances = 1 << (num_vars - 6);
     let mut a = a
         .chunks_exact(instances)
-        .map(|x| to_poly_xor_base(x))
+        .map(to_poly_xor_base)
         .collect::<Vec<_>>();
 
     #[cfg(debug_assertions)]
@@ -55,11 +55,11 @@ pub fn prove_theta_c(
         assert_eq!(a_sum, sum);
     }
 
-    let proof = prove_sumcheck_theta_c(
-        transcript, num_vars, beta_c, beta_rot_c, &mut eq, &mut rot, &mut a, sum,
-    );
+    
 
-    proof
+    prove_sumcheck_theta_c(
+        transcript, num_vars, beta_c, beta_rot_c, &mut eq, &mut rot, &mut a, sum,
+    )
 }
 
 pub fn prove_sumcheck_theta_c(
@@ -357,7 +357,7 @@ mod test {
         let theta_c = state
             .c
             .chunks_exact(instances)
-            .map(|x| to_poly_xor_base(x))
+            .map(to_poly_xor_base)
             .collect::<Vec<_>>();
         let theta_rot_c = state
             .c

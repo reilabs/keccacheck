@@ -36,7 +36,7 @@ pub fn prove_chi(
     let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
     let mut pis = pi
         .chunks_exact(instances)
-        .map(|x| to_poly(x))
+        .map(to_poly)
         .collect::<Vec<_>>();
 
     let proof = prove_sumcheck_chi(transcript, num_vars, beta, &mut eq, &mut pis, sum);
@@ -216,12 +216,12 @@ mod tests {
         apply_pi_t(&state.rho, &mut pi);
         let pi = pi
             .chunks_exact(instances)
-            .map(|x| to_poly(x))
+            .map(to_poly)
             .collect::<Vec<_>>();
         let chi = state
             .pi_chi
             .chunks_exact(instances)
-            .map(|x| to_poly(x))
+            .map(to_poly)
             .collect::<Vec<_>>();
 
         let real_chi_sum: Fr = chi

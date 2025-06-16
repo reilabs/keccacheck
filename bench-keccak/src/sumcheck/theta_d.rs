@@ -24,10 +24,10 @@ pub fn prove_theta_d(
 ) -> ThetaDProof {
     let instances = 1 << (num_vars - 6);
 
-    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
+    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
     let mut cs = c
         .chunks_exact(instances)
-        .map(|x| to_poly_xor_base(x))
+        .map(to_poly_xor_base)
         .collect::<Vec<_>>();
     let mut rot_c = c
         .chunks_exact(instances)
@@ -45,11 +45,11 @@ pub fn prove_theta_d(
         assert_eq!(c_sum, sum);
     }
 
-    let proof = prove_sumcheck_theta_d(
-        transcript, num_vars, beta, &mut eq, &mut cs, &mut rot_c, sum,
-    );
+    
 
-    proof
+    prove_sumcheck_theta_d(
+        transcript, num_vars, beta, &mut eq, &mut cs, &mut rot_c, sum,
+    )
 }
 
 pub fn prove_sumcheck_theta_d(
@@ -195,7 +195,7 @@ mod test {
         let theta_d = state
             .d
             .chunks_exact(instances)
-            .map(|x| to_poly_xor_base(x))
+            .map(to_poly_xor_base)
             .collect::<Vec<_>>();
         let real_theta_d_sum: Fr = theta_d
             .iter()

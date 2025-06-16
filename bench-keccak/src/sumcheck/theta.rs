@@ -25,10 +25,10 @@ pub fn prove_theta(
 ) -> ThetaProof {
     let instances = 1 << (num_vars - 6);
 
-    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r);
+    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
     let mut d = d
         .chunks_exact(instances)
-        .map(|x| to_poly_xor_base(x))
+        .map(to_poly_xor_base)
         .collect::<Vec<_>>();
     let mut ai = (0..5)
         .map(|i| {
@@ -56,9 +56,9 @@ pub fn prove_theta(
         assert_eq!(ai_d_sum, sum);
     }
 
-    let proof = prove_sumcheck_theta(transcript, num_vars, &mut eq, &mut d, &mut ai, sum);
+    
 
-    proof
+    prove_sumcheck_theta(transcript, num_vars, &mut eq, &mut d, &mut ai, sum)
 }
 
 pub fn prove_sumcheck_theta(
@@ -192,7 +192,7 @@ mod tests {
         let real_theta_sum: Fr = state
             .theta
             .chunks_exact(instances)
-            .map(|x| to_poly(x))
+            .map(to_poly)
             .map(|poly| eval_mle(&poly, &alpha))
             .map(|x| Fr::one() - x - x)
             .enumerate()

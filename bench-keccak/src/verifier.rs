@@ -116,7 +116,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
 
     // combine subclaims on theta d
     let mut expected_sum = Fr::zero();
-    let mut beta_d = vec![Fr::zero(); 5];
+    let mut beta_d = [Fr::zero(); 5];
     beta_d.iter_mut().enumerate().for_each(|(i, b)| {
         *b = verifier.generate();
         expected_sum += *b * d[i];
@@ -138,8 +138,8 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
 
     // combine subclaims on theta c and rot_c
     let mut expected_sum = Fr::zero();
-    let mut beta_c = vec![Fr::zero(); 5];
-    let mut beta_rot_c = vec![Fr::zero(); 5];
+    let mut beta_c = [Fr::zero(); 5];
+    let mut beta_rot_c = [Fr::zero(); 5];
     beta_c.iter_mut().enumerate().for_each(|(i, b)| {
         *b = verifier.generate();
         expected_sum += *b * c[i];

@@ -29,7 +29,7 @@ pub fn prove_rho(
         .collect::<Vec<_>>();
     let mut thetas = theta
         .chunks_exact(instances)
-        .map(|u| to_poly(u))
+        .map(to_poly)
         .collect::<Vec<_>>();
 
     let proof = prove_sumcheck_rho(transcript, num_vars, beta, &mut rots, &mut thetas, sum);
@@ -164,7 +164,7 @@ mod tests {
         let real_rho_sum: Fr = state
             .rho
             .chunks_exact(instances)
-            .map(|x| to_poly(x))
+            .map(to_poly)
             .enumerate()
             .map(|(i, poly)| beta[i] * eval_mle(&poly, &alpha))
             .sum();

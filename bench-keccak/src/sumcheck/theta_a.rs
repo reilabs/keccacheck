@@ -23,12 +23,12 @@ pub fn prove_theta_a(
     a: &[u64],
     sum: Fr,
 ) -> ThetaAProof {
-    let mut eq1 = calculate_evaluations_over_boolean_hypercube_for_eq(&r1);
-    let mut eq2 = calculate_evaluations_over_boolean_hypercube_for_eq(&r2);
+    let mut eq1 = calculate_evaluations_over_boolean_hypercube_for_eq(r1);
+    let mut eq2 = calculate_evaluations_over_boolean_hypercube_for_eq(r2);
     let instances = 1 << (num_vars - 6);
     let mut a = a
         .chunks_exact(instances)
-        .map(|x| to_poly_xor_base(x))
+        .map(to_poly_xor_base)
         .collect::<Vec<_>>();
 
     #[cfg(debug_assertions)]
@@ -183,7 +183,7 @@ mod test {
         let result = state
             .a
             .chunks_exact(instances)
-            .map(|x| to_poly_xor_base(x))
+            .map(to_poly_xor_base)
             .collect::<Vec<_>>();
         let real_sum: Fr = result
             .iter()

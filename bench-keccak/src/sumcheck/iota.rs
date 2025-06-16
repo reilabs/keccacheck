@@ -199,12 +199,12 @@ mod tests {
         let chi = state
             .pi_chi
             .chunks_exact(instances)
-            .map(|x| to_poly(x))
+            .map(to_poly)
             .collect::<Vec<_>>();
         let iota = state
             .iota
             .chunks_exact(instances)
-            .map(|x| to_poly(x))
+            .map(to_poly)
             .collect::<Vec<_>>();
 
         let real_iota_sum: Fr = iota
