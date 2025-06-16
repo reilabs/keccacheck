@@ -10,7 +10,8 @@ use tracing::instrument;
 pub struct ThetaAProof {
     pub _sum: Fr,
     pub r: Vec<Fr>,
-    pub iota: Vec<Fr>,
+    pub iota_hat: Vec<Fr>,
+    pub coeffs: Vec<Fr>,
 }
 
 #[instrument(skip_all)]
@@ -153,10 +154,12 @@ pub fn prove_sumcheck_theta_a(
         sum = p0 + r * (p1 + r * p2);
     }
 
+    let mut coeffs = Vec::with_capacity(aij.len());
     let mut subclaims = Vec::with_capacity(aij.len());
     for j in 0..aij.len() {
         transcript.write(aij[j][0]);
         subclaims.push(aij[j][0]);
+        coeffs.push(beta_a[j] * eq_a[0] + beta_b[j] * eq_b[0]);
     }
 
     // check result
@@ -164,15 +167,18 @@ pub fn prove_sumcheck_theta_a(
     {
         let mut checksum = Fr::zero();
         for j in 0..aij.len() {
-            checksum += beta_a[j] * eq_a[0] * aij[j][0] + beta_b[j] * eq_b[0] * aij[j][0];
+            checksum += coeffs[j] * subclaims[j];
+            // println!("{} * {}", coeffs[j], subclaims[j]);
         }
+        // println!("sum {}", checksum);
         assert_eq!(sum, checksum);
     }
 
     ThetaAProof {
         _sum: sum,
         r: rs,
-        iota: subclaims,
+        iota_hat: subclaims,
+        coeffs
     }
 }
 
@@ -192,7 +198,7 @@ mod test {
         let mut data = (0..(instances * STATE))
             .map(|i| i as u64)
             .collect::<Vec<_>>();
-        let state = keccak_round(&mut data, ROUND_CONSTANTS[0]);
+        let state = keccak_round(&mut data, 0);
 
         let mut prover = Prover::new();
         let alpha_a = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();

@@ -6,20 +6,19 @@ use crate::sumcheck::theta::{prove_theta, ThetaProof};
 use crate::sumcheck::theta_a::{prove_theta_a, ThetaAProof};
 use crate::sumcheck::theta_c::prove_theta_c;
 use crate::sumcheck::theta_d::prove_theta_d;
-use crate::sumcheck::util::{eval_mle, to_poly};
+use crate::sumcheck::util::{eval_mle, to_poly, HALF};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use tracing::instrument;
 
+#[instrument(skip_all)]
 pub fn prove(data: &[u64]) -> Vec<Fr> {
     let instances = data.len() / 25;
     let num_vars = 6 + instances.ilog2() as usize;
 
     let data = data.to_vec();
-    let state = KeccakRoundState::from_data(&data, ROUND_CONSTANTS[0]);
-
-    println!("num vars {num_vars}");
+    let mut state = KeccakRoundState::at_round(&data, 23);
 
     let mut prover = Prover::new();
 
@@ -39,21 +38,28 @@ pub fn prove(data: &[u64]) -> Vec<Fr> {
         .sum();
 
     prover.write(sum);
-    //for round in 0..24 {
-        let previous_proof = prove_round(&mut prover, num_vars, &state, &r, &mut beta, sum);
+    for _ in 0..24 {
+        let previous_proof = prove_round(&mut prover, num_vars, &state, &r, &mut beta, sum, ROUND_CONSTANTS[state.round]);
         r = previous_proof.r;
-        sum = previous_proof._sum;
-    //}
+        if state.round != 0 {
+            state = KeccakRoundState::at_round(&data, state.round - 1);
+
+            sum = Fr::zero();
+            beta.iter_mut().enumerate().for_each(|(i, b)| {
+                *b = prover.read();
+                let v = HALF * (Fr::one() - previous_proof.iota_hat[i]);
+                sum += *b * v;
+            });
+        }
+    }
 
     prover.finish()
 }
 
 #[instrument(skip_all)]
-pub fn prove_round(prover: &mut Prover, num_vars: usize, layers: &KeccakRoundState, alpha: &[Fr], beta: &mut [Fr], sum: Fr) -> ThetaAProof {
-    let instances = 1usize << (num_vars - 6);
-
+pub fn prove_round(prover: &mut Prover, num_vars: usize, layers: &KeccakRoundState, alpha: &[Fr], beta: &mut [Fr], sum: Fr, rc: u64) -> ThetaAProof {
     // prove iota
-    let iota_proof = prove_iota(prover, num_vars, &alpha, &beta, &layers.pi_chi, sum);
+    let iota_proof = prove_iota(prover, num_vars, &alpha, &beta, &layers.pi_chi, sum, rc);
 
     // combine subclaims chi_00 and chi_rlc
     let x = prover.read();

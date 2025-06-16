@@ -215,7 +215,7 @@ mod test {
         let mut data = (0..(instances * STATE))
             .map(|i| i as u64)
             .collect::<Vec<_>>();
-        let state = keccak_round(&mut data, ROUND_CONSTANTS[0]);
+        let state = keccak_round(&mut data, 0);
 
         let mut prover = Prover::new();
         let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();

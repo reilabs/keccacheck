@@ -58,6 +58,7 @@ fn transpose(a: &[u64], instances: usize) -> Vec<u64> {
 
 #[derive(Debug)]
 pub struct KeccakRoundState {
+    pub round: usize,
     pub iota: Vec<u64>,   // output, state after iota step
     pub pi_chi: Vec<u64>, // state after pi and chi steps
     pub rho: Vec<u64>,    // state after rho step
@@ -68,8 +69,9 @@ pub struct KeccakRoundState {
 }
 
 impl KeccakRoundState {
-    pub fn alloc(instances: usize) -> Self {
+    pub fn alloc(instances: usize, round: usize) -> Self {
         Self {
+            round,
             iota: vec![0; instances * STATE],
             pi_chi: vec![0; instances * STATE],
             rho: vec![0; instances * STATE],
@@ -80,24 +82,31 @@ impl KeccakRoundState {
         }
     }
 
-    pub fn from_data(a: &[u64], rc: u64) -> Self {
-        let instances = a.len() / STATE;
-        let a = transpose(a, instances);
-        keccak_round(&a, rc)
+    #[instrument(skip(a))]
+    pub fn at_round(a: &[u64], i: usize) -> Self {
+        let mut state = Self::from_data(&a, 0);
+        for _ in 1..=i {
+            state = state.next();
+        }
+        state
     }
 
-    pub fn next(&self, rc: u64) -> Self {
-        let instances = self.a.len() / STATE;
-        keccak_round(&self.iota, rc)
+    fn from_data(a: &[u64], i: usize) -> Self {
+        let instances = a.len() / STATE;
+        let a = transpose(a, instances);
+        keccak_round(&a, i)
+    }
+
+    fn next(&self) -> Self {
+        keccak_round(&self.iota, self.round + 1)
     }
 }
 
-#[instrument(skip_all)]
-pub fn keccak_round(a_t: &[u64], rc: u64) -> KeccakRoundState {
+pub fn keccak_round(a_t: &[u64], round: usize) -> KeccakRoundState {
     assert_eq!(a_t.len() % STATE, 0);
     let instances = a_t.len() / STATE;
 
-    let mut result = KeccakRoundState::alloc(instances);
+    let mut result = KeccakRoundState::alloc(instances, round);
     result.a.copy_from_slice(a_t);
 
     // Theta
@@ -120,11 +129,11 @@ pub fn keccak_round(a_t: &[u64], rc: u64) -> KeccakRoundState {
             }
         }
     }
-
-    println!("a {:?}", result.a);
-    println!("c {:?}", result.c);
-    println!("d {:?}", result.d);
-    println!("theta {:?}", result.theta);
+    //
+    // println!("a {:?}", result.a);
+    // println!("c {:?}", result.c);
+    // println!("d {:?}", result.d);
+    // println!("theta {:?}", result.theta);
 
     // Rho
     // Apply rotation to each lane
@@ -133,8 +142,7 @@ pub fn keccak_round(a_t: &[u64], rc: u64) -> KeccakRoundState {
             result.rho[x * instances + i] = result.theta[x * instances + i].rotate_left(RHO_OFFSETS[x]);
         }
     }
-    println!("rho {:?}", result.rho);
-
+    // println!("rho {:?}", result.rho);
 
     // Pi
     // Permute the positions of lanes
@@ -142,32 +150,31 @@ pub fn keccak_round(a_t: &[u64], rc: u64) -> KeccakRoundState {
     for i in 0..instances {
         apply_pi_t(&result.rho, &mut pi);
     }
-    println!("pi {:?}", pi);
+    // println!("pi {:?}", pi);
 
     // Chi
-    let mut c = vec![0; COLUMNS * instances];
+    let mut c = vec![0; COLUMNS];
     for i in 0..instances {
         for y_step in 0..ROWS {
             let y = y_step * COLUMNS;
 
             for x in 0..COLUMNS {
-                c[x * instances + i] = pi[(y + x) * instances + i];
+                c[x] = pi[(y + x) * instances + i];
             }
 
             for x in 0..5 {
-                result.pi_chi[(y + x) * instances + i] = result.c[x * instances + i]
-                    ^ ((!c[((x + 1) % 5) * instances + i]) & (c[((x + 2) % 5) * instances + i]));
+                result.pi_chi[(y + x) * instances + i] = c[x] ^ ((!c[(x + 1) % 5]) & (c[(x + 2) % 5]));
             }
         }
     }
-    println!("pi_chi {:?}", result.pi_chi);
+    // println!("pi_chi {:?}", result.pi_chi);
 
     // Iota
     result.iota.clone_from_slice(&result.pi_chi);
     for i in 0..instances {
-        result.iota[i] ^= rc;
+        result.iota[i] ^= ROUND_CONSTANTS[round];
     }
-    println!("iota {:?}", result.iota);
+    // println!("iota {:?}", result.iota);
 
 
     result

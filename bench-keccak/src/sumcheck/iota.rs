@@ -27,10 +27,11 @@ pub fn prove_iota(
     beta: &[Fr],
     chi: &[u64],
     sum: Fr,
+    rc: u64,
 ) -> IotaProof {
     let instances = 1 << (num_vars - 6);
 
-    let ((mut eq, mut chi_00), (mut rc, mut chi_rlc)) = rayon::join(
+    let ((mut eq, mut chi_00), (mut rc_poly, mut chi_rlc)) = rayon::join(
         || {
             rayon::join(
                 || calculate_evaluations_over_boolean_hypercube_for_eq(r),
@@ -39,7 +40,7 @@ pub fn prove_iota(
         },
         || {
             rayon::join(
-                || to_poly(&vec![ROUND_CONSTANTS[0]; instances]),
+                || to_poly(&vec![rc; instances]),
                 || {
                     let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
                     // iterating from 1 to skip the first state element (i, j) = (0, 0)
@@ -56,13 +57,22 @@ pub fn prove_iota(
         },
     );
 
+    #[cfg(debug_assertions)]
+    {
+        let mut c_sum = Fr::zero();
+        for x in 0..(1 << num_vars) {
+            c_sum += eq[x] * (beta[0] * xor(chi_00[x], rc_poly[x]) + chi_rlc[x]);
+        }
+        assert_eq!(c_sum, sum);
+    }
+
     let proof = prove_sumcheck_iota(
         transcript,
         num_vars,
         beta[0],
         &mut eq,
         &mut chi_00,
-        &mut rc,
+        &mut rc_poly,
         &mut chi_rlc,
         sum,
     );
@@ -72,7 +82,7 @@ pub fn prove_iota(
         // sumcheck consumed all polynomials. create again
         let eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
         let chi_00 = to_poly(&chi[0..instances]);
-        let rc = to_poly(&vec![ROUND_CONSTANTS[0]; instances]);
+        let rc = to_poly(&vec![rc; instances]);
         let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
         for el in 1..25 {
             let slice = &chi[(el * instances)..(el * instances + instances)];
@@ -194,7 +204,7 @@ mod tests {
         let mut data = (0..(instances * STATE))
             .map(|i| i as u64)
             .collect::<Vec<_>>();
-        let state = keccak_round(&mut data, ROUND_CONSTANTS[0]);
+        let state = keccak_round(&mut data, 0);
 
         let mut prover = Prover::new();
         let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
