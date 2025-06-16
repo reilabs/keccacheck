@@ -11,6 +11,7 @@ use crate::{
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use std::str::FromStr;
+use rayon::prelude::*;
 use tracing::instrument;
 
 pub struct ChiProof {
@@ -33,8 +34,10 @@ pub fn prove_chi(
     let mut pi = rho.to_vec();
     apply_pi_t(rho, &mut pi);
 
-    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
-    let mut pis = pi.chunks_exact(instances).map(to_poly).collect::<Vec<_>>();
+    let (mut eq, mut pis) = rayon::join(
+        || calculate_evaluations_over_boolean_hypercube_for_eq(r),
+        || pi.par_chunks_exact(instances).map(to_poly).collect::<Vec<_>>()
+    );
 
     let proof = prove_sumcheck_chi(transcript, num_vars, beta, &mut eq, &mut pis, sum);
 
@@ -159,11 +162,15 @@ pub fn prove_sumcheck_chi(
         let r = transcript.read();
         rs.push(r);
         // TODO: Fold update into evaluation loop.
-        e = update(e, r);
-        for j in 0..pis.len() {
-            // TODO: unnecessary allocation
-            pis[j] = update(&mut pis[j], r).to_vec()
-        }
+        (e, _) = rayon::join(
+            || update(e, r),
+            || {
+                pis.par_iter_mut().for_each(|x| {
+                    // TODO: unnecessary allocation
+                    *x = update(x, r).to_vec()
+                });
+            }
+        );
         sum = p0 + r * (p1 + r * (p2 + r * (p3 + r * p4)));
     }
     let mut subclaims = Vec::with_capacity(pis.len());

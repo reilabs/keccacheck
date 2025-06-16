@@ -26,7 +26,6 @@ pub fn prove_theta_a(
 ) -> ThetaAProof {
     let instances = 1 << (num_vars - 6);
 
-    let span = tracing::span!(tracing::Level::INFO, "prep").entered();
     let ((mut eq1, mut eq2), mut a) = rayon::join(
         || {
             rayon::join(
@@ -40,7 +39,6 @@ pub fn prove_theta_a(
                 .map(to_poly_xor_base)
                 .collect::<Vec<_>>()
         });
-    span.exit();
 
     #[cfg(debug_assertions)]
     {
@@ -58,7 +56,6 @@ pub fn prove_theta_a(
     )
 }
 
-#[instrument(skip_all)]
 pub fn prove_sumcheck_theta_a(
     transcript: &mut Prover,
     size: usize,
@@ -96,7 +93,6 @@ pub fn prove_sumcheck_theta_a(
             })
             .collect::<Vec<_>>();
 
-        let span = tracing::span!(tracing::Level::INFO, "parallel iterator").entered();
         let (p0t, p2t) = a.into_par_iter().enumerate().map(|(j, a)| {
             let ba = beta_a[j];
             let bb = beta_b[j];
@@ -126,7 +122,6 @@ pub fn prove_sumcheck_theta_a(
 
         p0 += p0t;
         p2 += p2t;
-        span.exit();
 
         // Compute p1 from
         //  p(0) + p(1) = 2 ⋅ p0 + p1 + p2 + p3 + p4
@@ -139,7 +134,6 @@ pub fn prove_sumcheck_theta_a(
         let r = transcript.read();
         rs.push(r);
 
-        let span = tracing::span!(tracing::Level::INFO, "folding").entered();
         // TODO: Fold update into evaluation loop.
         let len = eq_a.len();
         ((eq_a, eq_b), _) = rayon::join(
@@ -160,7 +154,6 @@ pub fn prove_sumcheck_theta_a(
         //     update(&mut aij[j][0..len], r);
         // }
         sum = p0 + r * (p1 + r * p2);
-        span.exit();
     }
 
     let mut subclaims = Vec::with_capacity(aij.len());
