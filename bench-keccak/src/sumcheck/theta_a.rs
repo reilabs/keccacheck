@@ -26,14 +26,21 @@ pub fn prove_theta_a(
 ) -> ThetaAProof {
     let instances = 1 << (num_vars - 6);
 
-    let (mut eq1, mut eq2) = rayon::join(
-        || calculate_evaluations_over_boolean_hypercube_for_eq(r1),
-        || calculate_evaluations_over_boolean_hypercube_for_eq(r2)
-    );
-    let mut a = a
-        .chunks_exact(instances)
-        .map(to_poly_xor_base)
-        .collect::<Vec<_>>();
+    let span = tracing::span!(tracing::Level::INFO, "prep").entered();
+    let ((mut eq1, mut eq2), mut a) = rayon::join(
+        || {
+            rayon::join(
+                || calculate_evaluations_over_boolean_hypercube_for_eq(r1),
+                || calculate_evaluations_over_boolean_hypercube_for_eq(r2)
+            )
+        },
+        || {
+            a
+                .par_chunks_exact(instances)
+                .map(to_poly_xor_base)
+                .collect::<Vec<_>>()
+        });
+    span.exit();
 
     #[cfg(debug_assertions)]
     {
@@ -51,6 +58,7 @@ pub fn prove_theta_a(
     )
 }
 
+#[instrument(skip_all)]
 pub fn prove_sumcheck_theta_a(
     transcript: &mut Prover,
     size: usize,
@@ -134,11 +142,23 @@ pub fn prove_sumcheck_theta_a(
         let span = tracing::span!(tracing::Level::INFO, "folding").entered();
         // TODO: Fold update into evaluation loop.
         let len = eq_a.len();
-        eq_a = update(eq_a, r);
-        eq_b = update(eq_b, r);
-        for j in 0..aij.len() {
-            update(&mut aij[j][0..len], r);
-        }
+        ((eq_a, eq_b), _) = rayon::join(
+            || {
+                rayon::join(
+                    || update(eq_a, r),
+                    || update(eq_b, r),
+                )
+            },
+            || {
+                aij.par_iter_mut().for_each(|a| {
+                    update(&mut a[0..len], r);
+                });
+            }
+        );
+
+        // for j in 0..aij.len() {
+        //     update(&mut aij[j][0..len], r);
+        // }
         sum = p0 + r * (p1 + r * p2);
         span.exit();
     }
