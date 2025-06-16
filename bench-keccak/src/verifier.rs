@@ -1,13 +1,10 @@
 use crate::reference::{ROUND_CONSTANTS, strip_pi_t};
 use crate::sumcheck::util::{
-    HALF, add_col, calculate_evaluations_over_boolean_hypercube_for_eq,
-    calculate_evaluations_over_boolean_hypercube_for_rot, derive_rot_evaluations_from_eq, eval_mle,
-    to_poly, verify_sumcheck, xor,
+    HALF, add_col, eval_mle, to_poly, verify_sumcheck, xor,
 };
 use crate::transcript::Verifier;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
-use itertools::assert_equal;
 use tracing::{instrument, Level};
 use crate::sumcheck::util;
 

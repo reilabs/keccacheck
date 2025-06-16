@@ -4,6 +4,7 @@ use crate::sumcheck::util::{
 use crate::{sumcheck::util::update, transcript::Prover};
 use ark_bn254::Fr;
 use ark_ff::Zero;
+use rayon::prelude::*;
 use tracing::instrument;
 
 pub struct ThetaAProof {
@@ -23,9 +24,12 @@ pub fn prove_theta_a(
     a: &[u64],
     sum: Fr,
 ) -> ThetaAProof {
-    let mut eq1 = calculate_evaluations_over_boolean_hypercube_for_eq(r1);
-    let mut eq2 = calculate_evaluations_over_boolean_hypercube_for_eq(r2);
     let instances = 1 << (num_vars - 6);
+
+    let (mut eq1, mut eq2) = rayon::join(
+        || calculate_evaluations_over_boolean_hypercube_for_eq(r1),
+        || calculate_evaluations_over_boolean_hypercube_for_eq(r2)
+    );
     let mut a = a
         .chunks_exact(instances)
         .map(to_poly_xor_base)
@@ -84,11 +88,11 @@ pub fn prove_sumcheck_theta_a(
             })
             .collect::<Vec<_>>();
 
-        let span = tracing::span!(tracing::Level::INFO, "sequential iterator").entered();
-        for j in 0..a.len() {
+        let span = tracing::span!(tracing::Level::INFO, "parallel iterator").entered();
+        let (p0t, p2t) = a.into_par_iter().enumerate().map(|(j, a)| {
             let ba = beta_a[j];
             let bb = beta_b[j];
-            let a = a[j].0.iter().zip(a[j].1);
+            let a = a.0.iter().zip(a.1);
 
             let mut p0_a = Fr::zero();
             let mut p0_b = Fr::zero();
@@ -106,9 +110,14 @@ pub fn prove_sumcheck_theta_a(
                 p2_b += (eb1[i] - eb0[i]) * v;
             }
 
-            p0 += ba * p0_a + bb * p0_b;
-            p2 += ba * p2_a + bb * p2_b;
-        }
+            (
+                ba * p0_a + bb * p0_b,
+                ba * p2_a + bb * p2_b
+            )
+        }).reduce_with(|a, b| (a.0 + b.0, a.1 + b.1)).unwrap();
+
+        p0 += p0t;
+        p2 += p2t;
         span.exit();
 
         // Compute p1 from
