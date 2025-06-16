@@ -82,7 +82,6 @@ impl KeccakRoundState {
         }
     }
 
-    #[instrument(skip(a))]
     pub fn at_round(a: &[u64], i: usize) -> Self {
         let mut state = Self::from_data(&a, 0);
         for _ in 1..=i {
@@ -97,7 +96,7 @@ impl KeccakRoundState {
         keccak_round(&a, i)
     }
 
-    fn next(&self) -> Self {
+    pub fn next(&self) -> Self {
         keccak_round(&self.iota, self.round + 1)
     }
 }

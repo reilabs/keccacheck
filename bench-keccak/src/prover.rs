@@ -12,13 +12,20 @@ use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use tracing::instrument;
 
-#[instrument(skip_all)]
+#[instrument(skip_all, fields(num_vars=(6 + (data.len() / 25).ilog2())))]
 pub fn prove(data: &[u64]) -> Vec<Fr> {
     let instances = data.len() / 25;
     let num_vars = 6 + instances.ilog2() as usize;
 
     let data = data.to_vec();
-    let mut state = KeccakRoundState::at_round(&data, 23);
+
+    let span = tracing::span!(tracing::Level::INFO, "calculate_states").entered();
+    let mut state = Vec::with_capacity(24);
+    state.push(KeccakRoundState::at_round(&data, 0));
+    for i in 1..24 {
+        state.push(state[i-1].next());
+    }
+    span.exit();
 
     let mut prover = Prover::new();
 
@@ -27,7 +34,7 @@ pub fn prove(data: &[u64]) -> Vec<Fr> {
     let mut beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
     // write final output sum
-    let mut sum: Fr = state
+    let mut sum: Fr = state[23]
         .iota
         .chunks_exact(instances)
         .enumerate()
@@ -38,12 +45,10 @@ pub fn prove(data: &[u64]) -> Vec<Fr> {
         .sum();
 
     prover.write(sum);
-    for _ in 0..24 {
-        let previous_proof = prove_round(&mut prover, num_vars, &state, &r, &mut beta, sum, ROUND_CONSTANTS[state.round]);
+    for round in (0..24).rev() {
+        let previous_proof = prove_round(&mut prover, num_vars, &state[round], &r, &mut beta, sum, ROUND_CONSTANTS[round]);
         r = previous_proof.r;
-        if state.round != 0 {
-            state = KeccakRoundState::at_round(&data, state.round - 1);
-
+        if round != 0 {
             sum = Fr::zero();
             beta.iter_mut().enumerate().for_each(|(i, b)| {
                 *b = prover.read();
