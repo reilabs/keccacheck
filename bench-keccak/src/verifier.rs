@@ -1,12 +1,10 @@
 use crate::reference::{ROUND_CONSTANTS, strip_pi_t};
-use crate::sumcheck::util::{
-    HALF, add_col, eval_mle, to_poly, verify_sumcheck, xor,
-};
+use crate::sumcheck::util;
+use crate::sumcheck::util::{HALF, add_col, eval_mle, to_poly, verify_sumcheck, xor};
 use crate::transcript::Verifier;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
-use tracing::{instrument, Level};
-use crate::sumcheck::util;
+use tracing::{Level, instrument};
 
 #[instrument(skip_all)]
 pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
@@ -56,7 +54,6 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     beta.iter_mut().skip(1).for_each(|b| *b *= y);
     let expected_sum = beta[0] * chi_00 + y * chi_rlc;
     span.exit();
-
 
     // verify chi
     let span = tracing::span!(Level::INFO, "verify_chi").entered();

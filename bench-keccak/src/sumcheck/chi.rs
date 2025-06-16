@@ -10,8 +10,8 @@ use crate::{
 };
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
-use std::str::FromStr;
 use rayon::prelude::*;
+use std::str::FromStr;
 use tracing::instrument;
 
 pub struct ChiProof {
@@ -36,7 +36,11 @@ pub fn prove_chi(
 
     let (mut eq, mut pis) = rayon::join(
         || calculate_evaluations_over_boolean_hypercube_for_eq(r),
-        || pi.par_chunks_exact(instances).map(to_poly).collect::<Vec<_>>()
+        || {
+            pi.par_chunks_exact(instances)
+                .map(to_poly)
+                .collect::<Vec<_>>()
+        },
     );
 
     let proof = prove_sumcheck_chi(transcript, num_vars, beta, &mut eq, &mut pis, sum);
@@ -92,48 +96,53 @@ pub fn prove_sumcheck_chi(
             .map(|x| x.split_at(x.len() / 2))
             .collect::<Vec<_>>();
 
-        let (a, b, c, d) = pi.par_iter().enumerate().map(|(j, p)| {
-            let mut p0t = Fr::zero();
-            let mut pem1t = Fr::zero();
-            let mut p4t = Fr::zero();
-            let mut pe2t = Fr::zero();
+        let (a, b, c, d) = pi
+            .par_iter()
+            .enumerate()
+            .map(|(j, p)| {
+                let mut p0t = Fr::zero();
+                let mut pem1t = Fr::zero();
+                let mut p4t = Fr::zero();
+                let mut pe2t = Fr::zero();
 
-            for i in 0..e0.len() {
-                let pi_p1 = pi[add_col(j, 1)];
-                let pi_p2 = pi[add_col(j, 2)];
+                for i in 0..e0.len() {
+                    let pi_p1 = pi[add_col(j, 1)];
+                    let pi_p2 = pi[add_col(j, 2)];
 
-                // Evaluation at 0
-                p0t += e0[i] * xor(p.0[i], (Fr::one() - pi_p1.0[i]) * pi_p2.0[i]);
+                    // Evaluation at 0
+                    p0t += e0[i] * xor(p.0[i], (Fr::one() - pi_p1.0[i]) * pi_p2.0[i]);
 
-                // Evaluation at -1
-                let eem1 = e0[i] + e0[i] - e1[i];
-                // TODO: these values can be calculated once
-                let piem1 = p.0[i] + p.0[i] - p.1[i];
-                let piem1_5 = pi_p1.0[i] + pi_p1.0[i] - pi_p1.1[i];
-                let piem1_10 = pi_p2.0[i] + pi_p2.0[i] - pi_p2.1[i];
-                pem1t += eem1 * xor(piem1, (Fr::one() - piem1_5) * piem1_10);
+                    // Evaluation at -1
+                    let eem1 = e0[i] + e0[i] - e1[i];
+                    // TODO: these values can be calculated once
+                    let piem1 = p.0[i] + p.0[i] - p.1[i];
+                    let piem1_5 = pi_p1.0[i] + pi_p1.0[i] - pi_p1.1[i];
+                    let piem1_10 = pi_p2.0[i] + pi_p2.0[i] - pi_p2.1[i];
+                    pem1t += eem1 * xor(piem1, (Fr::one() - piem1_5) * piem1_10);
 
-                // Evaluation at ∞
-                p4t += (e1[i] - e0[i])
-                    * (p.1[i] - p.0[i])
-                    * (pi_p1.1[i] - pi_p1.0[i])
-                    * (pi_p2.1[i] - pi_p2.0[i]);
+                    // Evaluation at ∞
+                    p4t += (e1[i] - e0[i])
+                        * (p.1[i] - p.0[i])
+                        * (pi_p1.1[i] - pi_p1.0[i])
+                        * (pi_p2.1[i] - pi_p2.0[i]);
 
-                // Evaluation at 2
-                let ee2 = e1[i] + e1[i] - e0[i];
-                let pie2 = p.1[i] + p.1[i] - p.0[i];
-                let pie2_5 = pi_p1.1[i] + pi_p1.1[i] - pi_p1.0[i];
-                let pie2_10 = pi_p2.1[i] + pi_p2.1[i] - pi_p2.0[i];
-                pe2t += ee2 * xor(pie2, (Fr::one() - pie2_5) * pie2_10);
-            }
-            p4t = p4t + p4t;
-            (
-                beta[j] * p0t,
-                beta[j] * pem1t,
-                beta[j] * p4t,
-                beta[j] * pe2t,
-            )
-        }).reduce_with(|a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2, a.3 + b.3)).unwrap();
+                    // Evaluation at 2
+                    let ee2 = e1[i] + e1[i] - e0[i];
+                    let pie2 = p.1[i] + p.1[i] - p.0[i];
+                    let pie2_5 = pi_p1.1[i] + pi_p1.1[i] - pi_p1.0[i];
+                    let pie2_10 = pi_p2.1[i] + pi_p2.1[i] - pi_p2.0[i];
+                    pe2t += ee2 * xor(pie2, (Fr::one() - pie2_5) * pie2_10);
+                }
+                p4t = p4t + p4t;
+                (
+                    beta[j] * p0t,
+                    beta[j] * pem1t,
+                    beta[j] * p4t,
+                    beta[j] * pe2t,
+                )
+            })
+            .reduce_with(|a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2, a.3 + b.3))
+            .unwrap();
 
         p0 += a;
         pem1 += b;
@@ -176,7 +185,7 @@ pub fn prove_sumcheck_chi(
                     // TODO: unnecessary allocation
                     *x = update(x, r).to_vec()
                 });
-            }
+            },
         );
         sum = p0 + r * (p1 + r * (p2 + r * (p3 + r * p4)));
     }

@@ -33,11 +33,10 @@ pub fn prove_theta_c(
             (eq, rot)
         },
         || {
-            a
-                .par_chunks_exact(instances)
+            a.par_chunks_exact(instances)
                 .map(to_poly_xor_base)
                 .collect::<Vec<_>>()
-        }
+        },
     );
 
     #[cfg(debug_assertions)]
@@ -109,102 +108,115 @@ pub fn prove_sumcheck_theta_c(
             .collect::<Vec<_>>();
 
         // TODO: this has potential for further optimization as it's limited to 5 threads
-        let (a, b, c, d, e, f) = (0..5).into_par_iter().map(|j| {
-            let mut p0_c = Fr::zero();
-            let mut pem1_c = Fr::zero();
-            let mut pem2_c = Fr::zero();
-            let mut pe2_c = Fr::zero();
-            let mut pe3_c = Fr::zero();
-            let mut p6_c = Fr::zero();
+        let (a, b, c, d, e, f) = (0..5)
+            .into_par_iter()
+            .map(|j| {
+                let mut p0_c = Fr::zero();
+                let mut pem1_c = Fr::zero();
+                let mut pem2_c = Fr::zero();
+                let mut pe2_c = Fr::zero();
+                let mut pe3_c = Fr::zero();
+                let mut p6_c = Fr::zero();
 
-            let mut p0_rot = Fr::zero();
-            let mut pem1_rot = Fr::zero();
-            let mut pem2_rot = Fr::zero();
-            let mut pe2_rot = Fr::zero();
-            let mut pe3_rot = Fr::zero();
-            let mut p6_rot = Fr::zero();
+                let mut p0_rot = Fr::zero();
+                let mut pem1_rot = Fr::zero();
+                let mut pem2_rot = Fr::zero();
+                let mut pe2_rot = Fr::zero();
+                let mut pe3_rot = Fr::zero();
+                let mut p6_rot = Fr::zero();
 
-            for i in 0..e0.len() {
-                let ax = (0..5)
-                    .map(|k| {
-                        let a0 = a[k * 5 + j].0[i];
-                        let a0_2 = a0 + a0;
-                        let a0_3 = a0_2 + a0;
-                        let a1 = a[k * 5 + j].1[i];
-                        let a1_2 = a1 + a1;
-                        let a1_3 = a1_2 + a1;
-                        ((a0, a0_2, a0_3), (a1, a1_2, a1_3))
-                    })
-                    .collect::<Vec<_>>();
+                for i in 0..e0.len() {
+                    let ax = (0..5)
+                        .map(|k| {
+                            let a0 = a[k * 5 + j].0[i];
+                            let a0_2 = a0 + a0;
+                            let a0_3 = a0_2 + a0;
+                            let a1 = a[k * 5 + j].1[i];
+                            let a1_2 = a1 + a1;
+                            let a1_3 = a1_2 + a1;
+                            ((a0, a0_2, a0_3), (a1, a1_2, a1_3))
+                        })
+                        .collect::<Vec<_>>();
 
-                let e0_1 = e0[i] + e0[i];
-                let e0_2 = e0_1 + e0[i];
-                let e1_1 = e1[i] + e1[i];
-                let e1_2 = e1_1 + e1[i];
+                    let e0_1 = e0[i] + e0[i];
+                    let e0_2 = e0_1 + e0[i];
+                    let e1_1 = e1[i] + e1[i];
+                    let e1_2 = e1_1 + e1[i];
 
-                let rot0_1 = rot0[i] + rot0[i];
-                let rot0_2 = rot0_1 + rot0[i];
-                let rot1_1 = rot1[i] + rot1[i];
-                let rot1_2 = rot1_1 + rot1[i];
+                    let rot0_1 = rot0[i] + rot0[i];
+                    let rot0_2 = rot0_1 + rot0[i];
+                    let rot1_1 = rot1[i] + rot1[i];
+                    let rot1_2 = rot1_1 + rot1[i];
 
-                // Evaluation at 0
-                let mut product = Fr::one();
-                for k in 0..5 {
-                    product *= ax[k].0.0;
+                    // Evaluation at 0
+                    let mut product = Fr::one();
+                    for k in 0..5 {
+                        product *= ax[k].0.0;
+                    }
+                    p0_c += product * e0[i];
+                    p0_rot += product * rot0[i];
+
+                    // Evaluation at -1
+                    let mut product = Fr::one();
+                    for k in 0..5 {
+                        product *= ax[k].0.1 - ax[k].1.0;
+                    }
+                    pem1_c += product * (e0_1 - e1[i]);
+                    pem1_rot += product * (rot0_1 - rot1[i]);
+
+                    // Evaluation at -2
+                    let mut product = Fr::one();
+                    for k in 0..5 {
+                        product *= ax[k].0.2 - ax[k].1.1;
+                    }
+                    pem2_c += product * (e0_2 - e1_1);
+                    pem2_rot += product * (rot0_2 - rot1_1);
+
+                    // Evaluation at 2
+                    let mut product = Fr::one();
+                    for k in 0..5 {
+                        product *= ax[k].1.1 - ax[k].0.0;
+                    }
+                    pe2_c += product * (e1_1 - e0[i]);
+                    pe2_rot += product * (rot1_1 - rot0[i]);
+
+                    // Evaluation at 3
+                    let mut product = Fr::one();
+                    for k in 0..5 {
+                        product *= ax[k].1.2 - ax[k].0.1;
+                    }
+                    pe3_c += product * (e1_2 - e0_1);
+                    pe3_rot += product * (rot1_2 - rot0_1);
+
+                    // Evaluation at ∞
+                    let mut product = Fr::one();
+                    for k in 0..5 {
+                        product *= ax[k].1.0 - ax[k].0.0;
+                    }
+                    p6_c += product * (e1[i] - e0[i]);
+                    p6_rot += product * (rot1[i] - rot0[i]);
                 }
-                p0_c += product * e0[i];
-                p0_rot += product * rot0[i];
 
-                // Evaluation at -1
-                let mut product = Fr::one();
-                for k in 0..5 {
-                    product *= ax[k].0.1 - ax[k].1.0;
-                }
-                pem1_c += product * (e0_1 - e1[i]);
-                pem1_rot += product * (rot0_1 - rot1[i]);
-
-                // Evaluation at -2
-                let mut product = Fr::one();
-                for k in 0..5 {
-                    product *= ax[k].0.2 - ax[k].1.1;
-                }
-                pem2_c += product * (e0_2 - e1_1);
-                pem2_rot += product * (rot0_2 - rot1_1);
-
-                // Evaluation at 2
-                let mut product = Fr::one();
-                for k in 0..5 {
-                    product *= ax[k].1.1 - ax[k].0.0;
-                }
-                pe2_c += product * (e1_1 - e0[i]);
-                pe2_rot += product * (rot1_1 - rot0[i]);
-
-                // Evaluation at 3
-                let mut product = Fr::one();
-                for k in 0..5 {
-                    product *= ax[k].1.2 - ax[k].0.1;
-                }
-                pe3_c += product * (e1_2 - e0_1);
-                pe3_rot += product * (rot1_2 - rot0_1);
-
-                // Evaluation at ∞
-                let mut product = Fr::one();
-                for k in 0..5 {
-                    product *= ax[k].1.0 - ax[k].0.0;
-                }
-                p6_c += product * (e1[i] - e0[i]);
-                p6_rot += product * (rot1[i] - rot0[i]);
-            }
-
-            (
-                p0_c * beta_c[j] + p0_rot * beta_rot_c[j],
-                pem1_c * beta_c[j] + pem1_rot * beta_rot_c[j],
-                pem2_c * beta_c[j] + pem2_rot * beta_rot_c[j],
-                pe2_c * beta_c[j] + pe2_rot * beta_rot_c[j],
-                pe3_c * beta_c[j] + pe3_rot * beta_rot_c[j],
-                p6_c * beta_c[j] + p6_rot * beta_rot_c[j],
-            )
-        }).reduce_with(|a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2, a.3 + b.3, a.4 + b.4, a.5 + b.5)).unwrap();
+                (
+                    p0_c * beta_c[j] + p0_rot * beta_rot_c[j],
+                    pem1_c * beta_c[j] + pem1_rot * beta_rot_c[j],
+                    pem2_c * beta_c[j] + pem2_rot * beta_rot_c[j],
+                    pe2_c * beta_c[j] + pe2_rot * beta_rot_c[j],
+                    pe3_c * beta_c[j] + pe3_rot * beta_rot_c[j],
+                    p6_c * beta_c[j] + p6_rot * beta_rot_c[j],
+                )
+            })
+            .reduce_with(|a, b| {
+                (
+                    a.0 + b.0,
+                    a.1 + b.1,
+                    a.2 + b.2,
+                    a.3 + b.3,
+                    a.4 + b.4,
+                    a.5 + b.5,
+                )
+            })
+            .unwrap();
 
         p0 += a;
         pem1 += b;
@@ -299,17 +311,13 @@ pub fn prove_sumcheck_theta_c(
         rs.push(r);
         // TODO: Fold update into evaluation loop.
         ((eq, rot), _) = rayon::join(
-            || rayon::join(
-                || update(eq, r),
-                || update(rot, r)
-            ),
+            || rayon::join(|| update(eq, r), || update(rot, r)),
             || {
                 aij.par_iter_mut().for_each(|x| {
                     // TODO: unnecessary allocation
                     *x = update(x, r).to_vec();
                 });
-
-            }
+            },
         );
 
         // sum = p(r)

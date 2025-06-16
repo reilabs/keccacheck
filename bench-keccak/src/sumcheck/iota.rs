@@ -9,6 +9,7 @@ use crate::{
 use ark_bn254::Fr;
 use ark_ff::Zero;
 use itertools::izip;
+use rayon::prelude::*;
 use tracing::instrument;
 
 pub struct IotaProof {
@@ -29,18 +30,31 @@ pub fn prove_iota(
 ) -> IotaProof {
     let instances = 1 << (num_vars - 6);
 
-    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
-    let mut chi_00 = to_poly(&chi[0..instances]);
-    let mut rc = to_poly(&vec![ROUND_CONSTANTS[0]; instances]);
-    let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
-    // iterating from 1 to skip the first state element (i, j) = (0, 0)
-    for el in 1..25 {
-        let slice = &chi[(el * instances)..(el * instances + instances)];
-        let poly = to_poly(slice);
-        for x in 0..(1 << num_vars) {
-            chi_rlc[x] += beta[el] * poly[x];
-        }
-    }
+    let ((mut eq, mut chi_00), (mut rc, mut chi_rlc)) = rayon::join(
+        || {
+            rayon::join(
+                || calculate_evaluations_over_boolean_hypercube_for_eq(r),
+                || to_poly(&chi[0..instances]),
+            )
+        },
+        || {
+            rayon::join(
+                || to_poly(&vec![ROUND_CONSTANTS[0]; instances]),
+                || {
+                    let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
+                    // iterating from 1 to skip the first state element (i, j) = (0, 0)
+                    for el in 1..25 {
+                        let slice = &chi[(el * instances)..(el * instances + instances)];
+                        let poly = to_poly(slice);
+                        for x in 0..(1 << num_vars) {
+                            chi_rlc[x] += beta[el] * poly[x];
+                        }
+                    }
+                    chi_rlc
+                },
+            )
+        },
+    );
 
     let proof = prove_sumcheck_iota(
         transcript,
@@ -112,6 +126,8 @@ pub fn prove_sumcheck_iota(
         let (a0, a1) = a.split_at(a.len() / 2);
         let (b0, b1) = b.split_at(b.len() / 2);
         let (c0, c1) = c.split_at(c.len() / 2);
+
+        // TODO: this should be parallelized ProveKit style
         izip!(
             e0.iter().zip(e1),
             a0.iter().zip(a1),
@@ -144,10 +160,10 @@ pub fn prove_sumcheck_iota(
         let r = transcript.read();
         rs.push(r);
         // TODO: Fold update into evaluation loop.
-        e = update(e, r);
-        a = update(a, r);
-        b = update(b, r);
-        c = update(c, r);
+        ((e, a), (b, c)) = rayon::join(
+            || rayon::join(|| update(e, r), || update(a, r)),
+            || rayon::join(|| update(b, r), || update(c, r)),
+        );
         // sum = p(r)
         sum = p0 + r * (p1 + r * (p2 + r * p3));
     }

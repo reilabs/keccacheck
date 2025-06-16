@@ -37,7 +37,7 @@ pub fn prove_rho(
                 .par_chunks_exact(instances)
                 .map(to_poly)
                 .collect::<Vec<_>>()
-        }
+        },
     );
 
     let proof = prove_sumcheck_rho(transcript, num_vars, beta, &mut rots, &mut thetas, sum);
@@ -93,23 +93,24 @@ pub fn prove_sumcheck_rho(
             .map(|x| x.split_at(x.len() / 2))
             .collect::<Vec<_>>();
 
-        let (a, b) = (0..theta.len()).into_par_iter().map(|j| {
-            let mut p0t = Fr::zero();
-            let mut p2t = Fr::zero();
+        let (a, b) = (0..theta.len())
+            .into_par_iter()
+            .map(|j| {
+                let mut p0t = Fr::zero();
+                let mut p2t = Fr::zero();
 
-            for i in 0..rot[0].0.len() {
-                // Evaluation at 0
-                p0t += rot[j].0[i] * theta[j].0[i];
+                for i in 0..rot[0].0.len() {
+                    // Evaluation at 0
+                    p0t += rot[j].0[i] * theta[j].0[i];
 
-                // Evaluation at ∞
-                p2t += (rot[j].1[i] - rot[j].0[i]) * (theta[j].1[i] - theta[j].0[i]);
-            }
+                    // Evaluation at ∞
+                    p2t += (rot[j].1[i] - rot[j].0[i]) * (theta[j].1[i] - theta[j].0[i]);
+                }
 
-            (
-                beta[j] * p0t,
-                beta[j] * p2t
-            )
-        }).reduce_with(|a, b| (a.0 + b.0, a.1 + b.1)).unwrap();
+                (beta[j] * p0t, beta[j] * p2t)
+            })
+            .reduce_with(|a, b| (a.0 + b.0, a.1 + b.1))
+            .unwrap();
 
         p0 += a;
         p2 += b;
@@ -135,7 +136,7 @@ pub fn prove_sumcheck_rho(
                 thetas.par_iter_mut().for_each(|x| {
                     *x = update(x, r).to_vec();
                 });
-            }
+            },
         );
         sum = p0 + r * (p1 + r * p2);
     }

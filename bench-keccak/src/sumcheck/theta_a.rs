@@ -30,15 +30,15 @@ pub fn prove_theta_a(
         || {
             rayon::join(
                 || calculate_evaluations_over_boolean_hypercube_for_eq(r1),
-                || calculate_evaluations_over_boolean_hypercube_for_eq(r2)
+                || calculate_evaluations_over_boolean_hypercube_for_eq(r2),
             )
         },
         || {
-            a
-                .par_chunks_exact(instances)
+            a.par_chunks_exact(instances)
                 .map(to_poly_xor_base)
                 .collect::<Vec<_>>()
-        });
+        },
+    );
 
     #[cfg(debug_assertions)]
     {
@@ -93,32 +93,34 @@ pub fn prove_sumcheck_theta_a(
             })
             .collect::<Vec<_>>();
 
-        let (p0t, p2t) = a.into_par_iter().enumerate().map(|(j, a)| {
-            let ba = beta_a[j];
-            let bb = beta_b[j];
-            let a = a.0.iter().zip(a.1);
+        let (p0t, p2t) = a
+            .into_par_iter()
+            .enumerate()
+            .map(|(j, a)| {
+                let ba = beta_a[j];
+                let bb = beta_b[j];
+                let a = a.0.iter().zip(a.1);
 
-            let mut p0_a = Fr::zero();
-            let mut p0_b = Fr::zero();
-            let mut p2_a = Fr::zero();
-            let mut p2_b = Fr::zero();
+                let mut p0_a = Fr::zero();
+                let mut p0_b = Fr::zero();
+                let mut p2_a = Fr::zero();
+                let mut p2_b = Fr::zero();
 
-            for (i, (a0, a1)) in a.enumerate() {
-                // Evaluation at 0
-                p0_a += ea0[i] * a0;
-                p0_b += eb0[i] * a0;
+                for (i, (a0, a1)) in a.enumerate() {
+                    // Evaluation at 0
+                    p0_a += ea0[i] * a0;
+                    p0_b += eb0[i] * a0;
 
-                // Evaluation at ∞
-                let v = a1 - a0;
-                p2_a += (ea1[i] - ea0[i]) * v;
-                p2_b += (eb1[i] - eb0[i]) * v;
-            }
+                    // Evaluation at ∞
+                    let v = a1 - a0;
+                    p2_a += (ea1[i] - ea0[i]) * v;
+                    p2_b += (eb1[i] - eb0[i]) * v;
+                }
 
-            (
-                ba * p0_a + bb * p0_b,
-                ba * p2_a + bb * p2_b
-            )
-        }).reduce_with(|a, b| (a.0 + b.0, a.1 + b.1)).unwrap();
+                (ba * p0_a + bb * p0_b, ba * p2_a + bb * p2_b)
+            })
+            .reduce_with(|a, b| (a.0 + b.0, a.1 + b.1))
+            .unwrap();
 
         p0 += p0t;
         p2 += p2t;
@@ -137,17 +139,12 @@ pub fn prove_sumcheck_theta_a(
         // TODO: Fold update into evaluation loop.
         let len = eq_a.len();
         ((eq_a, eq_b), _) = rayon::join(
-            || {
-                rayon::join(
-                    || update(eq_a, r),
-                    || update(eq_b, r),
-                )
-            },
+            || rayon::join(|| update(eq_a, r), || update(eq_b, r)),
             || {
                 aij.par_iter_mut().for_each(|a| {
                     update(&mut a[0..len], r);
                 });
-            }
+            },
         );
 
         // for j in 0..aij.len() {
