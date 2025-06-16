@@ -46,8 +46,17 @@ pub fn strip_pi_t<T: Copy>(pi: &[T], rho: &mut [T]) {
     }
 }
 
-// TODO: all state should be slicing into global state array with many keccak instances
-#[derive(Debug, Default)]
+fn transpose(a: &[u64], instances: usize) -> Vec<u64> {
+    let mut result = vec![0; a.len()];
+    for i in 0..instances {
+        for s in 0..STATE {
+            result[s * instances + i] = a[i * STATE + s];
+        }
+    }
+    result
+}
+
+#[derive(Debug)]
 pub struct KeccakRoundState {
     pub iota: Vec<u64>,   // output, state after iota step
     pub pi_chi: Vec<u64>, // state after pi and chi steps
@@ -58,119 +67,108 @@ pub struct KeccakRoundState {
     pub a: Vec<u64>,      // input, should be equal to iota from the previous round
 }
 
-#[instrument(skip_all)]
-pub fn keccak_round(a: &mut [u64], rc: u64) -> KeccakRoundState {
-    assert_eq!(a.len() % STATE, 0);
-    let instances = a.len() / STATE;
-
-    let mut result = KeccakRoundState::default();
-    result.a = vec![0; a.len()];
-    // transpose a
-    for i in 0..instances {
-        for x in 0..STATE {
-            result.a[instances * x + i] = a[i * STATE + x];
+impl KeccakRoundState {
+    pub fn alloc(instances: usize) -> Self {
+        Self {
+            iota: vec![0; instances * STATE],
+            pi_chi: vec![0; instances * STATE],
+            rho: vec![0; instances * STATE],
+            theta: vec![0; instances * STATE],
+            d: vec![0; instances * COLUMNS],
+            c: vec![0; instances * COLUMNS],
+            a: vec![0; instances * STATE],
         }
     }
 
-    // println!("a: {a:?}");
-    // println!("t: {:?}", result.a);
+    pub fn from_data(a: &[u64], rc: u64) -> Self {
+        let instances = a.len() / STATE;
+        let a = transpose(a, instances);
+        keccak_round(&a, rc)
+    }
+
+    pub fn next(&self, rc: u64) -> Self {
+        let instances = self.a.len() / STATE;
+        keccak_round(&self.iota, rc)
+    }
+}
+
+#[instrument(skip_all)]
+pub fn keccak_round(a_t: &[u64], rc: u64) -> KeccakRoundState {
+    assert_eq!(a_t.len() % STATE, 0);
+    let instances = a_t.len() / STATE;
+
+    let mut result = KeccakRoundState::alloc(instances);
+    result.a.copy_from_slice(a_t);
 
     // Theta
-    let mut c = vec![0; COLUMNS * instances];
     for i in 0..instances {
         for x in 0..COLUMNS {
             for y_count in 0..ROWS {
                 let y = y_count * COLUMNS;
-                c[instances * x + i] ^= a[i * STATE + x + y];
+                result.c[instances * x + i] ^= result.a[(y + x) * instances + i];
             }
         }
     }
-    result.c = c.clone();
-    // println!("c: {:?}", result.c);
 
-    let mut d = vec![0; COLUMNS * instances];
     for i in 0..instances {
-        for x in 0..5 {
-            d[x * instances + i] =
-                c[((x + 4) % 5) * instances + i] ^ c[((x + 1) % 5) * instances + i].rotate_left(1);
-            for y_count in 0..5 {
-                let y = y_count * 5;
-                a[i * STATE + y + x] ^= d[x * instances + i];
+        for x in 0..COLUMNS {
+            result.d[x * instances + i] =
+                result.c[((x + 4) % 5) * instances + i] ^ result.c[((x + 1) % 5) * instances + i].rotate_left(1);
+            for y_count in 0..ROWS {
+                let y = y_count * COLUMNS;
+                result.theta[(y + x) * instances + i] = result.a[(y + x) * instances + i] ^ result.d[x * instances + i];
             }
         }
     }
-    result.d = d.clone();
-    // println!("d: {:?}", result.d);
 
-    // transpose a
-    result.theta = vec![0; a.len()];
-    for i in 0..instances {
-        for x in 0..STATE {
-            result.theta[instances * x + i] = a[i * STATE + x];
-        }
-    }
-    // println!("theta: {:?}", result.theta);
+    println!("a {:?}", result.a);
+    println!("c {:?}", result.c);
+    println!("d {:?}", result.d);
+    println!("theta {:?}", result.theta);
 
     // Rho
     // Apply rotation to each lane
     for i in 0..instances {
-        for x in 1..25 {
-            // Skip position (0,0) - it doesn't rotate
-            a[i * STATE + x] = a[i * STATE + x].rotate_left(RHO_OFFSETS[x]);
+        for x in 0..25 {
+            result.rho[x * instances + i] = result.theta[x * instances + i].rotate_left(RHO_OFFSETS[x]);
         }
     }
-    result.rho = vec![0; a.len()];
-    for i in 0..instances {
-        for x in 0..STATE {
-            result.rho[instances * x + i] = a[i * STATE + x];
-        }
-    }
-    // println!("rho: {:?}", result.rho);
+    println!("rho {:?}", result.rho);
+
 
     // Pi
     // Permute the positions of lanes
-    let state_copy = a.to_owned();
+    let mut pi = result.rho.clone();
     for i in 0..instances {
-        apply_pi(
-            &state_copy[i * STATE..(i + 1) * STATE],
-            &mut a[i * STATE..(i + 1) * STATE],
-        );
+        apply_pi_t(&result.rho, &mut pi);
     }
+    println!("pi {:?}", pi);
 
     // Chi
+    let mut c = vec![0; COLUMNS * instances];
     for i in 0..instances {
-        for y_step in 0..5 {
-            let y = y_step * 5;
+        for y_step in 0..ROWS {
+            let y = y_step * COLUMNS;
 
-            for x in 0..5 {
-                c[x * instances + i] = a[i * STATE + y + x];
+            for x in 0..COLUMNS {
+                c[x * instances + i] = pi[(y + x) * instances + i];
             }
 
             for x in 0..5 {
-                a[i * STATE + y + x] = c[x * instances + i]
+                result.pi_chi[(y + x) * instances + i] = result.c[x * instances + i]
                     ^ ((!c[((x + 1) % 5) * instances + i]) & (c[((x + 2) % 5) * instances + i]));
             }
         }
     }
-    result.pi_chi = vec![0; a.len()];
-    for i in 0..instances {
-        for x in 0..STATE {
-            result.pi_chi[instances * x + i] = a[i * STATE + x];
-        }
-    }
-    // println!("pi_chi: {:?}", result.pi_chi);
+    println!("pi_chi {:?}", result.pi_chi);
 
     // Iota
+    result.iota.clone_from_slice(&result.pi_chi);
     for i in 0..instances {
-        a[i * STATE] ^= rc;
+        result.iota[i] ^= rc;
     }
-    result.iota = vec![0; a.len()];
-    for i in 0..instances {
-        for x in 0..STATE {
-            result.iota[instances * x + i] = a[i * STATE + x];
-        }
-    }
-    // println!("iota: {:?}", result.iota);
+    println!("iota {:?}", result.iota);
+
 
     result
 }

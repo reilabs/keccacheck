@@ -1,9 +1,9 @@
-use crate::reference::{KeccakRoundState, strip_pi_t};
+use crate::reference::{KeccakRoundState, strip_pi_t, keccak_round, ROUND_CONSTANTS};
 use crate::sumcheck::chi::prove_chi;
 use crate::sumcheck::iota::prove_iota;
 use crate::sumcheck::rho::prove_rho;
-use crate::sumcheck::theta::prove_theta;
-use crate::sumcheck::theta_a::prove_theta_a;
+use crate::sumcheck::theta::{prove_theta, ThetaProof};
+use crate::sumcheck::theta_a::{prove_theta_a, ThetaAProof};
 use crate::sumcheck::theta_c::prove_theta_c;
 use crate::sumcheck::theta_d::prove_theta_d;
 use crate::sumcheck::util::{eval_mle, to_poly};
@@ -12,31 +12,48 @@ use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use tracing::instrument;
 
-#[instrument(skip(layers))]
-pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
-    let instances = 1usize << (num_vars - 6);
+pub fn prove(data: &[u64]) -> Vec<Fr> {
+    let instances = data.len() / 25;
+    let num_vars = 6 + instances.ilog2() as usize;
+
+    let data = data.to_vec();
+    let state = KeccakRoundState::from_data(&data, ROUND_CONSTANTS[0]);
+
+    println!("num vars {num_vars}");
 
     let mut prover = Prover::new();
 
     // TODO: feed output to the prover before obtaining alpha
-    let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
+    let mut r = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
     let mut beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
     // write final output sum
-    let sum: Fr = layers
+    let mut sum: Fr = state
         .iota
         .chunks_exact(instances)
         .enumerate()
         .map(|(i, x)| {
             let poly = to_poly(x);
-            beta[i] * eval_mle(&poly, &alpha)
+            beta[i] * eval_mle(&poly, &r)
         })
         .sum();
 
     prover.write(sum);
+    //for round in 0..24 {
+        let previous_proof = prove_round(&mut prover, num_vars, &state, &r, &mut beta, sum);
+        r = previous_proof.r;
+        sum = previous_proof._sum;
+    //}
+
+    prover.finish()
+}
+
+#[instrument(skip_all)]
+pub fn prove_round(prover: &mut Prover, num_vars: usize, layers: &KeccakRoundState, alpha: &[Fr], beta: &mut [Fr], sum: Fr) -> ThetaAProof {
+    let instances = 1usize << (num_vars - 6);
 
     // prove iota
-    let iota_proof = prove_iota(&mut prover, num_vars, &alpha, &beta, &layers.pi_chi, sum);
+    let iota_proof = prove_iota(prover, num_vars, &alpha, &beta, &layers.pi_chi, sum);
 
     // combine subclaims chi_00 and chi_rlc
     let x = prover.read();
@@ -47,7 +64,7 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
 
     // prove chi
     let pi_chi_proof = prove_chi(
-        &mut prover,
+        prover,
         num_vars,
         &iota_proof.r,
         &beta,
@@ -68,7 +85,7 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
 
     // prove rho
     let rho_proof = prove_rho(
-        &mut prover,
+        prover,
         num_vars,
         &pi_chi_proof.r,
         &beta,
@@ -91,7 +108,7 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
 
     // prove theta
     let theta_proof = prove_theta(
-        &mut prover,
+        prover,
         num_vars,
         &rho_proof.r,
         &beta,
@@ -110,7 +127,7 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
 
     // prove theta d
     let theta_d_proof = prove_theta_d(
-        &mut prover,
+        prover,
         num_vars,
         &theta_proof.r,
         &beta_d,
@@ -133,7 +150,7 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
 
     // prove theta c
     let theta_c_proof = prove_theta_c(
-        &mut prover,
+        prover,
         num_vars,
         &theta_d_proof.r,
         &beta_c,
@@ -159,8 +176,8 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
     });
 
     // prove theta a
-    let _theta_a_proof = prove_theta_a(
-        &mut prover,
+    prove_theta_a(
+        prover,
         num_vars,
         &theta_proof.r,
         &theta_c_proof.r,
@@ -168,8 +185,5 @@ pub fn prove(num_vars: usize, layers: &KeccakRoundState) -> Vec<Fr> {
         &beta_a,
         &layers.a,
         sum,
-    );
-
-    // done
-    prover.finish()
+    )
 }
