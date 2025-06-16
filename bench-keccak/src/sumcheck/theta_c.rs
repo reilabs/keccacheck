@@ -55,8 +55,6 @@ pub fn prove_theta_c(
         assert_eq!(a_sum, sum);
     }
 
-    
-
     prove_sumcheck_theta_c(
         transcript, num_vars, beta_c, beta_rot_c, &mut eq, &mut rot, &mut a, sum,
     )

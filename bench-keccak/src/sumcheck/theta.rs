@@ -56,8 +56,6 @@ pub fn prove_theta(
         assert_eq!(ai_d_sum, sum);
     }
 
-    
-
     prove_sumcheck_theta(transcript, num_vars, &mut eq, &mut d, &mut ai, sum)
 }
 
