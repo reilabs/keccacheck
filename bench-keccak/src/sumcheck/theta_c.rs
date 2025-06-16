@@ -5,6 +5,7 @@ use crate::sumcheck::util::{
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{MontFp, One, Zero};
+use rayon::prelude::*;
 use tracing::instrument;
 
 pub struct ThetaCProof {
@@ -23,13 +24,21 @@ pub fn prove_theta_c(
     a: &[u64],
     sum: Fr,
 ) -> ThetaCProof {
-    let mut eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
-    let mut rot = derive_rot_evaluations_from_eq(&eq, 1);
     let instances = 1 << (num_vars - 6);
-    let mut a = a
-        .chunks_exact(instances)
-        .map(to_poly_xor_base)
-        .collect::<Vec<_>>();
+
+    let ((mut eq, mut rot), mut a) = rayon::join(
+        || {
+            let eq = calculate_evaluations_over_boolean_hypercube_for_eq(r);
+            let rot = derive_rot_evaluations_from_eq(&eq, 1);
+            (eq, rot)
+        },
+        || {
+            a
+                .par_chunks_exact(instances)
+                .map(to_poly_xor_base)
+                .collect::<Vec<_>>()
+        }
+    );
 
     #[cfg(debug_assertions)]
     {
@@ -99,7 +108,8 @@ pub fn prove_sumcheck_theta_c(
             .map(|x| x.split_at(x.len() / 2))
             .collect::<Vec<_>>();
 
-        for j in 0..5 {
+        // TODO: this has potential for further optimization as it's limited to 5 threads
+        let (a, b, c, d, e, f) = (0..5).into_par_iter().map(|j| {
             let mut p0_c = Fr::zero();
             let mut pem1_c = Fr::zero();
             let mut pem2_c = Fr::zero();
@@ -186,13 +196,22 @@ pub fn prove_sumcheck_theta_c(
                 p6_rot += product * (rot1[i] - rot0[i]);
             }
 
-            p0 += p0_c * beta_c[j] + p0_rot * beta_rot_c[j];
-            pem1 += pem1_c * beta_c[j] + pem1_rot * beta_rot_c[j];
-            pem2 += pem2_c * beta_c[j] + pem2_rot * beta_rot_c[j];
-            pe2 += pe2_c * beta_c[j] + pe2_rot * beta_rot_c[j];
-            pe3 += pe3_c * beta_c[j] + pe3_rot * beta_rot_c[j];
-            p6 += p6_c * beta_c[j] + p6_rot * beta_rot_c[j];
-        }
+            (
+                p0_c * beta_c[j] + p0_rot * beta_rot_c[j],
+                pem1_c * beta_c[j] + pem1_rot * beta_rot_c[j],
+                pem2_c * beta_c[j] + pem2_rot * beta_rot_c[j],
+                pe2_c * beta_c[j] + pe2_rot * beta_rot_c[j],
+                pe3_c * beta_c[j] + pe3_rot * beta_rot_c[j],
+                p6_c * beta_c[j] + p6_rot * beta_rot_c[j],
+            )
+        }).reduce_with(|a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2, a.3 + b.3, a.4 + b.4, a.5 + b.5)).unwrap();
+
+        p0 += a;
+        pem1 += b;
+        pem2 += c;
+        pe2 += d;
+        pe3 += e;
+        p6 += f;
 
         // Compute p1, p2, p3, p4, p5 from
         //  p(0) + p(1) = 2 ⋅ p0 + p1 + p2 + p3 + p4 + p5 + p6
@@ -279,12 +298,19 @@ pub fn prove_sumcheck_theta_c(
         let r = transcript.read();
         rs.push(r);
         // TODO: Fold update into evaluation loop.
-        eq = update(eq, r);
-        rot = update(rot, r);
-        for j in 0..aij.len() {
-            // TODO: unnecessary allocation
-            aij[j] = update(&mut aij[j], r).to_vec();
-        }
+        ((eq, rot), _) = rayon::join(
+            || rayon::join(
+                || update(eq, r),
+                || update(rot, r)
+            ),
+            || {
+                aij.par_iter_mut().for_each(|x| {
+                    // TODO: unnecessary allocation
+                    *x = update(x, r).to_vec();
+                });
+
+            }
+        );
 
         // sum = p(r)
         sum = p0 + r * (p1 + r * (p2 + r * (p3 + r * (p4 + r * (p5 + r * p6)))));

@@ -4,6 +4,7 @@ use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_rot
 use crate::{sumcheck::util::update, transcript::Prover};
 use ark_bn254::Fr;
 use ark_ff::Zero;
+use rayon::prelude::*;
 use tracing::instrument;
 
 #[derive(Debug)]
@@ -24,13 +25,20 @@ pub fn prove_rho(
 ) -> RhoProof {
     let instances = 1 << (num_vars - 6);
 
-    let mut rots = (0..25)
-        .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(r, i))
-        .collect::<Vec<_>>();
-    let mut thetas = theta
-        .chunks_exact(instances)
-        .map(to_poly)
-        .collect::<Vec<_>>();
+    let (mut rots, mut thetas) = rayon::join(
+        || {
+            (0..25)
+                .into_par_iter()
+                .map(|i| calculate_evaluations_over_boolean_hypercube_for_rot(r, i))
+                .collect::<Vec<_>>()
+        },
+        || {
+            theta
+                .par_chunks_exact(instances)
+                .map(to_poly)
+                .collect::<Vec<_>>()
+        }
+    );
 
     let proof = prove_sumcheck_rho(transcript, num_vars, beta, &mut rots, &mut thetas, sum);
 
@@ -85,7 +93,7 @@ pub fn prove_sumcheck_rho(
             .map(|x| x.split_at(x.len() / 2))
             .collect::<Vec<_>>();
 
-        for j in 0..theta.len() {
+        let (a, b) = (0..theta.len()).into_par_iter().map(|j| {
             let mut p0t = Fr::zero();
             let mut p2t = Fr::zero();
 
@@ -97,9 +105,14 @@ pub fn prove_sumcheck_rho(
                 p2t += (rot[j].1[i] - rot[j].0[i]) * (theta[j].1[i] - theta[j].0[i]);
             }
 
-            p0 += beta[j] * p0t;
-            p2 += beta[j] * p2t;
-        }
+            (
+                beta[j] * p0t,
+                beta[j] * p2t
+            )
+        }).reduce_with(|a, b| (a.0 + b.0, a.1 + b.1)).unwrap();
+
+        p0 += a;
+        p2 += b;
 
         // Compute p1 from
         //  p(0) + p(1) = 2 ⋅ p0 + p1 + p2 + p3 + p4
@@ -112,11 +125,18 @@ pub fn prove_sumcheck_rho(
         let r = transcript.read();
         rs.push(r);
         // TODO: Fold update into evaluation loop.
-        for j in 0..rots.len() {
-            // TODO: unnecessary allocation
-            rots[j] = update(&mut rots[j], r).to_vec();
-            thetas[j] = update(&mut thetas[j], r).to_vec();
-        }
+        rayon::join(
+            || {
+                rots.par_iter_mut().for_each(|x| {
+                    *x = update(x, r).to_vec();
+                });
+            },
+            || {
+                thetas.par_iter_mut().for_each(|x| {
+                    *x = update(x, r).to_vec();
+                });
+            }
+        );
         sum = p0 + r * (p1 + r * p2);
     }
     let mut subclaims = Vec::with_capacity(thetas.len());
