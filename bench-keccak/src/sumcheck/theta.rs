@@ -5,7 +5,6 @@ use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::Zero;
 use rayon::prelude::*;
-use tracing::instrument;
 
 pub struct ThetaProof {
     pub _sum: Fr,
@@ -206,7 +205,7 @@ pub fn prove_sumcheck_theta(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::reference::{ROUND_CONSTANTS, STATE, keccak_round};
+    use crate::reference::{STATE, keccak_round};
     use crate::sumcheck::util::{eval_mle, to_poly};
     use ark_ff::One;
     #[test]

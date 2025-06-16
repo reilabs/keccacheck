@@ -1,4 +1,3 @@
-use crate::reference::ROUND_CONSTANTS;
 #[cfg(debug_assertions)]
 use crate::sumcheck::util::eval_mle;
 use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, to_poly};
@@ -9,8 +8,6 @@ use crate::{
 use ark_bn254::Fr;
 use ark_ff::Zero;
 use itertools::izip;
-use rayon::prelude::*;
-use tracing::instrument;
 
 pub struct IotaProof {
     pub _sum: Fr,

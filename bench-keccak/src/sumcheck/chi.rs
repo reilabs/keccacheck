@@ -1,4 +1,4 @@
-use crate::reference::apply_pi_t;
+use crate::reference::apply_pi;
 #[cfg(debug_assertions)]
 use crate::sumcheck::util::eval_mle;
 use crate::sumcheck::util::{
@@ -12,7 +12,6 @@ use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use rayon::prelude::*;
 use std::str::FromStr;
-use tracing::instrument;
 
 pub struct ChiProof {
     pub _sum: Fr,
@@ -32,7 +31,7 @@ pub fn prove_chi(
     let instances = 1 << (num_vars - 6);
 
     let mut pi = rho.to_vec();
-    apply_pi_t(rho, &mut pi);
+    apply_pi(rho, &mut pi);
 
     let (mut eq, mut pis) = rayon::join(
         || calculate_evaluations_over_boolean_hypercube_for_eq(r),
@@ -215,7 +214,7 @@ pub fn prove_sumcheck_chi(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::reference::{ROUND_CONSTANTS, STATE, keccak_round};
+    use crate::reference::{STATE, keccak_round};
 
     #[test]
     fn pi_chi_no_recursion() {
@@ -233,7 +232,7 @@ mod tests {
 
         let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
         let mut pi = state.rho.to_vec();
-        apply_pi_t(&state.rho, &mut pi);
+        apply_pi(&state.rho, &mut pi);
         let pi = pi.chunks_exact(instances).map(to_poly).collect::<Vec<_>>();
         let chi = state
             .pi_chi

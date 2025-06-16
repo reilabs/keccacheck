@@ -1,12 +1,12 @@
-use crate::reference::{KeccakRoundState, strip_pi_t, keccak_round, ROUND_CONSTANTS};
+use crate::reference::{KeccakRoundState, ROUND_CONSTANTS, strip_pi};
 use crate::sumcheck::chi::prove_chi;
 use crate::sumcheck::iota::prove_iota;
 use crate::sumcheck::rho::prove_rho;
-use crate::sumcheck::theta::{prove_theta, ThetaProof};
-use crate::sumcheck::theta_a::{prove_theta_a, ThetaAProof};
+use crate::sumcheck::theta::prove_theta;
+use crate::sumcheck::theta_a::{ThetaAProof, prove_theta_a};
 use crate::sumcheck::theta_c::prove_theta_c;
 use crate::sumcheck::theta_d::prove_theta_d;
-use crate::sumcheck::util::{eval_mle, to_poly, HALF};
+use crate::sumcheck::util::{HALF, eval_mle, to_poly};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
@@ -23,14 +23,14 @@ pub fn prove(data: &[u64]) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     let mut state = Vec::with_capacity(24);
     state.push(KeccakRoundState::at_round(&data, 0));
     for i in 1..24 {
-        state.push(state[i-1].next());
+        state.push(state[i - 1].next());
     }
     span.exit();
 
     let mut prover = Prover::new();
 
     let span = tracing::span!(tracing::Level::INFO, "prove all rounds").entered();
-    
+
     // TODO: feed output to the prover before obtaining alpha
     let mut r = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
     let mut beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
@@ -48,7 +48,15 @@ pub fn prove(data: &[u64]) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
 
     prover.write(sum);
     for round in (0..24).rev() {
-        let previous_proof = prove_round(&mut prover, num_vars, &state[round], &r, &mut beta, sum, ROUND_CONSTANTS[round]);
+        let previous_proof = prove_round(
+            &mut prover,
+            num_vars,
+            &state[round],
+            &r,
+            &mut beta,
+            sum,
+            ROUND_CONSTANTS[round],
+        );
         r = previous_proof.r;
         if round != 0 {
             sum = Fr::zero();
@@ -65,7 +73,15 @@ pub fn prove(data: &[u64]) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
 }
 
 // #[instrument(skip_all)]
-pub fn prove_round(prover: &mut Prover, num_vars: usize, layers: &KeccakRoundState, alpha: &[Fr], beta: &mut [Fr], sum: Fr, rc: u64) -> ThetaAProof {
+pub fn prove_round(
+    prover: &mut Prover,
+    num_vars: usize,
+    layers: &KeccakRoundState,
+    alpha: &[Fr],
+    beta: &mut [Fr],
+    sum: Fr,
+    rc: u64,
+) -> ThetaAProof {
     // prove iota
     let iota_proof = prove_iota(prover, num_vars, &alpha, &beta, &layers.pi_chi, sum, rc);
 
@@ -77,18 +93,11 @@ pub fn prove_round(prover: &mut Prover, num_vars: usize, layers: &KeccakRoundSta
     let sum = beta[0] * iota_proof.chi_00 + y * iota_proof.chi_rlc;
 
     // prove chi
-    let pi_chi_proof = prove_chi(
-        prover,
-        num_vars,
-        &iota_proof.r,
-        &beta,
-        &layers.rho,
-        sum,
-    );
+    let pi_chi_proof = prove_chi(prover, num_vars, &iota_proof.r, &beta, &layers.rho, sum);
 
     // strip pi to get rho
     let mut rho = pi_chi_proof.pi.clone();
-    strip_pi_t(&pi_chi_proof.pi, &mut rho);
+    strip_pi(&pi_chi_proof.pi, &mut rho);
 
     // combine subclaims on rho
     let mut sum = Fr::zero();
@@ -98,14 +107,7 @@ pub fn prove_round(prover: &mut Prover, num_vars: usize, layers: &KeccakRoundSta
     });
 
     // prove rho
-    let rho_proof = prove_rho(
-        prover,
-        num_vars,
-        &pi_chi_proof.r,
-        &beta,
-        &layers.theta,
-        sum,
-    );
+    let rho_proof = prove_rho(prover, num_vars, &pi_chi_proof.r, &beta, &layers.theta, sum);
 
     // combine subclaims on theta, change base
     let theta_xor_base = rho_proof
@@ -140,14 +142,7 @@ pub fn prove_round(prover: &mut Prover, num_vars: usize, layers: &KeccakRoundSta
     });
 
     // prove theta d
-    let theta_d_proof = prove_theta_d(
-        prover,
-        num_vars,
-        &theta_proof.r,
-        &beta_d,
-        &layers.c,
-        sum,
-    );
+    let theta_d_proof = prove_theta_d(prover, num_vars, &theta_proof.r, &beta_d, &layers.c, sum);
 
     // combine claims on theta c and rot_c
     let mut sum = Fr::zero();

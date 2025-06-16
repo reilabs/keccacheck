@@ -1,20 +1,8 @@
-use tracing::instrument;
-
 pub const COLUMNS: usize = 5;
 pub const ROWS: usize = 5;
 pub const STATE: usize = COLUMNS * ROWS;
 
 pub fn apply_pi<T: Copy>(rho: &[T], pi: &mut [T]) {
-    // Position (0,0) doesn't change
-    // For all other positions, use the PI mapping
-    for i in 0..24 {
-        // i+1 is the source position (skipping 0,0)
-        // PI[i] is the target position
-        pi[PI[i]] = rho[i + 1];
-    }
-}
-
-pub fn apply_pi_t<T: Copy>(rho: &[T], pi: &mut [T]) {
     assert_eq!(rho.len(), pi.len());
     assert_eq!(rho.len() % STATE, 0);
     let instances = rho.len() / STATE;
@@ -30,7 +18,7 @@ pub fn apply_pi_t<T: Copy>(rho: &[T], pi: &mut [T]) {
     }
 }
 
-pub fn strip_pi_t<T: Copy>(pi: &[T], rho: &mut [T]) {
+pub fn strip_pi<T: Copy>(pi: &[T], rho: &mut [T]) {
     assert_eq!(rho.len(), pi.len());
     assert_eq!(rho.len() % STATE, 0);
     let instances = rho.len() / STATE;
@@ -120,11 +108,12 @@ pub fn keccak_round(a_t: &[u64], round: usize) -> KeccakRoundState {
 
     for i in 0..instances {
         for x in 0..COLUMNS {
-            result.d[x * instances + i] =
-                result.c[((x + 4) % 5) * instances + i] ^ result.c[((x + 1) % 5) * instances + i].rotate_left(1);
+            result.d[x * instances + i] = result.c[((x + 4) % 5) * instances + i]
+                ^ result.c[((x + 1) % 5) * instances + i].rotate_left(1);
             for y_count in 0..ROWS {
                 let y = y_count * COLUMNS;
-                result.theta[(y + x) * instances + i] = result.a[(y + x) * instances + i] ^ result.d[x * instances + i];
+                result.theta[(y + x) * instances + i] =
+                    result.a[(y + x) * instances + i] ^ result.d[x * instances + i];
             }
         }
     }
@@ -138,7 +127,8 @@ pub fn keccak_round(a_t: &[u64], round: usize) -> KeccakRoundState {
     // Apply rotation to each lane
     for i in 0..instances {
         for x in 0..25 {
-            result.rho[x * instances + i] = result.theta[x * instances + i].rotate_left(RHO_OFFSETS[x]);
+            result.rho[x * instances + i] =
+                result.theta[x * instances + i].rotate_left(RHO_OFFSETS[x]);
         }
     }
     // println!("rho {:?}", result.rho);
@@ -146,8 +136,8 @@ pub fn keccak_round(a_t: &[u64], round: usize) -> KeccakRoundState {
     // Pi
     // Permute the positions of lanes
     let mut pi = result.rho.clone();
-    for i in 0..instances {
-        apply_pi_t(&result.rho, &mut pi);
+    for _ in 0..instances {
+        apply_pi(&result.rho, &mut pi);
     }
     // println!("pi {:?}", pi);
 
@@ -162,7 +152,8 @@ pub fn keccak_round(a_t: &[u64], round: usize) -> KeccakRoundState {
             }
 
             for x in 0..5 {
-                result.pi_chi[(y + x) * instances + i] = c[x] ^ ((!c[(x + 1) % 5]) & (c[(x + 2) % 5]));
+                result.pi_chi[(y + x) * instances + i] =
+                    c[x] ^ ((!c[(x + 1) % 5]) & (c[(x + 2) % 5]));
             }
         }
     }
@@ -174,7 +165,6 @@ pub fn keccak_round(a_t: &[u64], round: usize) -> KeccakRoundState {
         result.iota[i] ^= ROUND_CONSTANTS[round];
     }
     // println!("iota {:?}", result.iota);
-
 
     result
 }

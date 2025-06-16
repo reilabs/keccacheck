@@ -5,7 +5,6 @@ use crate::{sumcheck::util::update, transcript::Prover};
 use ark_bn254::Fr;
 use ark_ff::Zero;
 use rayon::prelude::*;
-use tracing::instrument;
 
 #[derive(Debug)]
 pub struct RhoProof {
@@ -166,7 +165,7 @@ pub fn prove_sumcheck_rho(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::reference::{ROUND_CONSTANTS, STATE, keccak_round};
+    use crate::reference::{STATE, keccak_round};
 
     #[test]
     fn rho_no_recursion() {

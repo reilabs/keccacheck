@@ -1,4 +1,4 @@
-use crate::reference::{ROUND_CONSTANTS, strip_pi_t};
+use crate::reference::{ROUND_CONSTANTS, strip_pi};
 use crate::sumcheck::util;
 use crate::sumcheck::util::{HALF, add_col, eval_mle, to_poly, verify_sumcheck, xor};
 use crate::transcript::Verifier;
@@ -23,9 +23,9 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
         .map(|i| {
             beta[i]
                 * eval_mle(
-                &to_poly(&output[(i * instances)..(i * instances + instances)]),
-                &r,
-            )
+                    &to_poly(&output[(i * instances)..(i * instances + instances)]),
+                    &r,
+                )
         })
         .sum();
     let mut sum = verifier.read();
@@ -35,7 +35,14 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     let span = tracing::span!(Level::INFO, "verify all rounds").entered();
     let mut iota = Vec::new();
     for round in (0..24).rev() {
-        (r, iota) = verify_round(&mut verifier, num_vars, &r, &mut beta, sum, ROUND_CONSTANTS[round]);
+        (r, iota) = verify_round(
+            &mut verifier,
+            num_vars,
+            &r,
+            &mut beta,
+            sum,
+            ROUND_CONSTANTS[round],
+        );
         if round != 0 {
             sum = Fr::zero();
             beta.iter_mut().enumerate().for_each(|(i, b)| {
@@ -60,7 +67,14 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     span.exit();
 }
 
-fn verify_round(verifier: &mut Verifier, num_vars: usize, alpha: &[Fr], beta: &mut [Fr], sum: Fr, rc: u64) -> (Vec<Fr>, Vec<Fr>) {
+fn verify_round(
+    verifier: &mut Verifier,
+    num_vars: usize,
+    alpha: &[Fr],
+    beta: &mut [Fr],
+    sum: Fr,
+    rc: u64,
+) -> (Vec<Fr>, Vec<Fr>) {
     let instances = 1usize << (num_vars - 6);
 
     // verify iota
@@ -96,7 +110,7 @@ fn verify_round(verifier: &mut Verifier, num_vars: usize, alpha: &[Fr], beta: &m
 
     // strip pi to get rho
     let mut rho = pi.clone();
-    strip_pi_t(&pi, &mut rho);
+    strip_pi(&pi, &mut rho);
 
     // combine subclaims on rho
     let mut expected_sum = Fr::zero();

@@ -6,7 +6,6 @@ use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{MontFp, One, Zero};
 use rayon::prelude::*;
-use tracing::instrument;
 
 pub struct ThetaCProof {
     pub _sum: Fr,
@@ -360,7 +359,7 @@ pub fn prove_sumcheck_theta_c(
 
 #[cfg(test)]
 mod test {
-    use crate::reference::{COLUMNS, ROUND_CONSTANTS, STATE, keccak_round};
+    use crate::reference::{COLUMNS, STATE, keccak_round};
     use crate::sumcheck::theta_c::prove_theta_c;
     use crate::sumcheck::util::{
         calculate_evaluations_over_boolean_hypercube_for_eq,

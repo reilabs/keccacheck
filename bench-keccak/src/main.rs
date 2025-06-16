@@ -1,5 +1,5 @@
 use crate::prover::prove;
-use crate::reference::{ROUND_CONSTANTS, STATE, keccak_round};
+use crate::reference::STATE;
 use crate::verifier::verify;
 use std::env;
 
