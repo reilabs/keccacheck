@@ -85,7 +85,7 @@ fn verify_round(
     let chi_00 = verifier.read();
     let chi_rlc = verifier.read();
 
-    let e_eq = util::eq(&alpha, &vrs_iota);
+    let e_eq = util::eq(alpha, &vrs_iota);
     let e_rc = eval_mle(&rc, &vrs_iota);
     assert_eq!(e_eq * (beta[0] * xor(chi_00, e_rc) + chi_rlc), ve);
 

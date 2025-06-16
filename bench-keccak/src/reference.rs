@@ -71,7 +71,7 @@ impl KeccakRoundState {
     }
 
     pub fn at_round(a: &[u64], i: usize) -> Self {
-        let mut state = Self::from_data(&a, 0);
+        let mut state = Self::from_data(a, 0);
         for _ in 1..=i {
             state = state.next();
         }
@@ -142,7 +142,7 @@ pub fn keccak_round(a_t: &[u64], round: usize) -> KeccakRoundState {
     // println!("pi {:?}", pi);
 
     // Chi
-    let mut c = vec![0; COLUMNS];
+    let mut c = [0; COLUMNS];
     for i in 0..instances {
         for y_step in 0..ROWS {
             let y = y_step * COLUMNS;

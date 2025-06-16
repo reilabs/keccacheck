@@ -83,7 +83,7 @@ pub fn prove_round(
     rc: u64,
 ) -> ThetaAProof {
     // prove iota
-    let iota_proof = prove_iota(prover, num_vars, &alpha, &beta, &layers.pi_chi, sum, rc);
+    let iota_proof = prove_iota(prover, num_vars, alpha, beta, &layers.pi_chi, sum, rc);
 
     // combine subclaims chi_00 and chi_rlc
     let x = prover.read();
@@ -93,7 +93,7 @@ pub fn prove_round(
     let sum = beta[0] * iota_proof.chi_00 + y * iota_proof.chi_rlc;
 
     // prove chi
-    let pi_chi_proof = prove_chi(prover, num_vars, &iota_proof.r, &beta, &layers.rho, sum);
+    let pi_chi_proof = prove_chi(prover, num_vars, &iota_proof.r, beta, &layers.rho, sum);
 
     // strip pi to get rho
     let mut rho = pi_chi_proof.pi.clone();
@@ -107,7 +107,7 @@ pub fn prove_round(
     });
 
     // prove rho
-    let rho_proof = prove_rho(prover, num_vars, &pi_chi_proof.r, &beta, &layers.theta, sum);
+    let rho_proof = prove_rho(prover, num_vars, &pi_chi_proof.r, beta, &layers.theta, sum);
 
     // combine subclaims on theta, change base
     let theta_xor_base = rho_proof
@@ -127,7 +127,7 @@ pub fn prove_round(
         prover,
         num_vars,
         &rho_proof.r,
-        &beta,
+        beta,
         &layers.d,
         &layers.a,
         sum,
@@ -190,7 +190,7 @@ pub fn prove_round(
         num_vars,
         &theta_proof.r,
         &theta_c_proof.r,
-        &beta,
+        beta,
         &beta_a,
         &layers.a,
         sum,

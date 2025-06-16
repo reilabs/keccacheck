@@ -143,7 +143,7 @@ pub fn eval_mle(coefficients: &[Fr], eval: &[Fr]) -> Fr {
 }
 
 pub fn eq(a: &[Fr], b: &[Fr]) -> Fr {
-    a.into_iter()
+    a.iter()
         .zip(b)
         .map(|(&x, &y)| x * y + (Fr::one() - x) * (Fr::one() - y))
         .product::<Fr>()
@@ -156,9 +156,9 @@ pub fn rot(n: usize, a: &[Fr], b: &[Fr]) -> Fr {
     let r = calculate_evaluations_over_boolean_hypercube_for_rot(&a[prefix..len], n);
     let result = eval_mle(&r, &b[prefix..len]);
     result
-        * a.into_iter()
+        * a.iter()
             .take(prefix)
-            .zip(b.into_iter().take(prefix))
+            .zip(b.iter().take(prefix))
             .map(|(&x, &y)| x * y + (Fr::one() - x) * (Fr::one() - y))
             .product::<Fr>()
 }
