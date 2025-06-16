@@ -84,6 +84,7 @@ pub fn prove_sumcheck_theta_a(
             })
             .collect::<Vec<_>>();
 
+        let span = tracing::span!(tracing::Level::INFO, "sequential iterator").entered();
         for j in 0..a.len() {
             let ba = beta_a[j];
             let bb = beta_b[j];
@@ -108,6 +109,7 @@ pub fn prove_sumcheck_theta_a(
             p0 += ba * p0_a + bb * p0_b;
             p2 += ba * p2_a + bb * p2_b;
         }
+        span.exit();
 
         // Compute p1 from
         //  p(0) + p(1) = 2 ⋅ p0 + p1 + p2 + p3 + p4
@@ -120,6 +122,7 @@ pub fn prove_sumcheck_theta_a(
         let r = transcript.read();
         rs.push(r);
 
+        let span = tracing::span!(tracing::Level::INFO, "folding").entered();
         // TODO: Fold update into evaluation loop.
         let len = eq_a.len();
         eq_a = update(eq_a, r);
@@ -128,6 +131,7 @@ pub fn prove_sumcheck_theta_a(
             update(&mut aij[j][0..len], r);
         }
         sum = p0 + r * (p1 + r * p2);
+        span.exit();
     }
 
     let mut subclaims = Vec::with_capacity(aij.len());
