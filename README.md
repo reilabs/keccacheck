@@ -332,3 +332,10 @@ For any choice of points, you can derive the coefficient equations: it's going
 to be a system of linear equations, which can easily be solved, even if the
 solution is going to be way uglier than in the degree-3 case and then this
 solution can just be hardcoded in the implementation.
+
+# Credits
+
+* Marcin Kostrzewa - the idea for GKR-style prover with a linear combination of keccak state and dropping the usual layering constraint.
+* Grzegorz Świrski - implementation
+* Ara Adkins - original research into using GKR for keccak proving
+* [ProveKit team](https://github.com/worldfnd/ProveKit) team - poseidon2 & transcript implementation, ideas for a very fast multi-threaded sumcheck implementation
