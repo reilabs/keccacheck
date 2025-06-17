@@ -29,7 +29,6 @@ pub fn prove_iota(
 ) -> IotaProof {
     let instances = 1 << (num_vars - 6);
 
-    let span = tracing::span!(tracing::Level::INFO, "prep").entered();
     let mut chi_poly = (0..25).into_par_iter().map(|el| {
         let slice = &chi[(el * instances)..(el * instances + instances)];
         if el == 0 {
@@ -62,7 +61,6 @@ pub fn prove_iota(
             chi_rlc
         },
     );
-    span.exit();
 
     #[cfg(debug_assertions)]
     {
@@ -116,7 +114,6 @@ pub fn prove_iota(
 
 /// Sumcheck for $\sum_x e(x) ⋅ (\beta ⋅ xor(a(x), b(x)) + c(x))$.
 /// Returns $(e, r)$ for reduced claim $e = e(r) ⋅ (\beta ⋅ xor(a(r), b(r)) + c(r))$.
-#[instrument(skip_all)]
 pub fn prove_sumcheck_iota(
     transcript: &mut Prover,
     size: usize,
