@@ -325,25 +325,8 @@ $$
 The highest degree sumcheck in our keccak circuit is degree 6, so we need 6
 points (7, but again, we get one for free from the claimed sum).
 Good points to try: $0$, $\infty$, $-1$, $2$.
-We can also go to $-2$ and $3$, but these are getting ugly (we get
-multiplications by $3$).
-
-Another option is the observation that we could also homogenize evaluations at
-fractional points.
-Using our running example (even if the degree is too low for it to make sense,
-you can redo it for higher degrees):
-
-$$
-8r(\frac{1}{2}) = (A[0]+A[1])\Big((B[0]+B[1])(C[0]+C[1])-2(D[0]+D[1])\Big)
-$$
-
-This is a very neat formula and the division by $8$ can be deferred until
-_after_ the summation (i.e. do it when reconstructing coefficients). For our
-degree-6 polynomial, you'd have to multiply by $64$ instead of $8$, but that
-is not really an important difference.
-Other good points for this method are $\frac{1}{3}$ and $\frac{2}{3}$, where
-the inner evaluations become $2P[0] + P[1]$ and $P[0]+2P[1]$ respectively
-(after multiplying by $3^6$).
+Values for points $-2$ and $3$ can be obtained easily from $-1$, $2$ without any need
+for multiplication.
 
 For any choice of points, you can derive the coefficient equations: it's going
 to be a system of linear equations, which can easily be solved, even if the
