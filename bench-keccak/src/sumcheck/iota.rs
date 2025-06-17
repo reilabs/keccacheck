@@ -30,37 +30,39 @@ pub fn prove_iota(
 ) -> IotaProof {
     let instances = 1 << (num_vars - 6);
 
-    let ((mut eq, mut chi_00), (mut rc_poly, mut chi_rlc)) = rayon::join(
+    let span = tracing::span!(tracing::Level::INFO, "prep").entered();
+
+    let mut chi_poly = (0..25).into_par_iter().map(|el| {
+        let slice = &chi[(el * instances)..(el * instances + instances)];
+        to_poly(slice)
+    }).collect::<Vec<_>>();
+
+    let chi_poly_slice = chi_poly.as_slice();
+    let ((mut eq, mut rc_poly), mut chi_rlc) = rayon::join(
         || {
             rayon::join(
                 || calculate_evaluations_over_boolean_hypercube_for_eq(r),
-                || to_poly(&chi[0..instances]),
+                || to_poly(&vec![rc; instances]),
             )
         },
         || {
-            rayon::join(
-                || to_poly(&vec![rc; instances]),
-                || {
-                    let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
-                    // iterating from 1 to skip the first state element (i, j) = (0, 0)
-                    for el in 1..25 {
-                        let slice = &chi[(el * instances)..(el * instances + instances)];
-                        let poly = to_poly(slice);
-                        for x in 0..(1 << num_vars) {
-                            chi_rlc[x] += beta[el] * poly[x];
-                        }
-                    }
-                    chi_rlc
-                },
-            )
+            let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
+            // iterating from 1 to skip the first state element (i, j) = (0, 0)
+            for el in 1..25 {
+                for x in 0..(1 << num_vars) {
+                    chi_rlc[x] += beta[el] * chi_poly[el][x];
+                }
+            }
+            chi_rlc
         },
     );
+    span.exit();
 
     #[cfg(debug_assertions)]
     {
         let mut c_sum = Fr::zero();
         for x in 0..(1 << num_vars) {
-            c_sum += eq[x] * (beta[0] * xor(chi_00[x], rc_poly[x]) + chi_rlc[x]);
+            c_sum += eq[x] * (beta[0] * xor(chi_poly[0][x], rc_poly[x]) + chi_rlc[x]);
         }
         assert_eq!(c_sum, sum);
     }
@@ -70,7 +72,7 @@ pub fn prove_iota(
         num_vars,
         beta[0],
         &mut eq,
-        &mut chi_00,
+        &mut chi_poly[0],
         &mut rc_poly,
         &mut chi_rlc,
         sum,
@@ -108,6 +110,7 @@ pub fn prove_iota(
 
 /// Sumcheck for $\sum_x e(x) ⋅ (\beta ⋅ xor(a(x), b(x)) + c(x))$.
 /// Returns $(e, r)$ for reduced claim $e = e(r) ⋅ (\beta ⋅ xor(a(r), b(r)) + c(r))$.
+#[instrument(skip_all)]
 pub fn prove_sumcheck_iota(
     transcript: &mut Prover,
     size: usize,
