@@ -6,6 +6,7 @@ use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{MontFp, One, Zero};
 use rayon::prelude::*;
+use tracing::instrument;
 
 pub struct ThetaCProof {
     pub _sum: Fr,
@@ -13,7 +14,7 @@ pub struct ThetaCProof {
     pub a: Vec<Fr>,
 }
 
-// #[instrument(skip_all)]
+#[instrument(skip_all)]
 pub fn prove_theta_c(
     transcript: &mut Prover,
     num_vars: usize,
@@ -67,6 +68,7 @@ pub fn prove_theta_c(
     )
 }
 
+#[instrument(skip_all)]
 pub fn prove_sumcheck_theta_c(
     transcript: &mut Prover,
     size: usize,

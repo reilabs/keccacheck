@@ -114,6 +114,7 @@ pub fn prove_iota(
 
 /// Sumcheck for $\sum_x e(x) ⋅ (\beta ⋅ xor(a(x), b(x)) + c(x))$.
 /// Returns $(e, r)$ for reduced claim $e = e(r) ⋅ (\beta ⋅ xor(a(r), b(r)) + c(r))$.
+#[instrument(skip_all)]
 pub fn prove_sumcheck_iota(
     transcript: &mut Prover,
     size: usize,

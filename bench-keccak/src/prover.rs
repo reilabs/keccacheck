@@ -72,7 +72,7 @@ pub fn prove(data: &[u64]) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     (prover.finish(), state[0].a.clone(), state[23].iota.clone())
 }
 
-// #[instrument(skip_all)]
+#[instrument(skip_all)]
 pub fn prove_round(
     prover: &mut Prover,
     num_vars: usize,

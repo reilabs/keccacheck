@@ -5,6 +5,7 @@ use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::Zero;
 use rayon::prelude::*;
+use tracing::instrument;
 
 pub struct ThetaDProof {
     pub _sum: Fr,
@@ -13,7 +14,7 @@ pub struct ThetaDProof {
     pub rot_c: Vec<Fr>,
 }
 
-// #[instrument(skip_all)]
+#[instrument(skip_all)]
 pub fn prove_theta_d(
     transcript: &mut Prover,
     num_vars: usize,
@@ -62,6 +63,7 @@ pub fn prove_theta_d(
     )
 }
 
+#[instrument(skip_all)]
 pub fn prove_sumcheck_theta_d(
     transcript: &mut Prover,
     size: usize,

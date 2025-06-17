@@ -115,6 +115,24 @@ pub fn to_poly_xor_base(x: &[u64]) -> Vec<Fr> {
     res
 }
 
+// low bits are elements, high bits are instances
+pub fn to_poly_xor_base_coeff(x: &[u64], y: Fr) -> Vec<Fr> {
+    let my = -y;
+    let mut res = Vec::with_capacity(x.len() * 64);
+    for el in x {
+        let mut k = 1;
+        for _ in 0..64 {
+            if *el & k > 0 {
+                res.push(-my);
+            } else {
+                res.push(y);
+            }
+            k <<= 1;
+        }
+    }
+    res
+}
+
 /// Updates f(x, x') -> f(r, x') and returns f
 pub fn update(f: &mut [Fr], r: Fr) -> &mut [Fr] {
     let (a, b) = f.split_at_mut(f.len() / 2);

@@ -12,6 +12,7 @@ use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use rayon::prelude::*;
 use std::str::FromStr;
+use tracing::instrument;
 
 pub struct ChiProof {
     pub _sum: Fr,
@@ -19,7 +20,7 @@ pub struct ChiProof {
     pub pi: Vec<Fr>,
 }
 
-// #[instrument(skip_all)]
+#[instrument(skip_all)]
 pub fn prove_chi(
     transcript: &mut Prover,
     num_vars: usize,
@@ -69,6 +70,7 @@ pub fn prove_chi(
     proof
 }
 
+#[instrument(skip_all)]
 pub fn prove_sumcheck_chi(
     transcript: &mut Prover,
     size: usize,

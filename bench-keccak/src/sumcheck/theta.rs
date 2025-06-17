@@ -1,10 +1,9 @@
-use crate::sumcheck::util::{
-    HALF, calculate_evaluations_over_boolean_hypercube_for_eq, to_poly_xor_base, update,
-};
+use crate::sumcheck::util::{HALF, calculate_evaluations_over_boolean_hypercube_for_eq, to_poly_xor_base, update, to_poly_xor_base_coeff};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::Zero;
 use rayon::prelude::*;
+use tracing::instrument;
 
 pub struct ThetaProof {
     pub _sum: Fr,
@@ -13,7 +12,7 @@ pub struct ThetaProof {
     pub ai: Vec<Fr>,
 }
 
-// #[instrument(skip_all)]
+#[instrument(skip_all)]
 pub fn prove_theta(
     transcript: &mut Prover,
     num_vars: usize,
@@ -44,9 +43,9 @@ pub fn prove_theta(
                     for j in 0..5 {
                         let id = j * 5 + i;
                         let idx = id * instances;
-                        let poly = to_poly_xor_base(&a[idx..(idx + instances)]);
+                        let poly = to_poly_xor_base_coeff(&a[idx..(idx + instances)], beta[id]);
                         for x in 0..(1 << num_vars) {
-                            rlc[x] += beta[id] * poly[x];
+                            rlc[x] += poly[x];
                         }
                     }
                     rlc
@@ -69,6 +68,7 @@ pub fn prove_theta(
     prove_sumcheck_theta(transcript, num_vars, &mut eq, &mut d, &mut ai, sum)
 }
 
+#[instrument(skip_all)]
 pub fn prove_sumcheck_theta(
     transcript: &mut Prover,
     size: usize,

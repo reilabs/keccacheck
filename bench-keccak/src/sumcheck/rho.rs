@@ -5,6 +5,7 @@ use crate::{sumcheck::util::update, transcript::Prover};
 use ark_bn254::Fr;
 use ark_ff::Zero;
 use rayon::prelude::*;
+use tracing::instrument;
 
 #[derive(Debug)]
 pub struct RhoProof {
@@ -13,7 +14,7 @@ pub struct RhoProof {
     pub theta: Vec<Fr>,
 }
 
-// #[instrument(skip_all)]
+#[instrument(skip_all)]
 pub fn prove_rho(
     transcript: &mut Prover,
     num_vars: usize,
@@ -59,6 +60,7 @@ pub fn prove_rho(
 }
 
 /// Sumcheck for $\sum_x e(x) ⋅ (\sum_ij \beta_ij ⋅ xor(\pi_{ij}, not(\pi_{i+1,j}) ⋅ \pi_{i+2, j}))$.
+#[instrument(skip_all)]
 pub fn prove_sumcheck_rho(
     transcript: &mut Prover,
     size: usize,
