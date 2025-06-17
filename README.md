@@ -150,34 +150,25 @@ $$
   \sum_{i}\beta_i\hat{D}\_i(\alpha_0) = \sum_k\sum_i\beta_ieq(\alpha_0, k)\hat{C}\_{i-1}(k)rot(\hat{C}_{i-1}, 1)(k)
 $$
 
-This yields 2 more evaluation obligations: $C_i(\alpha_1)$ and $rot(C_i,1)(\alpha_0)$.
-Punting the former, let's focus on the latter (sampling new $\beta\text{s}$):
-
-$$
-\sum_i\beta_{i}rot(\hat{C}_i,1)(\alpha_1) =
-\sum_krot_1(\alpha_1, k)\Big(\sum_i\beta_i\hat{C}_i(k)\Big)
-$$
-
-Sumchecking this gives us an obligation to evaluate $C_i(\alpha_2)$.
-This time we sample $\beta_i$ and $\beta'_i$, and combine this claim with the
-one from the previous sumcheck:
+This yields 2 more evaluation obligations: $C_i(\alpha_1)$ and $rot(C_i,1)(\alpha_1)$.
+We sample $\beta_i$ and $\beta'_i$ and combine both:
 
 $$
 \begin{align*}
-\sum_i\beta_i\hat{C}\_i(\alpha_1) + \beta'\_i\hat{C}\_i(\alpha_2) =\\\\=
-\sum_k\sum_i\Big(\beta_ieq(\alpha_1,k)\prod_j\hat{A}\_{ij}(k) + \beta'\_ieq(\alpha_2, k)\prod_j\hat{A}\_{ij}(k)\Big) =\\\\=
-\sum_k\sum_i\Big(\beta\_ieq(\alpha\_1,k) + \beta'\_ieq(\alpha_2, k)\Big)\prod_j\hat{A}_{ij}(k)
+\sum_i\beta_i\hat{C}\_i(\alpha_1) + \beta'\_irot(\hat{C}\_i,1)(\alpha_1) =\\\\=
+\sum_k\sum_i\Big(\beta_ieq(\alpha_1,k)\prod_j\hat{A}\_{ij}(k) + \beta'\_irot_1(\alpha_1, k)\prod_j\hat{A}\_{ij}(k)\Big) =\\\\=
+\sum_k\sum_i\Big(\beta\_ieq(\alpha\_1,k) + \beta'\_irot_1(\alpha_1, k)\Big)\prod_j\hat{A}_{ij}(k)
 \end{align*}
 $$
 
-Once again, this can be sumchecked, requiring us to evaluate $A_{ij}(\alpha_3)$. We can
+Once again, this can be sumchecked, requiring us to evaluate $A_{ij}(\alpha_2)$. We can
 combine with the long-forgotten claim on $A_{ij}(\alpha_0)$:
 
 $$
 \begin{align*}
-\sum_{i,j}\beta_{ij}\hat{A}\_{ij}(\alpha_0) + \beta'\_{ij}\hat{A}\_{ij}(\alpha_3) =\\\\=
-\sum_k\sum_{i,j}\beta_{ij}eq(\alpha_0,k)\hat{A}\_{ij}(k) + \beta'\_{ij}eq(\alpha_3, k)\hat{A}\_{ij}(k) =\\\\=
-\sum_k\sum_{i,j}\big(\beta_{ij}eq(\alpha_0,k) + \beta'\_{ij}eq(\alpha_3, k)\big)\hat{A}\_{ij}(k)
+\sum_{i,j}\beta_{ij}\hat{A}\_{ij}(\alpha_0) + \beta'\_{ij}\hat{A}\_{ij}(\alpha_2) =\\\\=
+\sum_k\sum_{i,j}\beta_{ij}eq(\alpha_0,k)\hat{A}\_{ij}(k) + \beta'\_{ij}eq(\alpha_2, k)\hat{A}\_{ij}(k) =\\\\=
+\sum_k\sum_{i,j}\big(\beta_{ij}eq(\alpha_0,k) + \beta'\_{ij}eq(\alpha_2, k)\big)\hat{A}\_{ij}(k)
 \end{align*}
 $$
 
