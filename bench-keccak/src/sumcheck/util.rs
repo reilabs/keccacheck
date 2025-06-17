@@ -123,7 +123,7 @@ pub fn to_poly_xor_base_coeff(x: &[u64], y: Fr) -> Vec<Fr> {
         let mut k = 1;
         for _ in 0..64 {
             if *el & k > 0 {
-                res.push(-my);
+                res.push(my);
             } else {
                 res.push(y);
             }

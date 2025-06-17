@@ -13,7 +13,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     let mut verifier = Verifier::new(proof);
 
     // TODO: feed output to the verifier before obtaining alpha
-    let span = tracing::span!(Level::INFO, "calculate sum").entered();
+    let span = tracing::span!(Level::INFO, "calculate output sum").entered();
     let mut r = (0..num_vars)
         .map(|_| verifier.generate())
         .collect::<Vec<_>>();
@@ -54,7 +54,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     span.exit();
 
     // verify input
-    let span = tracing::span!(Level::INFO, "evaluate at random point").entered();
+    let span = tracing::span!(Level::INFO, "evaluate input at random point").entered();
     for i in 0..25 {
         assert_eq!(
             eval_mle(

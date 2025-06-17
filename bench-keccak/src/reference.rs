@@ -9,11 +9,22 @@ pub fn apply_pi<T: Copy>(rho: &[T], pi: &mut [T]) {
 
     // Position (0,0) doesn't change
     // For all other positions, use the PI mapping
+
+    // Pi
+    // let mut last = a[1];
+    // for x in 0..24 {
+    //     array[0] = a[$crate::PI[x]];
+    //     a[$crate::PI[x]] = last;
+    //     last = array[0];
+    // }
+
+    let mut last = instances..(instances + instances);
     for i in 0..24 {
         // i+1 is the source position (skipping 0,0)
         // PI[i] is the target position
-        pi[(instances * PI[i])..(instances * (PI[i] + 1))]
-            .copy_from_slice(&rho[instances * (i + 1)..(instances * (i + 2))]);
+        let range = (instances * PI[i])..(instances * (PI[i] + 1));
+        pi[range.clone()].copy_from_slice(&rho[last]);
+        last = range;
         // pi[PI[i]] = rho[i + 1];
     }
 }
@@ -25,11 +36,13 @@ pub fn strip_pi<T: Copy>(pi: &[T], rho: &mut [T]) {
 
     // Position (0,0) doesn't change
     // For all other positions, use the PI mapping
+    let mut last = instances..(instances + instances);
     for i in 0..24 {
         // i+1 is the source position (skipping 0,0)
         // PI[i] is the target position
-        rho[instances * (i + 1)..(instances * (i + 2))]
-            .copy_from_slice(&pi[(instances * PI[i])..(instances * (PI[i] + 1))]);
+        let range = (instances * PI[i])..(instances * (PI[i] + 1));
+        rho[last].copy_from_slice(&pi[range.clone()]);
+        last = range;
         // rho[i + 1] = pi[PI[i]];
     }
 }
@@ -127,8 +140,8 @@ pub fn keccak_round(a_t: &[u64], round: usize) -> KeccakRoundState {
     // Apply rotation to each lane
     for i in 0..instances {
         for x in 0..25 {
-            result.rho[x * instances + i] =
-                result.theta[x * instances + i].rotate_left(RHO_OFFSETS[x]);
+            result.rho[x * instances + i] = result.theta[x * instances + i].rotate_left(RHO_OFFSETS[x]);
+            // println!("last {} rot {} -> {}", result.theta[x * instances + i], RHO_OFFSETS[x], result.rho[x * instances + i]);
         }
     }
     // println!("rho {:?}", result.rho);

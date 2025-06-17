@@ -29,5 +29,19 @@ fn main() {
         .collect::<Vec<_>>();
     let (proof, input, output) = prove(&data);
     verify(num_vars, &output, &input, &proof);
-    println!("OK.")
+
+    let mut reference_input: [u64; 25] = [0; 25];
+    let mut reference_output: [u64; 25] = [0; 25];
+    for i in 0..instances {
+        for j in 0..STATE {
+            reference_input[j] = input[j * instances + i];
+            reference_output[j] = output[j * instances + i];
+        }
+        let mut buf = reference_input.clone();
+        keccak::f1600(&mut buf);
+        assert_eq!(buf, reference_output);
+    }
+
+    println!("OK.");
+
 }
