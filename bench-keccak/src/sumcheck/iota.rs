@@ -1,13 +1,12 @@
 #[cfg(debug_assertions)]
 use crate::sumcheck::util::eval_mle;
-use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, to_poly};
+use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, to_poly, to_poly_coeff};
 use crate::{
     sumcheck::util::{HALF, update, xor},
     transcript::Prover,
 };
 use ark_bn254::Fr;
 use ark_ff::Zero;
-use itertools::izip;
 use rayon::prelude::*;
 use tracing::instrument;
 
@@ -31,13 +30,17 @@ pub fn prove_iota(
     let instances = 1 << (num_vars - 6);
 
     let span = tracing::span!(tracing::Level::INFO, "prep").entered();
-
     let mut chi_poly = (0..25).into_par_iter().map(|el| {
         let slice = &chi[(el * instances)..(el * instances + instances)];
-        to_poly(slice)
+        if el == 0 {
+            to_poly(slice)
+        } else {
+            to_poly_coeff(slice, beta[el])
+        }
     }).collect::<Vec<_>>();
 
-    let chi_poly_slice = chi_poly.as_slice();
+    let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
+
     let ((mut eq, mut rc_poly), mut chi_rlc) = rayon::join(
         || {
             rayon::join(
@@ -46,13 +49,16 @@ pub fn prove_iota(
             )
         },
         || {
-            let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
-            // iterating from 1 to skip the first state element (i, j) = (0, 0)
-            for el in 1..25 {
-                for x in 0..(1 << num_vars) {
-                    chi_rlc[x] += beta[el] * chi_poly[el][x];
+            let chunk_size = 8192;
+            chi_rlc.par_chunks_mut(chunk_size).enumerate().for_each(|(chunk, slice)| {
+                // iterating from 1 to skip the first state element (i, j) = (0, 0)
+                for el in 1..25 {
+                    for (x, v) in slice.iter_mut().enumerate() {
+                        let i = chunk * chunk_size + x;
+                        *v += chi_poly[el][i];
+                    }
                 }
-            }
+            });
             chi_rlc
         },
     );
