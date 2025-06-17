@@ -209,6 +209,7 @@ That is:
 $$
 f(x_1,\dots,x_n) = g(p_1(x_1,\dots,x_n),\dots,p_m(x_1,\dots,x_n))
 $$
+
 Where $g$ is an arbitrary low-degree polynomial given by an efficiently
 computable formula, and $p_1\dots p_n$ are given by arrays $P_1, \dots, P_n$,
 each of length $2^n$ and the functions are defined as:
@@ -221,27 +222,32 @@ We now plug all this back into the definition of $r$ (we use the overline to
 signify a binary number obtained by concatenating the digits):
 
 $$
-r(X) = \sum_{k_2,\dots,k_n} f(X, k_2,\dots,k_n) =\\=
-\sum_{k_2,\dots,k_n} g(p_1(X,k_2\dots,k_n),\dots,p_m(X,k_2\dots,k_n)) =\\=
-\sum_{k_2,\dots,k_n} g( \sum_{k'_1\dots k'_n} eq(X,k_2\dots,k_n,k'_1,\dots,k'_n)P_1[\overline{k'_1\dots k'_n}],\dots, \sum_{k'_1\dots k'_n} eq(X,k_2\dots,k_n,k'_1,\dots,k'_n)P_m[\overline{k'_1\dots k'_n}])
+\begin{align*}
+r(X) = \sum\_{k\_2,\dots,k\_n} f(X, k\_2,\dots,k\_n) =\\\\=
+\sum\_{k\_2,\dots,k\_n} g(p\_1(X,k\_2\dots,k\_n),\dots,p\_m(X,k\_2\dots,k\_n)) =\\\\=
+\sum\_{k\_2,\dots,k\_n} g( \sum\_{k'\_1\dots k'\_n} eq(X,k\_2\dots,k\_n,k'\_1,\dots,k'\_n)P\_1[\overline{k'\_1\dots k'\_n}],\dots, \sum\_{k'\_1\dots k'\_n} eq(X,k\_2\dots,k\_n,k'\_1,\dots,k'\_n)P\_m[\overline{k'\_1\dots k'\_n}])
+\end{align*}
 $$
 
 Working on the inner sums, we notice that it forces equality between $k\text{s}$
 and $k'\text{s}$ almost everywhere, obviating the need for sums. That is:
 
 $$
-\sum_{k'_1\dots k'_n} eq(X,k_2\dots,k_n,k'_1,\dots,k'_n)P_i[\overline{k'_1\dots k'_n}] =\\=
-\sum_{k'_1\dots k'_n} eq(X, k_1)eq(k_2\dots,k_n,k'_2,\dots,k'_n)P_i[\overline{k'_1\dots k'_n}] =\\=
-\sum_{k'_1}eq(X,k'_1)P_i[\overline{k'_1,k_2,\dots,k_n}] =\\=
-eq(X, 0)P_i[\overline{0,k_2,\dots,k_n}] + eq(X,1)P_i[\overline{1,k_2,\dots,k_n}] =\\=
-(1-X)P_i[\overline{0,k_2,\dots,k_n}] + XP_i[\overline{1,k_2,\dots,k_n}]
+\begin{align*}
+\sum_{k'\_1\dots k'\_n} eq(X,k\_2\dots,k\_n,k'\_1,\dots,k'\_n)P_i[\overline{k'_1\dots k'_n}] =\\\\=
+\sum\_{k'\_1\dots k'\_n} eq(X, k\_1)eq(k\_2\dots,k\_n,k'\_2,\dots,k'\_n)P\_i[\overline{k'\_1\dots k'\_n}] =\\\\=
+\sum\_{k'\_1}eq(X,k'\_1)P\_i[\overline{k'\_1,k\_2,\dots,k\_n}] =\\\\=
+eq(X, 0)P\_i[\overline{0,k\_2,\dots,k\_n}] + eq(X,1)P\_i[\overline{1,k\_2,\dots,k\_n}] =\\\\=
+(1-X)P\_i[\overline{0,k\_2,\dots,k\_n}] + XP\_i[\overline{1,k\_2,\dots,k\_n}]
+\end{align*}
 $$
 
 Plugging this back into the last equation (and simplifying indices), we get
 
 $$
-r(x) = \sum_{k}g((1-X)P_1[\overline{0,k}] + XP_1[\overline{1,k}], \dots, (1-X)P_m[\overline{0,k}] + XP_m[\overline{1,k}])
+r(x) = \sum\_{k}g((1-X)P\_1[\overline{0,k}] + XP\_1[\overline{1,k}], \dots, (1-X)P\_m[\overline{0,k}] + XP\_m[\overline{1,k}])
 $$
+
 So the plan is simple: fold $P\text{s}$ in half, compute the function under the
 sum for each $k$ (this is highly parallelizable!) and sum all these functions.
 
@@ -257,9 +263,11 @@ Throughout this section we'll be using $g(a,b,c,d) = a(bc - d)$ (used in
 spartan) as an example.
 So the equation for $r$ (skipping the $k$ suffixes in array indices, because
 I'm tired of them by now) becomes:
+
 $$
 r(X) = \big((1-X)A[0]+XA[1]\big)\Big(\big((1-X)B[0]+XB[1]\big)\big((1-X)C[0]+XC[1]\big)-\big((1-X)D[0]+XD[1]\big)\Big)
 $$
+
 This is degree 3, so we need to obtain 4 "pieces of independent information".
 
 ### Choosing the points
@@ -275,7 +283,9 @@ so that is not independent information.
 
 We choose $r(-1)$ instead, which is equal to:
 
-$r(-1) = g(2P_1[0,k]-P_1[1,k],\dots,2P_m[0,k]-P_m[1,k])$
+$$
+r(-1) = g(2P\_1[0,k]-P\_1[1,k],\dots,2P\_m[0,k]-P\_m[1,k])
+$$
 
 Note that $2P$ should never be computed through a multiplication, but rather
 as $P+P$, that's much cheaper!
@@ -285,26 +295,34 @@ know. We will use what is called an evaluation at infinity and essentially
 boils down to computing the highest degree coefficient. In our example, that
 highest coefficient (which is going to be the coefficient next to $X^3$)
 can be checked to be:
+
 $$
 r(\infty) = (A[1]-A[0])(B[1]-B[0])(C[1]-C[0])
 $$
+
 This is pretty awesome, because we didn't even have to touch $D$!
 
 ### Reconstructing the coefficients
 
 If we assume $r(x) = a_3x^3+a_2x^2+a_1x+a_0$, we can see that:
+
 $$
-r(0) = a_0\\
-r(\infty) = a_3\\
-y_{sum} = r(1) + r(0) = a_3 + a_2 + a_1 + 2a_0\\
+\begin{align*}
+r(0) = a_0\\\\
+r(\infty) = a_3\\\\
+y_{sum} = r(1) + r(0) = a_3 + a_2 + a_1 + 2a_0\\\\
 r(-1) = -a_3 + a_2 -a_1+a_0
+\end{align*}
 $$
 
 From which we recover $a_0$ and $a_3$ trivially and note that:
+
 $$
 a_2 = \frac{y_{sum} + r(-1) - 3r(0)}{2}
 $$
+
 and
+
 $$
 a_1 = y_{sum} - a_3 - a_2 - 2a_0
 $$
@@ -321,9 +339,11 @@ Another option is the observation that we could also homogenize evaluations at
 fractional points.
 Using our running example (even if the degree is too low for it to make sense,
 you can redo it for higher degrees):
+
 $$
 8r(\frac{1}{2}) = (A[0]+A[1])\Big((B[0]+B[1])(C[0]+C[1])-2(D[0]+D[1])\Big)
 $$
+
 This is a very neat formula and the division by $8$ can be deferred until
 _after_ the summation (i.e. do it when reconstructing coefficients). For our
 degree-6 polynomial, you'd have to multiply by $64$ instead of $8$, but that
