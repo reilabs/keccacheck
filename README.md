@@ -60,7 +60,7 @@ the input state and $B$, $C$ and $D$ follow their pseudocode definitions.
 I'm also very liberal with reusing the symbol $\beta$ for random linear combination coefficients
 it should be clear context when new $\beta\text{s}$ should be chosen, so I keep reusing this letter.
 
-Also define $a \oplus b := a + b - ab$.
+Also define $a \oplus b := a + b - 2ab$.
 
 ## Iota
 
@@ -77,10 +77,6 @@ $\sum_{i,j\ne(0,0)}\beta_{ij}\chi_{ij}(\alpha')$ and $\beta_{00}\chi_{00}(\alpha
 Verifier samples some randomness to do a random linear combination of these two claims, at which point
 we end up with the goal of convincing them about the value of $\sum_{i,j}\beta_{ij}'\chi_{ij}(\alpha')$
 for some easily computable values of $\beta'$. We strip off the primes and we're back at the original form, but a step further!
-
-### Option B (TODO)
-
-A less elegant but more efficient solution would be to only sumcheck over $\iota_{00}$ – this will lead to an evaluation claim at a different point for just this one polynomial, but this can probably be elided in the next step?
 
 ## Chi
 
@@ -114,7 +110,7 @@ $$
 $$
 
 Unsurprisingly, we sumcheck this. The $rot_k$ polynomial is such that
-$rot_k(a,b) = 1$ iff $ a = (b + k)\mod 64 $ (TODO: which way does it actually go?),
+$rot_k(a,b) = 1$ iff $ a = (b + k)\mod 64 $,
 where the bitvectors are interpreted as binary integers.
 Computing them will be painful, particularly for the verifier + this is a
 sumcheck over 50 different polys: oof. OTOH, it's _just_ a sum, so this thing
@@ -151,7 +147,7 @@ evaluating $\hat{D}\text{s}$.
 The verifier samples some randomness $\beta_i$ and sumchecks:
 
 $$
-  \sum_{i}D_i(\alpha_0) = \sum_k\sum_i\beta_ieq(\alpha_0, k)\hat{C}\_{i-1}(k)rot(\hat{C}_{i-1}, 1)(k)
+  \sum_{i}\beta_i\hat{D}\_i(\alpha_0) = \sum_k\sum_i\beta_ieq(\alpha_0, k)\hat{C}\_{i-1}(k)rot(\hat{C}_{i-1}, 1)(k)
 $$
 
 This yields 2 more evaluation obligations: $C_i(\alpha_1)$ and $rot(C_i,1)(\alpha_0)$.
@@ -167,26 +163,32 @@ This time we sample $\beta_i$ and $\beta'_i$, and combine this claim with the
 one from the previous sumcheck:
 
 $$
-\sum_i\beta_i\hat{C}\_i(\alpha_1) + \beta'\_i\hat{C}\_i(\alpha_2) =
-\sum_k\sum_i\Big(\beta_ieq(\alpha_1,k)\prod_j\hat{A}\_{ij}(k) + \beta'\_ieq(\alpha_2, k)\prod_j\hat{A}\_{ij}(k)\Big) =
+\begin{align*}
+\sum_i\beta_i\hat{C}\_i(\alpha_1) + \beta'\_i\hat{C}\_i(\alpha_2) =\\\\=
+\sum_k\sum_i\Big(\beta_ieq(\alpha_1,k)\prod_j\hat{A}\_{ij}(k) + \beta'\_ieq(\alpha_2, k)\prod_j\hat{A}\_{ij}(k)\Big) =\\\\=
 \sum_k\sum_i\Big(\beta\_ieq(\alpha\_1,k) + \beta'\_ieq(\alpha_2, k)\Big)\prod_j\hat{A}_{ij}(k)
+\end{align*}
 $$
 
 Once again, this can be sumchecked, requiring us to evaluate $A_{ij}(\alpha_3)$. We can
 combine with the long-forgotten claim on $A_{ij}(\alpha_0)$:
 
 $$
-\sum_{i,j}\beta_{ij}A_{ij}(\alpha_0) + \beta'\_{ij}A_{ij}(\alpha_3) =
-\sum_k\sum_{i,j}\beta_{ij}eq(\alpha_0,k)A_{ij}(k) + \beta'\_{ij}eq(\alpha_3, k)A_{ij}(k) =
-\sum_k\sum_{i,j}\big(\beta_{ij}eq(\alpha_0,k) + \beta'\_{ij}eq(\alpha_3, k)\big)A_{ij}(k)
+\begin{align*}
+\sum_{i,j}\beta_{ij}\hat{A}\_{ij}(\alpha_0) + \beta'\_{ij}\hat{A}\_{ij}(\alpha_3) =\\\\=
+\sum_k\sum_{i,j}\beta_{ij}eq(\alpha_0,k)\hat{A}\_{ij}(k) + \beta'\_{ij}eq(\alpha_3, k)\hat{A}\_{ij}(k) =\\\\=
+\sum_k\sum_{i,j}\big(\beta_{ij}eq(\alpha_0,k) + \beta'\_{ij}eq(\alpha_3, k)\big)\hat{A}\_{ij}(k)
+\end{align*}
 $$
 
 This can be sumchecked one last time to reduce the problem to a single
-opening of all $A\text{s}$.
+opening of all $\hat{A}\\text{s}$.
 
-NB: this step can be skipped between-rounds
-and folded into the next $\iota$, but that makes the implementation less
-elegant, so keeping this as a last-ditch optimization.
+We need to change the base back to $A$ and can proceed to the next round.
+
+$$
+A = \frac{1}{2} ( 1 - \hat{A})
+$$
 
 # Notes on implementing sumcheck
 
