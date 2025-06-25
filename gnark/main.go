@@ -42,7 +42,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 
 func KeccacheckHint(field *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 	for i := 0; i < len(outputs); i++ {
-		outputs[i] = big.NewInt(5)
+		outputs[i] = big.NewInt(int64(C.keccacheck_init()))
 	}
 
 	return nil
@@ -53,7 +53,6 @@ func main() {
 
 	log.Info().Msg("initialize Rust prover")
 	solver.RegisterHint(KeccacheckHint)
-	C.keccacheck_init()
 
 	log.Info().Msg("call frontend.Compile")
 	var circuit KeccakfCircuit
