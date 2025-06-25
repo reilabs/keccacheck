@@ -1,12 +1,21 @@
 package main
 
 import (
+	"math/big"
+
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
+	"github.com/consensys/gnark/constraint/solver"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/logger"
 )
+
+/*
+#cgo LDFLAGS: ./libkeccak.a -ldl
+#include "./bindings.h"
+*/
+import "C"
 
 type KeccakfCircuit struct {
 	Input  frontend.Variable `gnark:",public"`
@@ -15,11 +24,36 @@ type KeccakfCircuit struct {
 
 func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	api.AssertIsEqual(circuit.Input, circuit.Output)
+
+	hint, err := api.NewHint(
+		KeccacheckHint,
+		1,
+		circuit.Input,
+	)
+	c := frontend.Variable(hint[0])
+	api.AssertIsEqual(c, circuit.Output)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return nil
+}
+
+func KeccacheckHint(field *big.Int, inputs []*big.Int, outputs []*big.Int) error {
+	for i := 0; i < len(outputs); i++ {
+		outputs[i] = big.NewInt(5)
+	}
+
 	return nil
 }
 
 func main() {
 	log := logger.Logger()
+
+	log.Info().Msg("initialize Rust prover")
+	solver.RegisterHint(KeccacheckHint)
+	C.keccacheck_init()
 
 	log.Info().Msg("call frontend.Compile")
 	var circuit KeccakfCircuit

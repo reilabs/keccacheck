@@ -1,4 +1,3 @@
-/sumcheck-benches/target
-/target
+/rust/target
 Cargo.lock
 /.idea
