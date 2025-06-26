@@ -51,3 +51,6 @@ debug = true
 inherits = "release"
 codegen-units = 1
 lto = true
+
+[build-dependencies]
+cbindgen = "0.29"
