@@ -1,9 +1,6 @@
 package main
 
 import (
-	"math/big"
-	"unsafe"
-
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/constraint/solver"
@@ -11,12 +8,6 @@ import (
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/logger"
 )
-
-/*
-#cgo LDFLAGS: ./libkeccak.a -ldl
-#include "./bindings.h"
-*/
-import "C"
 
 type KeccakfCircuit struct {
 	Input  frontend.Variable `gnark:",public"`
@@ -41,23 +32,6 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	return nil
 }
 
-// inputs, outputs are NOT in the montgomery form
-func KeccacheckHint(field *big.Int, inputs []*big.Int, outputs []*big.Int) error {
-	inputBytes := inputs[0].Bytes()
-	inputLen := C.uintptr_t(len(inputBytes))
-	inputPtr := (*C.uint8_t)(C.CBytes(inputBytes))
-	defer C.free(unsafe.Pointer(inputPtr))
-
-	var outLen C.uintptr_t
-	retPtr := C.keccacheck_init(inputPtr, inputLen, &outLen)
-	defer C.keccacheck_free(retPtr, outLen)
-
-	// Copy the result from C memory to Go []byte
-	result := C.GoBytes(unsafe.Pointer(retPtr), C.int(outLen))
-	outputs[0] = new(big.Int).SetBytes(result)
-
-	return nil
-}
 func main() {
 	log := logger.Logger()
 
