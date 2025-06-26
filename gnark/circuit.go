@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/permutation/poseidon2"
 )
 
 type KeccakfCircuit struct {
@@ -24,8 +25,8 @@ func evalMle(api frontend.API, mle []frontend.Variable, r []frontend.Variable) f
 		next := make([]frontend.Variable, newSize)
 		oneMinusRi := api.Sub(1, r[i])
 		for j := 0; j < newSize; j++ {
-			left := api.Mul(oneMinusRi, coeffs[2*j])
-			right := api.Mul(r[i], coeffs[2*j+1])
+			left := api.Mul(oneMinusRi, coeffs[j])
+			right := api.Mul(r[i], coeffs[newSize+j])
 			next[j] = api.Add(left, right)
 		}
 		coeffs = next
@@ -35,44 +36,59 @@ func evalMle(api frontend.API, mle []frontend.Variable, r []frontend.Variable) f
 }
 
 func (circuit *KeccakfCircuit) Define(api frontend.API) error {
-	// 1. convert output to binary and treat as a MLE polynomial
+	// 1. convert output to binary and treat as 25 MLE polynomials
 	bits := api.ToBinary(circuit.Output, 1600)
-	_, err := api.NewHint(
-		KeccacheckHint,
-		1,
-		bits...,
-	)
 
-	// 2. evaluate output MLE polynomial on a random value r, store result as alpha
-	r := []frontend.Variable{frontend.Variable(1), frontend.Variable(2), frontend.Variable(3), frontend.Variable(4), frontend.Variable(5), frontend.Variable(6)}
-	beta := make([]frontend.Variable, 25)
+	// 2. obtain a pseudo-random value r
+	_, err := poseidon2.NewPoseidon2FromParameters(api, 4, 8, 56)
+	if err != nil {
+		return err
+	}
+	r := make([]frontend.Variable, 6)
+	for i := 0; i < 6; i++ {
+		r[i] = frontend.Variable(i + 2)
+	}
+
+	// for i := 0; i < 6; i++ {
+	// 	h.Reset()
+	// 	h.Write(circuit.Output, frontend.Variable(i))
+	// 	r[i] = h.Sum()
+	// }
+
+	// 3. calculate random linear combination beta of 25 output MLE polynomials
+	//    evaluated on a random value r, store result as alpha
 	alpha := frontend.Variable(0)
+	beta := make([]frontend.Variable, 25)
 	for i := 0; i < 25; i++ {
 		beta[i] = frontend.Variable(i + 1)
 		alpha = api.Add(alpha, api.Mul(beta[i], evalMle(api, bits[i*64:(i+1)*64], r)))
 	}
 
+	api.Println("r:")
+	api.Println(r...)
+
 	api.Println("alpha:", alpha)
+
+	// TODO:
+	// 4. obtain GKR proof that alpha is the output of the MLE polynomial
+
 	_, err = api.NewHint(
 		KeccacheckHint,
 		1,
 		alpha,
 	)
+	if err != nil {
+		return err
+	}
 
-	// TODO:
-	// 3. obtain GKR proof that alpha is the output of the MLE polynomial
-	// 4. recursively verify GKR proof until we obtain a claim on the input bits
-	// 5. conver input to binary and treat it as a MLE polynomial
-	// 6. evaluate input MLE polynomial on subclaims to check if the entire proof is valid
+	// 5. recursively verify GKR proof until we obtain a claim on the input bits
+	// 6. conver input to binary and treat it as a MLE polynomial
+	// 7. evaluate input MLE polynomial on subclaims to check if the entire proof is valid
 
 	api.AssertIsEqual(api.Mul(circuit.Input, 2), circuit.Output)
 
 	// c := frontend.Variable(hint[0])
 	// api.AssertIsEqual(c, circuit.Output)
-
-	if err != nil {
-		panic(err)
-	}
 
 	return nil
 }
