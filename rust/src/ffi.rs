@@ -6,8 +6,10 @@ pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize, out_len: *m
     // SAFETY: Caller must ensure ptr is valid for len bytes
     let input: &[u8] = unsafe { std::slice::from_raw_parts(ptr, len) };
 
-    let mut fr = Fr::from_be_bytes_mod_order(input);
-    fr += fr;
+    let fr_ary = (0..len/4).map(|i| Fr::from_be_bytes_mod_order(&input[i*4..(i+1)*4])).collect::<Vec<_>>();
+    println!("fr_ary: {fr_ary:?}");
+
+    let fr = Fr::from_be_bytes_mod_order(input);
 
     // Serialize fr to bytes using into_bigint().to_bytes_be()
     let mut buffer = fr.into_bigint().to_bytes_be();

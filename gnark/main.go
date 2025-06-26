@@ -30,8 +30,8 @@ func main() {
 
 	log.Info().Msg("create witness")
 	assignment := KeccakfCircuit{}
-	assignment.Input = -1
-	assignment.Output = -2
+	assignment.Input = 5
+	assignment.Output = 10
 	witness, err := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
 	if err != nil {
 		panic(err)
