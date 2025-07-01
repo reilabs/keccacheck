@@ -6,6 +6,25 @@ The high level idea is to represent a single Keccak-F as layered polynomials. Mu
 
 Since these proofs are rather large, the idea is to wrap proof verification into another proof system that produces more succint proofs (using gnark).
 
+##  Building and Running the Project
+
+### Rust (Static Library)
+
+To compile the Rust portion of the project and generate the static library:
+
+```bash
+cargo build && cp target/debug/libkeccak.a ../gnark/libkeccak.a
+```
+
+### Go (gnark)
+
+When making changes to the Rust static library, it's important to ensure Go does not serve outdated, cached versions of the compiled code. To avoid this issue, always clean the Go build cache before running:
+
+```bash
+go clean -cache
+go run .
+```
+
 ## Benchmarking
 
 Run `RUSTFLAGS='-C target-cpu=native' cargo run --profile=optimized -- {num_variables}`.
