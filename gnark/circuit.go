@@ -1,13 +1,16 @@
 package main
 
 import (
+	"unsafe"
+
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/permutation/poseidon2"
 )
 
 type KeccakfCircuit struct {
-	Input  frontend.Variable `gnark:",public"`
-	Output frontend.Variable `gnark:",public"`
+	Input     frontend.Variable `gnark:",public"`
+	Output    frontend.Variable `gnark:",public"`
+	gkrProver unsafe.Pointer    `gnark:"-"`
 }
 
 func evalMle(api frontend.API, mle []frontend.Variable, r []frontend.Variable) frontend.Variable {
@@ -72,14 +75,14 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	// TODO:
 	// 4. obtain GKR proof that alpha is the output of the MLE polynomial
 
-	_, err = api.NewHint(
-		KeccacheckHint,
-		1,
-		alpha,
-	)
-	if err != nil {
-		return err
-	}
+	// _, err = api.NewHint(
+	// 	KeccacheckHint,
+	// 	1,
+	// 	alpha,
+	// )
+	// if err != nil {
+	// 	return err
+	// }
 
 	// 5. recursively verify GKR proof until we obtain a claim on the input bits
 	// 6. conver input to binary and treat it as a MLE polynomial

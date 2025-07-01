@@ -3,13 +3,19 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-uint8_t *keccacheck_init(const uint8_t *ptr, uintptr_t len, uintptr_t *out_len);
+#define COLUMNS 5
+
+#define ROWS 5
+
+#define STATE (COLUMNS * ROWS)
+
+void *keccacheck_init(const uint8_t *ptr, uintptr_t len);
 
 /**
- * Frees memory allocated by keccacheck_init.
+ * Frees memory allocated by `keccak_init`.
  *
  * # Safety
- * The pointer and length must be exactly as returned by keccacheck_init and must not have been freed already.
+ * The pointer must be a valid pointer to a `KeccakInstance` that was created by `keccak_init`.
+ * It must not have been freed already.
  */
-void keccacheck_free(uint8_t *ptr,
-                     uintptr_t len);
+void keccacheck_free(void *ptr);
