@@ -22,6 +22,15 @@ INFO        ┝━ prove_iota [ 9.54ms | 0.18% ]
 INFO.       ...
 ```
 
+### Proof size
+
+| keccak instances | 1    | 2    | 128   | 1024  | n                  |
+|------------------|------|------|-------|-------|--------------------|
+| num variables    | 6    | 7    | 13    | 16    | 6 + log₂(n)        |
+| proof size (felts) | 6241 | 6793 | 10105 | 11761 | 552 * vars + 2929 |
+| proof size (bn254, kB)	| 195	| 212	| 316	| 368 | |
+
+
 ## Keccak definition
 
 ```
