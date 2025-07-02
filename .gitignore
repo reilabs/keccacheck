@@ -1,3 +1,4 @@
 /rust/target
 Cargo.lock
 /.idea
+gnark/libkeccak.a
