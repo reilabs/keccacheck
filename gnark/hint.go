@@ -12,6 +12,10 @@ import (
 */
 import "C"
 
+// Takes input and output words and returns a pointer to an
+// array of bytes containing those words
+//
+// i.e. 5 input words and 5 output words will make a byte array of length 80
 func KeccacheckInit(inputs []*big.Int, outputs []*big.Int) unsafe.Pointer {
 	bytes := make([]byte, (len(inputs)+len(outputs))*8)
 	for i, input := range inputs {
@@ -29,28 +33,14 @@ func KeccacheckInit(inputs []*big.Int, outputs []*big.Int) unsafe.Pointer {
 }
 
 func KeccacheckFree(ptr unsafe.Pointer) {
+	// Calls rust box dropping so we don't need to know the
+	// size of the memory chunk we are freeing
 	C.keccacheck_free(ptr)
 }
 
 // KeccacheckHint is a gnark hint function that calls the C keccacheck_init and keccacheck_free routines.
-func KeccacheckHint(field *big.Int, inputs []*big.Int, outputs []*big.Int) error {
+func KeccacheckHint(field *big.Int, inputs, outputs []*big.Int) error {
 	fmt.Println("field elements", len(inputs))
-
-	// inputBytes := make([]byte, len(inputs)*4)
-	// for i := range inputs {
-	// 	inputs[i].FillBytes(inputBytes[i*4 : (i+1)*4])
-	// }
-	// inputLen := C.uintptr_t(len(inputBytes))
-	// inputPtr := (*C.uint8_t)(C.CBytes(inputBytes))
-	// defer C.free(unsafe.Pointer(inputPtr))
-
-	// var outLen C.uintptr_t
-	// retPtr := C.keccacheck_init(inputPtr, inputLen, &outLen)
-	// defer C.keccacheck_free(retPtr, outLen)
-
-	// // Copy the result from C memory to Go []byte
-	// result := C.GoBytes(unsafe.Pointer(retPtr), C.int(outLen))
-	// outputs[0] = new(big.Int).SetBytes(result)
 
 	return nil
 }

@@ -33,8 +33,9 @@ func main() {
 	log.Info().Msg("create witness")
 	assignment := KeccakfCircuit{}
 	assignment.Input = 5
-	assignment.Output = 10
-	assignment.gkrProver = KeccacheckInit([]*big.Int{big.NewInt(5)}, []*big.Int{big.NewInt(10)})
+	assignment.Output = 15
+	assignment.gkrProver = KeccacheckInit([]*big.Int{big.NewInt(5)}, []*big.Int{big.NewInt(15)})
+
 	defer KeccacheckFree(assignment.gkrProver)
 	witness, err := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
 	if err != nil {

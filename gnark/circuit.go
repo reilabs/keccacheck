@@ -13,36 +13,13 @@ type KeccakfCircuit struct {
 	gkrProver unsafe.Pointer    `gnark:"-"`
 }
 
-func evalMle(api frontend.API, mle []frontend.Variable, r []frontend.Variable) frontend.Variable {
-	n := len(r)
-	size := 1 << n
-	if len(mle) != size {
-		panic("mle length must be 2^len(r)")
-	}
-
-	// Start from the full mle and reduce layer by layer
-	coeffs := mle
-
-	for i := 0; i < n; i++ {
-		newSize := len(coeffs) / 2
-		next := make([]frontend.Variable, newSize)
-		oneMinusRi := api.Sub(1, r[i])
-		for j := 0; j < newSize; j++ {
-			left := api.Mul(oneMinusRi, coeffs[j])
-			right := api.Mul(r[i], coeffs[newSize+j])
-			next[j] = api.Add(left, right)
-		}
-		coeffs = next
-	}
-
-	return coeffs[0]
-}
-
+// Main Verifier circuit definition
 func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	// 1. convert output to binary and treat as 25 MLE polynomials
 	bits := api.ToBinary(circuit.Output, 1600)
 
 	// 2. obtain a pseudo-random value r
+	// TODO explain where these constants come from
 	_, err := poseidon2.NewPoseidon2FromParameters(api, 4, 8, 56)
 	if err != nil {
 		return err
@@ -75,7 +52,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	// TODO:
 	// 4. obtain GKR proof that alpha is the output of the MLE polynomial
 
-	// _, err = api.NewHint(
+	// _, err = api.Compiler().NewHint(
 	// 	KeccacheckHint,
 	// 	1,
 	// 	alpha,
@@ -85,10 +62,10 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	// }
 
 	// 5. recursively verify GKR proof until we obtain a claim on the input bits
-	// 6. conver input to binary and treat it as a MLE polynomial
+	// 6. convert input to binary and treat it as a MLE polynomial
 	// 7. evaluate input MLE polynomial on subclaims to check if the entire proof is valid
 
-	api.AssertIsEqual(api.Mul(circuit.Input, 2), circuit.Output)
+	api.AssertIsEqual(api.Mul(circuit.Input, 3), circuit.Output)
 
 	// c := frontend.Variable(hint[0])
 	// api.AssertIsEqual(c, circuit.Output)
