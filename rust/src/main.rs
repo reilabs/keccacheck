@@ -48,8 +48,14 @@ fn main() {
     println!("OK.");
 
     let poly = to_poly(&[10]);
-    let r = vec![Fr::from(2), Fr::from(3), Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7)];
+    let r = vec![
+        Fr::from(2),
+        Fr::from(3),
+        Fr::from(4),
+        Fr::from(5),
+        Fr::from(6),
+        Fr::from(7),
+    ];
     let eval = eval_mle(&poly, &r);
     println!("poly {:?} r {:?} eval {:?}", poly, r, eval);
-
 }

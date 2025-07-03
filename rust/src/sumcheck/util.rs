@@ -97,7 +97,6 @@ pub fn to_poly_coeff(x: &[u64], y: Fr) -> Vec<Fr> {
     res
 }
 
-
 // low bits are elements, high bits are instances
 pub fn to_poly_xor_base(x: &[u64]) -> Vec<Fr> {
     let mut res = Vec::with_capacity(x.len() * 64);

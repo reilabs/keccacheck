@@ -1,6 +1,8 @@
 #[cfg(debug_assertions)]
 use crate::sumcheck::util::eval_mle;
-use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_eq, to_poly, to_poly_coeff};
+use crate::sumcheck::util::{
+    calculate_evaluations_over_boolean_hypercube_for_eq, to_poly, to_poly_coeff,
+};
 use crate::{
     sumcheck::util::{HALF, update, xor},
     transcript::Prover,
@@ -29,14 +31,17 @@ pub fn prove_iota(
 ) -> IotaProof {
     let instances = 1 << (num_vars - 6);
 
-    let mut chi_poly = (0..25).into_par_iter().map(|el| {
-        let slice = &chi[(el * instances)..(el * instances + instances)];
-        if el == 0 {
-            to_poly(slice)
-        } else {
-            to_poly_coeff(slice, beta[el])
-        }
-    }).collect::<Vec<_>>();
+    let mut chi_poly = (0..25)
+        .into_par_iter()
+        .map(|el| {
+            let slice = &chi[(el * instances)..(el * instances + instances)];
+            if el == 0 {
+                to_poly(slice)
+            } else {
+                to_poly_coeff(slice, beta[el])
+            }
+        })
+        .collect::<Vec<_>>();
 
     let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
 
@@ -49,15 +54,18 @@ pub fn prove_iota(
         },
         || {
             let chunk_size = 8192;
-            chi_rlc.par_chunks_mut(chunk_size).enumerate().for_each(|(chunk, slice)| {
-                // iterating from 1 to skip the first state element (i, j) = (0, 0)
-                for el in 1..25 {
-                    for (x, v) in slice.iter_mut().enumerate() {
-                        let i = chunk * chunk_size + x;
-                        *v += chi_poly[el][i];
+            chi_rlc
+                .par_chunks_mut(chunk_size)
+                .enumerate()
+                .for_each(|(chunk, slice)| {
+                    // iterating from 1 to skip the first state element (i, j) = (0, 0)
+                    for el in 1..25 {
+                        for (x, v) in slice.iter_mut().enumerate() {
+                            let i = chunk * chunk_size + x;
+                            *v += chi_poly[el][i];
+                        }
                     }
-                }
-            });
+                });
             chi_rlc
         },
     );
@@ -152,33 +160,36 @@ pub fn prove_sumcheck_iota(
 
         let chunk = 1024;
 
-        let (p0t, pem1t, p3t) = e0.par_chunks(chunk).zip(e1.par_chunks(chunk)).zip(
-            a0.par_chunks(chunk).zip(a1.par_chunks(chunk))
-        ).zip(
-        b0.par_chunks(chunk).zip(b1.par_chunks(chunk)).zip(
-            c0.par_chunks(chunk).zip(c1.par_chunks(chunk))
-        ))
-        .map(|x| {
-            let (((e0, e1), (a0, a1)), ((b0, b1), (c0, c1))) = x;
-            let mut p0 = Fr::zero();
-            let mut pem1 = Fr::zero();
-            let mut p3 = Fr::zero();
-            for i in 0..e0.len() {
-                // Evaluation at 0
-                p0 += e0[i] * (beta_00 * xor(a0[i], b[i]) + c0[i]);
-                // Evaluation at -1
-                let eem1 = e0[i] + e0[i] - e1[i]; // e(-1)
-                let aem1 = a0[i] + a0[i] - a1[i]; // a(-1)
-                let bem1 = b0[i] + b0[i] - b1[i]; // b(-1)
-                let cem1 = c0[i] + c0[i] - c1[i]; // c(-1)
-                pem1 += eem1 * (beta_00 * xor(aem1, bem1) + cem1);
-                // Evaluation at ∞
-                p3 += beta_m2 * (e1[i] - e0[i]) * (a1[i] - a0[i]) * (b1[i] - b0[i]);
-            }
-            (p0, pem1, p3)
-        })
-        .reduce_with(|a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2))
-        .unwrap();
+        let (p0t, pem1t, p3t) = e0
+            .par_chunks(chunk)
+            .zip(e1.par_chunks(chunk))
+            .zip(a0.par_chunks(chunk).zip(a1.par_chunks(chunk)))
+            .zip(
+                b0.par_chunks(chunk)
+                    .zip(b1.par_chunks(chunk))
+                    .zip(c0.par_chunks(chunk).zip(c1.par_chunks(chunk))),
+            )
+            .map(|x| {
+                let (((e0, e1), (a0, a1)), ((b0, b1), (c0, c1))) = x;
+                let mut p0 = Fr::zero();
+                let mut pem1 = Fr::zero();
+                let mut p3 = Fr::zero();
+                for i in 0..e0.len() {
+                    // Evaluation at 0
+                    p0 += e0[i] * (beta_00 * xor(a0[i], b[i]) + c0[i]);
+                    // Evaluation at -1
+                    let eem1 = e0[i] + e0[i] - e1[i]; // e(-1)
+                    let aem1 = a0[i] + a0[i] - a1[i]; // a(-1)
+                    let bem1 = b0[i] + b0[i] - b1[i]; // b(-1)
+                    let cem1 = c0[i] + c0[i] - c1[i]; // c(-1)
+                    pem1 += eem1 * (beta_00 * xor(aem1, bem1) + cem1);
+                    // Evaluation at ∞
+                    p3 += beta_m2 * (e1[i] - e0[i]) * (a1[i] - a0[i]) * (b1[i] - b0[i]);
+                }
+                (p0, pem1, p3)
+            })
+            .reduce_with(|a, b| (a.0 + b.0, a.1 + b.1, a.2 + b.2))
+            .unwrap();
 
         p0 += p0t;
         pem1 += pem1t;

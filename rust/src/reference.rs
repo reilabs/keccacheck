@@ -140,7 +140,8 @@ pub fn keccak_round(a_t: &[u64], round: usize) -> KeccakRoundState {
     // Apply rotation to each lane
     for i in 0..instances {
         for x in 0..25 {
-            result.rho[x * instances + i] = result.theta[x * instances + i].rotate_left(RHO_OFFSETS[x]);
+            result.rho[x * instances + i] =
+                result.theta[x * instances + i].rotate_left(RHO_OFFSETS[x]);
             // println!("last {} rot {} -> {}", result.theta[x * instances + i], RHO_OFFSETS[x], result.rho[x * instances + i]);
         }
     }

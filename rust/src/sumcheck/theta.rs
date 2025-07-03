@@ -1,4 +1,7 @@
-use crate::sumcheck::util::{HALF, calculate_evaluations_over_boolean_hypercube_for_eq, to_poly_xor_base, update, to_poly_xor_base_coeff};
+use crate::sumcheck::util::{
+    HALF, calculate_evaluations_over_boolean_hypercube_for_eq, to_poly_xor_base,
+    to_poly_xor_base_coeff, update,
+};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::Zero;
