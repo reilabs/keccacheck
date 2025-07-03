@@ -39,7 +39,7 @@ pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_v
         input.iter_mut().zip(inp.iter()).for_each(|(s, b)| *s = *b);
         let mut output = vec![0u64; 25 * n];
         output.iter_mut().zip(out.iter()).for_each(|(s, b)| *s = *b);
-        
+
         // Sanity check on the input and output
         for i in 0..n {
             let mut input_i = [0u64; 25];
@@ -48,22 +48,24 @@ pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_v
             keccak::f1600(&mut input_i);
             assert_eq!(input_i, output_i);
         }
-        
+
         let mut state_data: Vec<u64> = Vec::with_capacity(600 * n);
 
         for i in 0..n {
-            let input_i = &mut input[25 * i..25 * i + 25]; 
+            let input_i = &mut input[25 * i..25 * i + 25];
             let mut state = KeccakRoundState::at_round(input_i, 0);
             for _ in 0..23 {
                 state_data.extend_from_slice(state.iota.as_slice());
                 state = state.next();
             }
             state_data.extend_from_slice(state.iota.as_slice());
-    }
-        
-        let instance = KeccakInstance { data: state_data };
+        }
 
-        Box::into_raw(Box::new(instance)) as *mut c_void
+        let mut instance = KeccakInstance { data: state_data };
+       
+        let ptr = instance.data.as_mut_ptr() as *mut c_void;
+        std::mem::forget(instance.data); 
+        ptr
     }
 }
 
@@ -124,12 +126,12 @@ mod tests {
             0x75F644E97F30A13B,
             0xEAF1FF7B5CECA249,
         ];
-        const N : usize = 16;
+        const N: usize = 16;
         let output = output.map(u64::swap_bytes);
         let mut data = [0u64; N * 50];
 
-        for i in 0..N { 
-            data[N * 25 + i * 25 ..N * 25 + i * 25 + 25].copy_from_slice(&output);
+        for i in 0..N {
+            data[N * 25 + i * 25..N * 25 + i * 25 + 25].copy_from_slice(&output);
         }
 
         let ptr: *const [u64] = &data;
