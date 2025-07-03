@@ -54,4 +54,6 @@ func TestKeccakInit(t *testing.T) {
 			t.Errorf("Expected word 600 to be %#x, got %#x", expected, actual)
 		}
 	}
+
+	KeccacheckFree(ptr, 600)
 }

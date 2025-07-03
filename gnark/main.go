@@ -36,7 +36,7 @@ func main() {
 	assignment.Output = 15
 	assignment.gkrProver = KeccacheckInit([]*big.Int{big.NewInt(5)}, []*big.Int{big.NewInt(15)})
 
-	defer KeccacheckFree(assignment.gkrProver)
+	// defer KeccacheckFree(assignment.gkrProver)
 	witness, err := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
 	if err != nil {
 		panic(err)

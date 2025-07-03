@@ -32,10 +32,9 @@ func KeccacheckInit(inputs []*big.Int, outputs []*big.Int) unsafe.Pointer {
 	return C.keccacheck_init(ptr, len)
 }
 
-func KeccacheckFree(ptr unsafe.Pointer) {
-	// Calls rust box dropping so we don't need to know the
-	// size of the memory chunk we are freeing
-	C.keccacheck_free(ptr)
+func KeccacheckFree(ptr unsafe.Pointer, len int) {
+
+	C.keccacheck_free(ptr, C.uintptr_t(len))
 }
 
 // KeccacheckHint is a gnark hint function that calls the C keccacheck_init and keccacheck_free routines.

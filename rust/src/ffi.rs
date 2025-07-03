@@ -75,12 +75,12 @@ pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_v
 /// The pointer must be a valid pointer to a `KeccakInstance` that was created by `keccak_init`.
 /// It must not have been freed already.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn keccacheck_free(ptr: *mut c_void) {
+pub unsafe extern "C" fn keccacheck_free(ptr: *mut c_void, len: usize) {
     if !ptr.is_null() {
-        // Take ownership of the pointer and drop the Box, deallocating the memory.
         unsafe {
-            let _ = Box::from_raw(ptr as *mut KeccakInstance);
-        }
+        let _ = Vec::from_raw_parts(ptr as *mut u64, len, len);
+        // Dropped here: memory freed safely
+    }
     }
 }
 
