@@ -20,12 +20,11 @@ pub struct KeccakInstance {
 pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_void {
     // SAFETY: Caller must ensure ptr is valid for len bytes
     unsafe {
-
         assert_eq!(len % 400, 0);
         let n = len / 400;
+
         // Gets the words from the data at the pointer
         let data: &[u8] = std::slice::from_raw_parts(ptr, len);
-
         let words: Vec<u64> = (0..len / 8)
             .map(|i| {
                 let mut bytes = [0u8; 8];
@@ -36,15 +35,12 @@ pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_v
 
         // Seperate input/output of the KeccakF function
         let (inp, out) = words.split_at(words.len() / 2);
-
         let mut input = vec![0u64; 25 * n];
         input.iter_mut().zip(inp.iter()).for_each(|(s, b)| *s = *b);
-       
-
         let mut output = vec![0u64; 25 * n];
         output.iter_mut().zip(out.iter()).for_each(|(s, b)| *s = *b);
         
-        // Sanity check on the println!("{:?}",input);input and output
+        // Sanity check on the input and output
         for i in 0..n {
             let mut input_i = [0u64; 25];
             input_i.clone_from_slice(&input[25 * i..25 * i + 25]);
@@ -52,19 +48,19 @@ pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_v
             keccak::f1600(&mut input_i);
             assert_eq!(input_i, output_i);
         }
+        
         let mut state_data: Vec<u64> = Vec::with_capacity(600 * n);
 
         for i in 0..n {
             let input_i = &mut input[25 * i..25 * i + 25]; 
-              
             let mut state = KeccakRoundState::at_round(input_i, 0);
-        
             for _ in 0..23 {
                 state_data.extend_from_slice(state.iota.as_slice());
                 state = state.next();
             }
             state_data.extend_from_slice(state.iota.as_slice());
     }
+        
         let instance = KeccakInstance { data: state_data };
 
         Box::into_raw(Box::new(instance)) as *mut c_void
