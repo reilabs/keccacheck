@@ -29,7 +29,26 @@ go run .
 
 Run `RUSTFLAGS='-C target-cpu=native' cargo run --profile=optimized -- {num_variables}`.
 
-`num_variables` must be greater than 6 (a single keccak instance). This will prove $2^{num_variables - 6}$ instances of keccak.
+`num_variables` must be greater than 6 (a single keccak instance). This will prove $2^{numVariables - 6}$ instances of keccak.
+
+**On an M3 Max laptop, the current prove time is 5.3s for 1024 instances of Keccak.** This can probably be further improved to about 4 seconds by smarter parallelizm (not all cores are properly utilized in simpler keccak stages).
+
+```
+INFO     prove [ 5.33s | 0.02% / 100.00% ] num_vars: 16
+INFO     ┝━ calculate_states [ 114ms | 2.14% ]
+INFO     ┕━ prove all rounds [ 5.21s | 93.50% / 97.84% ]
+INFO        ┝━ prove_iota [ 9.54ms | 0.18% ]
+INFO.       ...
+```
+
+### Proof size
+
+| keccak instances | 1    | 2    | 128   | 1024  | n                  |
+|------------------|------|------|-------|-------|--------------------|
+| num variables    | 6    | 7    | 13    | 16    | 6 + log₂(n)        |
+| proof size (felts) | 6241 | 6793 | 10105 | 11761 | 552 * vars + 2929 |
+| proof size (bn254, kB)	| 195	| 212	| 316	| 368 | |
+
 
 ## Keccak definition
 
