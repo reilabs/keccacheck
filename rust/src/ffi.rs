@@ -16,10 +16,11 @@ pub struct KeccakInstance {
 /// The data passed in the argument should be the input and output bits of
 /// a KeccakF function
 /// We construct a buffer that holds the state of all 24 rounds sequentially.
-/// Each round consists of 200 bytes, the total buffer we should return is 4.8 kB
+/// Each round consists of 200 bytes, the total buffer we should return is 4.8 kB * number of instances
 pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_void {
     // SAFETY: Caller must ensure ptr is valid for len bytes
     unsafe {
+
         assert_eq!(len % 400, 0);
         let n = len / 400;
         // Gets the words from the data at the pointer
@@ -56,7 +57,7 @@ pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_v
         for i in 0..n {
             let input_i = &mut input[25 * i..25 * i + 25]; 
               
-            let mut state = KeccakRoundState::at_round(&input_i, 0);
+            let mut state = KeccakRoundState::at_round(input_i, 0);
         
             for _ in 0..23 {
                 state_data.extend_from_slice(state.iota.as_slice());
@@ -134,7 +135,7 @@ mod tests {
         for i in 0..N { 
             data[N * 25 + i * 25 ..N * 25 + i * 25 + 25].copy_from_slice(&output);
         }
-        
+
         let ptr: *const [u64] = &data;
 
         let result: *mut c_void = unsafe { keccacheck_init(ptr as *const u8, N * 400) };
