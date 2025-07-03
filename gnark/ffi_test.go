@@ -3,10 +3,13 @@ package main
 import (
 	"math/big"
 	"testing"
+	"unsafe"
 )
 
 func TestKeccakInit(t *testing.T) {
-	inputs := make([]*big.Int, 25)
+	n := 16
+
+	inputs := make([]*big.Int, 25*n)
 	for i := range inputs {
 		inputs[i] = big.NewInt(0)
 	}
@@ -39,21 +42,23 @@ func TestKeccakInit(t *testing.T) {
 		0xEAF1FF7B5CECA249,
 	}
 
-	outputs := make([]*big.Int, len(outputValues))
-
-	for i, val := range outputValues {
-		outputs[i] = new(big.Int).SetUint64(val)
+	outputs := make([]*big.Int, len(outputValues)*n)
+	for i := range n {
+		for j, val := range outputValues {
+			outputs[i*len(outputValues)+j] = new(big.Int).SetUint64(val)
+		}
 	}
 	ptr := KeccacheckInit(inputs, outputs)
-	words := (*[600]uint64)(ptr)
-
-	for i := range 25 {
-		expected := outputValues[i]
-		actual := words[575+i]
-		if actual != expected {
-			t.Errorf("Expected word 600 to be %#x, got %#x", expected, actual)
+	words := unsafe.Slice((*uint64)(ptr), 600*n)
+	for i := range n {
+		for j := range 25 {
+			expected := outputValues[j]
+			actual := words[600*i+575+j]
+			if actual != expected {
+				t.Errorf("Expected word 600 to be %#x, got %#x", expected, actual)
+			}
 		}
 	}
 
-	KeccacheckFree(ptr, 600)
+	KeccacheckFree(ptr, 600*n)
 }
