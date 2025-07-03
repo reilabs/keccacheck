@@ -20,6 +20,7 @@ pub struct KeccakInstance {
 pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_void {
     // SAFETY: Caller must ensure ptr is valid for len bytes
     unsafe {
+        assert_eq!(len % 400, 0);
         // Gets the words from the data at the pointer
         let data: &[u8] = std::slice::from_raw_parts(ptr, len);
         
@@ -27,7 +28,7 @@ pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_v
             .map(|i| {
                 let mut bytes = [0u8; 8];
                 bytes.copy_from_slice(&data[i * 8..(i + 1) * 8]);
-                u64::from_le_bytes(bytes)
+                u64::from_be_bytes(bytes)
             })
             .collect();
 
@@ -118,7 +119,7 @@ mod tests {
                 0x75F644E97F30A13B,
                 0xEAF1FF7B5CECA249,
             ];
-
+            let output = output.map(u64::swap_bytes);
             let mut data = [0u64;50];
             data[25..].copy_from_slice(&output);
             let ptr : *const [u64] = &data;
@@ -128,7 +129,7 @@ mod tests {
             };
             let instance =unsafe{ &*(result as *const KeccakInstance)};
             
-            assert_eq!(output[0], instance.data[575]);
-            assert_eq!(output[24], instance.data[599])
+            assert_eq!(output[0].swap_bytes(), instance.data[575]);
+            assert_eq!(output[24].swap_bytes(), instance.data[599])
          }
 }
