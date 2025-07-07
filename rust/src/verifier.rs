@@ -75,18 +75,14 @@ fn verify_round(
     sum: Fr,
     rc: u64,
 ) -> (Vec<Fr>, Vec<Fr>) {
-    let instances = 1usize << (num_vars - 6);
-
     // verify iota
-    // TODO: no need to materialize this polynomial
-    let rc = to_poly(&vec![rc; instances]);
-
     let (ve, vrs_iota) = verify_sumcheck::<3>(verifier, num_vars, sum);
     let chi_00 = verifier.read();
     let chi_rlc = verifier.read();
 
     let e_eq = util::eq(alpha, &vrs_iota);
-    let e_rc = eval_mle(&rc, &vrs_iota);
+    let rc = to_poly(&vec![rc; 1]);
+    let e_rc = eval_mle(&rc, &vrs_iota[(vrs_iota.len()-6)..]);
     assert_eq!(e_eq * (beta[0] * xor(chi_00, e_rc) + chi_rlc), ve);
 
     // combine subclaims chi_00 and chi_rlc
