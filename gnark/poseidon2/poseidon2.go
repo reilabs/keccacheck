@@ -16,7 +16,7 @@ func Compress(api frontend.API, input []frontend.Variable, RC16_0 [][16]frontend
 		for i := len(input); i < 16; i++ {
 			state[i] = frontend.Variable(0)
 		}
-		Permute16(api, state, RC16_0, RC16_1, RC16_2)
+		Permute16(api, state)
 		return state[0]
 	} else {
 		var state [16]frontend.Variable
@@ -39,12 +39,15 @@ func Compress(api frontend.API, input []frontend.Variable, RC16_0 [][16]frontend
 		for i := len(input) / chunk; i < 16; i++ {
 			state[i] = frontend.Variable(0)
 		}
-		Permute16(api, state, RC16_0, RC16_1, RC16_2)
+		Permute16(api, state)
 		return state[0]
 	}
 }
 
-func Permute3(api frontend.API, state []frontend.Variable, RC30, RC31, RC32 [][]frontend.Variable) {
+func Permute3(api frontend.API, state []frontend.Variable) {
+	RC30 := parseTwoDimensionArray(first_full_rc3)
+	RC32 := parseTwoDimensionArray(second_full_rc3)
+	RC31 := parseOneDimensionArray(partial_rc3)
 	if len(state) != 3 {
 		panic("permute3 requires state length 3")
 	}
@@ -95,10 +98,11 @@ func Permute3(api frontend.API, state []frontend.Variable, RC30, RC31, RC32 [][]
 }
 
 func Permute16(api frontend.API, state [16]frontend.Variable,
-	RC16_0 [][16]frontend.Variable,
-	RC16_1 []frontend.Variable,
-	RC16_2 [][16]frontend.Variable) {
+) {
 
+	RC16_0 := parseTwoDimensionArray(first_full_rc16)
+	RC16_2 := parseTwoDimensionArray(second_full_rc16)
+	RC16_1 := parseOneDimensionArray(partial_rc16)
 	// Full round
 	MatFull16(api, state)
 
