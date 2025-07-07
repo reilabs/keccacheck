@@ -323,6 +323,7 @@ func MatPartial16(api frontend.API, state [16]frontend.Variable) {
 		state[i] = api.Add(state[i], sum)
 	}
 }
+
 func Sbox(api frontend.API, x frontend.Variable) frontend.Variable {
 	x2 := api.Mul(x, x)
 	x4 := api.Mul(x2, x2)
