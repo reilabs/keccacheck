@@ -12,7 +12,8 @@ import (
 
 // --- TESTS BELOW ---
 
-// TODO add tests for full permute function
+// TODO add tests for Compress function
+
 type sboxCircuit struct {
 	X frontend.Variable
 	Y frontend.Variable `gnark:",public"`
