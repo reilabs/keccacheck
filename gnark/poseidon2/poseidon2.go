@@ -8,7 +8,7 @@ import (
 
 func Compress(api frontend.API, input []frontend.Variable, RC16_0 [][16]frontend.Variable, RC16_1 []frontend.Variable, RC16_2 [][16]frontend.Variable) frontend.Variable {
 	if len(input) <= 16 {
-		var state []frontend.Variable
+		var state [16]frontend.Variable
 		// Fill with input, zero-pad the rest
 		for i := 0; i < len(input); i++ {
 			state[i] = input[i]
@@ -16,10 +16,10 @@ func Compress(api frontend.API, input []frontend.Variable, RC16_0 [][16]frontend
 		for i := len(input); i < 16; i++ {
 			state[i] = frontend.Variable(0)
 		}
-		Permute16(api, state)
+		Permute16(api, &state)
 		return state[0]
 	} else {
-		var state []frontend.Variable
+		var state [16]frontend.Variable
 
 		// Compute largest power of 16 < len(input)
 		n := len(input)
@@ -39,19 +39,15 @@ func Compress(api frontend.API, input []frontend.Variable, RC16_0 [][16]frontend
 		for i := len(input) / chunk; i < 16; i++ {
 			state[i] = frontend.Variable(0)
 		}
-		Permute16(api, state)
+		Permute16(api, &state)
 		return state[0]
 	}
 }
 
-func Permute3(api frontend.API, state [3]frontend.Variable) {
+func Permute3(api frontend.API, state *[3]frontend.Variable) {
 	RC30 := parseTwoDimensionArray(first_full_rc3)
 	RC32 := parseTwoDimensionArray(second_full_rc3)
 	RC31 := parseOneDimensionArray(partial_rc3)
-	if len(state) != 3 {
-		panic("permute3 requires state length 3")
-	}
-
 	MatFull3(api, state)
 
 	// RC3.0 rounds
@@ -97,7 +93,7 @@ func Permute3(api frontend.API, state [3]frontend.Variable) {
 	}
 }
 
-func Permute16(api frontend.API, state []frontend.Variable,
+func Permute16(api frontend.API, state *[16]frontend.Variable,
 ) {
 
 	RC16_0 := parseTwoDimensionArray(first_full_rc16)
@@ -151,11 +147,8 @@ func Permute16(api frontend.API, state []frontend.Variable,
 	}
 }
 
-func MatFull3(api frontend.API, state [3]frontend.Variable) {
+func MatFull3(api frontend.API, state *[3]frontend.Variable) {
 
-	if len(state) != 3 {
-		panic("matFull3 requires state of length 3")
-	}
 	sum := frontend.Variable(0)
 	for _, s := range state {
 		sum = api.Add(sum, s)
@@ -165,7 +158,7 @@ func MatFull3(api frontend.API, state [3]frontend.Variable) {
 	}
 }
 
-func MatFull4(api frontend.API, state []frontend.Variable) {
+func matFull4(api frontend.API, state []frontend.Variable) {
 	if len(state) != 4 {
 		panic("matFull4 requires state of length 4")
 	}
@@ -187,10 +180,7 @@ func MatFull4(api frontend.API, state []frontend.Variable) {
 	state[3] = t4
 }
 
-func MatFull16(api frontend.API, state []frontend.Variable) {
-	if len(state) != 16 {
-		panic("matFull16 requires state of length 16")
-	}
+func MatFull16(api frontend.API, state *[16]frontend.Variable) {
 
 	sum := make([]frontend.Variable, 4)
 	for i := 0; i < 4; i++ {
@@ -201,7 +191,7 @@ func MatFull16(api frontend.API, state []frontend.Variable) {
 	for i := 0; i < 4; i++ {
 		chunk := state[i*4 : (i+1)*4]
 
-		MatFull4(api, chunk)
+		matFull4(api, chunk)
 
 		for j := 0; j < 4; j++ {
 			sum[j] = api.Add(sum[j], chunk[j])
@@ -217,11 +207,7 @@ func MatFull16(api frontend.API, state []frontend.Variable) {
 	}
 }
 
-func MatPartial16(api frontend.API, state []frontend.Variable) {
-	if len(state) != 16 {
-		panic("matPartial16 requires state of length 16")
-	}
-
+func MatPartial16(api frontend.API, state *[16]frontend.Variable) {
 	// Compute sum = Σ state[i]
 	sum := frontend.Variable(0)
 	for i := 0; i < 16; i++ {

@@ -42,15 +42,9 @@ type Permute3Circuit struct {
 }
 
 func (c *Permute3Circuit) Define(api frontend.API) error {
-	// Make a copy of Input slice to permute
-	var permuted [3]frontend.Variable
-	copy(permuted[:], c.Input[:])
-
-	Permute3(api, permuted) // permute in place
-
-	// Assert permuted equals Output
+	Permute3(api, &c.Input)
 	for i := 0; i < 3; i++ {
-		api.AssertIsEqual(permuted[i], c.Output[i])
+		api.AssertIsEqual(c.Input[i], c.Output[i])
 	}
 
 	return nil
@@ -62,17 +56,10 @@ type Permute16Circuit struct {
 }
 
 func (c *Permute16Circuit) Define(api frontend.API) error {
-	// Make a copy of Input slice to permute
-	permuted := make([]frontend.Variable, 16)
-	copy(permuted, c.Input[:])
-
-	Permute16(api, permuted) // permute in place
-
-	// Assert permuted equals Output
+	Permute16(api, &c.Input)
 	for i := 0; i < 16; i++ {
-		api.AssertIsEqual(permuted[i], c.Output[i])
+		api.AssertIsEqual(c.Input[i], c.Output[i])
 	}
-
 	return nil
 }
 

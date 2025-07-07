@@ -55,7 +55,7 @@ func (s *Sponge) absorb(api frontend.API, value frontend.Variable) {
 		s.sponge = Full
 	}
 	if s.sponge == Full|Squeezing {
-		poseidon2.Permute3(api, s.State)
+		poseidon2.Permute3(api, &s.State)
 		s.State[0] = api.Add(value, s.State[0])
 		s.sponge = Absorbing
 	}
@@ -70,7 +70,7 @@ func (s *Sponge) Squeeze(api frontend.API) frontend.Variable {
 		s.sponge = Full
 		return s.State[1]
 	} else {
-		poseidon2.Permute3(api, s.State)
+		poseidon2.Permute3(api, &s.State)
 		s.sponge = Squeezing
 		return s.State[0]
 	}
