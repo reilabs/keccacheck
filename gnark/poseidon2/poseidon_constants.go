@@ -1,5 +1,41 @@
 package poseidon2
 
+import (
+	"fmt"
+	"math/big"
+	"strings"
+)
+
+func parseOneDimensionArray(s string) []*big.Int {
+	ss := strings.ReplaceAll(s, "[", "")
+	ss = strings.ReplaceAll(ss, "]", "")
+	ss = strings.TrimSpace(ss)
+	slist := strings.Split(ss, ",")
+
+	poseidonc := make([]*big.Int, len(slist))
+	for i, v := range slist {
+		temp := strings.TrimPrefix(strings.TrimSpace(v), "0x")
+		c, ok := new(big.Int).SetString(temp, 16)
+		if !ok {
+			panic(fmt.Sprintf("%s -> %s", v, temp))
+		}
+		poseidonc[i] = c
+	}
+	return poseidonc
+}
+
+func parseTwoDimensionArray(s string) [][]*big.Int {
+	ss := strings.TrimSpace(s)
+	ss = strings.ReplaceAll(ss, "\n", "")
+	ss = strings.ReplaceAll(ss, " ", "")
+	ones := strings.Split(ss, "],[")
+	two := make([][]*big.Int, len(ones))
+	for i, s := range ones {
+		two[i] = parseOneDimensionArray(s)
+	}
+	return two
+}
+
 // https://github.com/TaceoLabs/noir-poseidon/blob/main/poseidon2/src/bn254/consts.nr
 
 var first_full_rc = `[
