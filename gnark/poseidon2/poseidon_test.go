@@ -14,42 +14,6 @@ import (
 
 // TODO add tests for Compress function
 
-type sboxCircuit struct {
-	X frontend.Variable
-	Y frontend.Variable `gnark:",public"`
-}
-
-func (c *sboxCircuit) Define(api frontend.API) error {
-	y := Sbox(api, c.X)
-	api.AssertIsEqual(y, c.Y)
-	return nil
-}
-
-type doubleCircuit struct {
-	X frontend.Variable
-	Y frontend.Variable `gnark:",public"`
-}
-
-func (c *doubleCircuit) Define(api frontend.API) error {
-	y := Double(api, c.X)
-	api.AssertIsEqual(y, c.Y)
-	return nil
-}
-
-type Permute3Circuit struct {
-	Input  [3]frontend.Variable `gnark:",public"`
-	Output [3]frontend.Variable `gnark:",public"`
-}
-
-func (c *Permute3Circuit) Define(api frontend.API) error {
-	Permute3(api, &c.Input)
-	for i := 0; i < 3; i++ {
-		api.AssertIsEqual(c.Input[i], c.Output[i])
-	}
-
-	return nil
-}
-
 type Permute16Circuit struct {
 	Input  [16]frontend.Variable `gnark:",public"`
 	Output [16]frontend.Variable `gnark:",public"`
@@ -105,6 +69,21 @@ func TestPermute16(t *testing.T) {
 	assert.ProverSucceeded(&circuit, &witness, test.WithCurves(ecc.BN254), test.WithBackends(backend.GROTH16))
 
 }
+
+type Permute3Circuit struct {
+	Input  [3]frontend.Variable `gnark:",public"`
+	Output [3]frontend.Variable `gnark:",public"`
+}
+
+func (c *Permute3Circuit) Define(api frontend.API) error {
+	Permute3(api, &c.Input)
+	for i := 0; i < 3; i++ {
+		api.AssertIsEqual(c.Input[i], c.Output[i])
+	}
+
+	return nil
+}
+
 func TestPermute3(t *testing.T) {
 	assert := test.NewAssert(t)
 	var state [3]frontend.Variable
@@ -131,33 +110,6 @@ func TestPermute3(t *testing.T) {
 		Input:  state,
 		Output: expected,
 	}
-	assert.ProverSucceeded(&circuit, &witness, test.WithCurves(ecc.BN254), test.WithBackends(backend.GROTH16))
-
-}
-
-func TestSbox(t *testing.T) {
-	assert := test.NewAssert(t)
-
-	var circuit sboxCircuit
-	witness := sboxCircuit{
-		X: 3,
-		Y: 243, // 3^5 = 243
-	}
-
-	// Generate poseidon hash using gnark implementation
-	assert.ProverSucceeded(&circuit, &witness, test.WithCurves(ecc.BN254), test.WithBackends(backend.GROTH16))
-
-}
-
-func TestDouble(t *testing.T) {
-	assert := test.NewAssert(t)
-
-	var circuit doubleCircuit
-	witness := doubleCircuit{
-		X: 7,
-		Y: 14, // 7 * 2 = 14
-	}
-
 	assert.ProverSucceeded(&circuit, &witness, test.WithCurves(ecc.BN254), test.WithBackends(backend.GROTH16))
 
 }
