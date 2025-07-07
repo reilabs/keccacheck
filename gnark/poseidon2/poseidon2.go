@@ -8,7 +8,7 @@ import (
 
 func Compress(api frontend.API, input []frontend.Variable, RC16_0 [][16]frontend.Variable, RC16_1 []frontend.Variable, RC16_2 [][16]frontend.Variable) frontend.Variable {
 	if len(input) <= 16 {
-		var state [16]frontend.Variable
+		var state []frontend.Variable
 		// Fill with input, zero-pad the rest
 		for i := 0; i < len(input); i++ {
 			state[i] = input[i]
@@ -19,7 +19,7 @@ func Compress(api frontend.API, input []frontend.Variable, RC16_0 [][16]frontend
 		Permute16(api, state)
 		return state[0]
 	} else {
-		var state [16]frontend.Variable
+		var state []frontend.Variable
 
 		// Compute largest power of 16 < len(input)
 		n := len(input)
@@ -97,7 +97,7 @@ func Permute3(api frontend.API, state []frontend.Variable) {
 	}
 }
 
-func Permute16(api frontend.API, state [16]frontend.Variable,
+func Permute16(api frontend.API, state []frontend.Variable,
 ) {
 
 	RC16_0 := parseTwoDimensionArray(first_full_rc16)
@@ -188,7 +188,7 @@ func MatFull4(api frontend.API, state []frontend.Variable) {
 	state[3] = t4
 }
 
-func MatFull16(api frontend.API, state [16]frontend.Variable) {
+func MatFull16(api frontend.API, state []frontend.Variable) {
 	if len(state) != 16 {
 		panic("matFull16 requires state of length 16")
 	}
@@ -218,7 +218,7 @@ func MatFull16(api frontend.API, state [16]frontend.Variable) {
 	}
 }
 
-func MatPartial16(api frontend.API, state [16]frontend.Variable) {
+func MatPartial16(api frontend.API, state []frontend.Variable) {
 	if len(state) != 16 {
 		panic("matPartial16 requires state of length 16")
 	}
