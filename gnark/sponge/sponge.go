@@ -3,6 +3,7 @@ package sponge
 import (
 	"fmt"
 	"math/big"
+	"reilabs/keccacheck/poseidon2"
 
 	"github.com/consensys/gnark/frontend"
 )
@@ -41,5 +42,36 @@ func NewSponge(cs frontend.API) *Sponge {
 	return &Sponge{
 		State:  state,
 		sponge: Initial,
+	}
+}
+
+func (s *Sponge) absorb(api frontend.API, value frontend.Variable) {
+	if s.sponge == Initial {
+		s.State[0] = api.Add(value, s.State[0])
+		s.sponge = Absorbing
+	}
+	if s.sponge == Absorbing {
+		s.State[1] = api.Add(value, s.State[1])
+		s.sponge = Full
+	}
+	if s.sponge == Full|Squeezing {
+		poseidon2.Permute3(api, s.State)
+		s.State[0] = api.Add(value, s.State[0])
+		s.sponge = Absorbing
+	}
+
+}
+
+func (s *Sponge) Squeeze(api frontend.API) frontend.Variable {
+	if s.sponge == Initial {
+		s.sponge = Squeezing
+		return s.State[0]
+	} else if s.sponge == Squeezing {
+		s.sponge = Full
+		return s.State[1]
+	} else {
+		poseidon2.Permute3(api, s.State)
+		s.sponge = Squeezing
+		return s.State[0]
 	}
 }

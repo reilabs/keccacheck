@@ -44,7 +44,7 @@ func Compress(api frontend.API, input []frontend.Variable, RC16_0 [][16]frontend
 	}
 }
 
-func Permute3(api frontend.API, state []frontend.Variable) {
+func Permute3(api frontend.API, state [3]frontend.Variable) {
 	RC30 := parseTwoDimensionArray(first_full_rc3)
 	RC32 := parseTwoDimensionArray(second_full_rc3)
 	RC31 := parseOneDimensionArray(partial_rc3)
@@ -151,9 +151,8 @@ func Permute16(api frontend.API, state []frontend.Variable,
 	}
 }
 
-func MatFull3(api frontend.API, state []frontend.Variable) {
-	//TODO consider making this compile time typing check
-	// instead of panicking at runtime
+func MatFull3(api frontend.API, state [3]frontend.Variable) {
+
 	if len(state) != 3 {
 		panic("matFull3 requires state of length 3")
 	}

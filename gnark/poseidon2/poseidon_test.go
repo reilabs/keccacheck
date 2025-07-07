@@ -43,8 +43,8 @@ type Permute3Circuit struct {
 
 func (c *Permute3Circuit) Define(api frontend.API) error {
 	// Make a copy of Input slice to permute
-	permuted := make([]frontend.Variable, 3)
-	copy(permuted, c.Input[:])
+	var permuted [3]frontend.Variable
+	copy(permuted[:], c.Input[:])
 
 	Permute3(api, permuted) // permute in place
 
