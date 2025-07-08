@@ -26,3 +26,17 @@ func EvalMle(api frontend.API, mle []frontend.Variable, r []frontend.Variable) f
 
 	return coeffs[0]
 }
+
+func Eq(api frontend.API, a, b []frontend.Variable) frontend.Variable {
+	if len(a) != len(b) {
+		panic("a and b must have the same length")
+	}
+	res := frontend.Variable(1)
+
+	for i := range a {
+		term1 := api.Mul(a[i], b[i])
+		term2 := api.Mul(api.Sub(1, a[i]), api.Sub(1, b[i]))
+		res = api.Mul(res, api.Add(term1, term2))
+	}
+	return res
+}
