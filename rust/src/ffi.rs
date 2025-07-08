@@ -104,9 +104,9 @@ pub struct KeccacheckResult {
 /// This function is marked `unsafe` because it dereferences a raw pointer and constructs
 /// a slice from it using `std::slice::from_raw_parts`. The caller **must** ensure the following:
 ///
-/// - `ptr` must be non-null and properly aligned for `u64`.
-/// - `ptr` must point to a valid memory region that contains at least `len` contiguous `u64` elements.
-/// - The memory region starting at `ptr` and extending for `len * size_of::<u64>()` bytes must be valid
+/// - `ptr` must be non-null and properly aligned for `u8`.
+/// - `ptr` must point to a valid memory region that contains at least `instances * 8 * 25` contiguous `u8` elements.
+/// - The memory region starting at `ptr` and extending for `len * 8 * 25* size_of::<u8>()` bytes must be valid
 ///   for reads for the lifetime of the call.
 /// - The memory must not be mutated by other threads while this function is executing.
 ///
