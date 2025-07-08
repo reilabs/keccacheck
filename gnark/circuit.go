@@ -1,6 +1,7 @@
 package main
 
 import (
+	"reilabs/keccacheck/sumcheck"
 	"unsafe"
 
 	"github.com/consensys/gnark/frontend"
@@ -41,7 +42,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	beta := make([]frontend.Variable, 25)
 	for i := 0; i < 25; i++ {
 		beta[i] = frontend.Variable(i + 1)
-		alpha = api.Add(alpha, api.Mul(beta[i], evalMle(api, bits[i*64:(i+1)*64], r)))
+		alpha = api.Add(alpha, api.Mul(beta[i], sumcheck.EvalMle(api, bits[i*64:(i+1)*64], r)))
 	}
 
 	api.Println("r:")

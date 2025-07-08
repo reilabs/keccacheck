@@ -1,4 +1,4 @@
-package sponge
+package transcript
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ type Sponge struct {
 	sponge SpongeState
 }
 
-func NewSponge(cs frontend.API) *Sponge {
+func NewSponge() *Sponge {
 	var state [3]frontend.Variable
 
 	for i, s := range initStrings {
