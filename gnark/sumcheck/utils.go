@@ -40,3 +40,21 @@ func Eq(api frontend.API, a, b []frontend.Variable) frontend.Variable {
 	}
 	return res
 }
+
+func ToPoly(api frontend.API, x []uint64) []frontend.Variable {
+	res := make([]frontend.Variable, 0, len(x)*64)
+
+	one := frontend.Variable(1)
+	zero := frontend.Variable(0)
+
+	for _, el := range x {
+		for i := 0; i < 64; i++ {
+			if (el>>i)&1 == 1 {
+				res = append(res, one)
+			} else {
+				res = append(res, zero)
+			}
+		}
+	}
+	return res
+}
