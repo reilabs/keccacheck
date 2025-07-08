@@ -113,12 +113,19 @@ pub struct KeccacheckResult {
 /// Violating any of these requirements results in **undefined behavior**.
 ///
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn keccacheck_prove(ptr: *mut c_void, instances: usize) -> *mut c_void {
+pub unsafe extern "C" fn keccacheck_prove(ptr: *const u8, instances: usize) -> *mut c_void {
     unsafe {
         // Safety: Caller must ensure ptr is valid and instances is correct.
-        let data: &[u64] = std::slice::from_raw_parts(ptr as *const u64, instances);
+        let data: &[u8] = std::slice::from_raw_parts(ptr, instances * 25 * 8);
+        let data: Vec<u64> = (0..instances * 25)
+            .map(|i| {
+                let mut bytes = [0u8; 8];
+                bytes.copy_from_slice(&data[i * 8..(i + 1) * 8]);
+                u64::from_be_bytes(bytes)
+            })
+            .collect();
 
-        let (mut proof, mut input, mut output) = prove(data);
+        let (mut proof, mut input, mut output) = prove(&data);
 
         let proof_ptr = proof.as_mut_ptr() as *mut c_void;
         let input_ptr = input.as_mut_ptr() as *mut c_void;
