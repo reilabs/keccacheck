@@ -6,7 +6,7 @@ import (
 	"github.com/consensys/gnark/frontend"
 )
 
-func Compress(api frontend.API, input []frontend.Variable, RC16_0 [][16]frontend.Variable, RC16_1 []frontend.Variable, RC16_2 [][16]frontend.Variable) frontend.Variable {
+func Compress(api frontend.API, input []frontend.Variable) frontend.Variable {
 	if len(input) <= 16 {
 		var state [16]frontend.Variable
 		// Fill with input, zero-pad the rest
@@ -32,7 +32,7 @@ func Compress(api frontend.API, input []frontend.Variable, RC16_0 [][16]frontend
 			if currentChunkSize > len(input) {
 				currentChunkSize = len(input)
 			}
-			state[i] = Compress(api, input[:currentChunkSize], RC16_0, RC16_1, RC16_2)
+			state[i] = Compress(api, input[:currentChunkSize])
 			input = input[currentChunkSize:]
 		}
 		// Fill remaining slots with zero if less than 16 chunks
