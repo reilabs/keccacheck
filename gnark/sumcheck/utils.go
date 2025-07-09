@@ -1,6 +1,11 @@
 package sumcheck
 
-import "github.com/consensys/gnark/frontend"
+import (
+	"fmt"
+	"math/big"
+
+	"github.com/consensys/gnark/frontend"
+)
 
 func EvalMle(api frontend.API, mle []frontend.Variable, r []frontend.Variable) frontend.Variable {
 	n := len(r)
@@ -41,15 +46,18 @@ func Eq(api frontend.API, a, b []frontend.Variable) frontend.Variable {
 	return res
 }
 
-func ToPoly(api frontend.API, x []uint64) []frontend.Variable {
+func ToPoly(api frontend.API, x []big.Int) []frontend.Variable {
 	res := make([]frontend.Variable, 0, len(x)*64)
 
 	one := frontend.Variable(1)
 	zero := frontend.Variable(0)
 
-	for _, el := range x {
+	for idx, el := range x {
+		if el.BitLen() > 64 {
+			panic(fmt.Sprintf("ToPoly: element at index %d exceeds 64 bits (bit length = %d)", idx, el.BitLen()))
+		}
 		for i := 0; i < 64; i++ {
-			if (el>>i)&1 == 1 {
+			if el.Bit(i) == 1 {
 				res = append(res, one)
 			} else {
 				res = append(res, zero)
