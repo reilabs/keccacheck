@@ -12,18 +12,18 @@ import (
 
 func VerifyKeccakF(api frontend.API, num_vars int, input, output []big.Int, proof []frontend.Variable) {
 	instances := 1 << (num_vars - 6)
-	verifer := transcript.NewVerifier(proof)
+	verifier := transcript.NewVerifier(proof)
 
 	r := make([]frontend.Variable, num_vars)
 
 	for i := range num_vars {
-		r[i] = verifer.Generate(api)
+		r[i] = verifier.Generate(api)
 	}
 
 	beta := make([]frontend.Variable, 25)
 
 	for i := range 25 {
-		beta[i] = verifer.Generate(api)
+		beta[i] = verifier.Generate(api)
 	}
 
 	expected_sum := frontend.Variable(0)
@@ -32,9 +32,32 @@ func VerifyKeccakF(api frontend.API, num_vars int, input, output []big.Int, proo
 		summand := sumcheck.EvalMle(api, sumcheck.ToPoly(api, output[(i*instances):(i*instances+instances)]), r)
 		expected_sum = api.Add(expected_sum, api.Mul(summand, beta[i]))
 	}
-	sum := verifer.Read(api)
+	sum := verifier.Read(api)
 
 	api.AssertIsEqual(sum, expected_sum)
+
+	var iota []frontend.Variable
+
+	for i := 23; i >= 0; i-- {
+		r, iota = VerifyRound(api, verifier, num_vars, &r, &beta, sum, ROUND_CONSTANTS[i])
+
+		if i != 0 {
+			sum = frontend.Variable(0)
+			for j := range beta {
+				beta[j] = verifier.Generate(api)
+				sum = api.Add(api.Mul(beta[j], iota[j]), sum)
+			}
+		}
+	}
+
+	for i := 0; i < 25; i++ {
+		start := i * instances
+		end := start + instances
+		chunk := input[start:end]
+		poly := sumcheck.ToPoly(api, chunk)
+		eval := sumcheck.EvalMle(api, poly, r)
+		api.AssertIsEqual(eval, iota[i])
+	}
 
 }
 
