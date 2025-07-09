@@ -7,12 +7,14 @@ import (
 )
 
 func Compress(api frontend.API, input []frontend.Variable) frontend.Variable {
+
 	if len(input) <= 16 {
 		var state [16]frontend.Variable
 		// Fill with input, zero-pad the rest
 		for i := 0; i < len(input); i++ {
 			state[i] = input[i]
 		}
+
 		for i := len(input); i < 16; i++ {
 			state[i] = frontend.Variable(0)
 		}
@@ -27,6 +29,7 @@ func Compress(api frontend.API, input []frontend.Variable) frontend.Variable {
 		power := 4 * ((log2 - 1) / 4)
 		chunk := 1 << power
 
+		processed := 0
 		for i := 0; i < 16 && len(input) > 0; i++ {
 			currentChunkSize := chunk
 			if currentChunkSize > len(input) {
@@ -34,9 +37,11 @@ func Compress(api frontend.API, input []frontend.Variable) frontend.Variable {
 			}
 			state[i] = Compress(api, input[:currentChunkSize])
 			input = input[currentChunkSize:]
+			processed++
 		}
+
 		// Fill remaining slots with zero if less than 16 chunks
-		for i := len(input) / chunk; i < 16; i++ {
+		for i := processed; i < 16; i++ {
 			state[i] = frontend.Variable(0)
 		}
 		Permute16(api, &state)

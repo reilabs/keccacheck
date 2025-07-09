@@ -12,11 +12,73 @@ import (
 
 // --- TESTS BELOW ---
 
-// TODO add tests for Compress function
+type Compress10000Circuit struct {
+	Input  [10000]frontend.Variable `gnark:",public"`
+	Output frontend.Variable        `gnark:",public"`
+}
+
+func (c *Compress10000Circuit) Define(api frontend.API) error {
+	res := Compress(api, c.Input[:])
+	api.AssertIsEqual(res, c.Output)
+	return nil
+}
+
+func TestCompress10000(t *testing.T) {
+	assert := test.NewAssert(t)
+	var state [10000]frontend.Variable
+	for i := 0; i < 10000; i++ {
+		state[i] = frontend.Variable(uint64(i))
+	}
+	outputString := "14886603848044981475714290163318647373226509781142547401218185586086586147802"
+	n, ok := new(big.Int).SetString(outputString, 10)
+	if !ok {
+		t.Fatalf("failed to parse expected value")
+	}
+
+	var circuit Compress10000Circuit
+	witness := Compress10000Circuit{
+		Input:  state,
+		Output: n,
+	}
+	assert.ProverSucceeded(&circuit, &witness, test.WithCurves(ecc.BN254), test.WithBackends(backend.GROTH16))
+
+}
+
+type Compress100Circuit struct {
+	Input  [100]frontend.Variable `gnark:",public"`
+	Output frontend.Variable      `gnark:",public"`
+}
+
+func (c *Compress100Circuit) Define(api frontend.API) error {
+	res := Compress(api, c.Input[:])
+	api.AssertIsEqual(res, c.Output)
+	return nil
+}
 
 type Permute16Circuit struct {
 	Input  [16]frontend.Variable `gnark:",public"`
 	Output [16]frontend.Variable `gnark:",public"`
+}
+
+func TestCompress100(t *testing.T) {
+	assert := test.NewAssert(t)
+	var state [100]frontend.Variable
+	for i := 0; i < 100; i++ {
+		state[i] = frontend.Variable(uint64(i))
+	}
+	outputString := "12499924002878240429854338251741815095221048573818181736189831611992454862386"
+	n, ok := new(big.Int).SetString(outputString, 10)
+	if !ok {
+		t.Fatalf("failed to parse expected value")
+	}
+
+	var circuit Compress100Circuit
+	witness := Compress100Circuit{
+		Input:  state,
+		Output: n,
+	}
+	assert.ProverSucceeded(&circuit, &witness, test.WithCurves(ecc.BN254), test.WithBackends(backend.GROTH16))
+
 }
 
 func (c *Permute16Circuit) Define(api frontend.API) error {

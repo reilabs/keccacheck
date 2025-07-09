@@ -1,7 +1,16 @@
-use crate::reference::KeccakRoundState;
+use ark_bn254::Fr;
+use reference::KeccakRoundState;
 use std::ffi::c_void;
 
+use crate::prover::prove;
+
+mod poseidon;
 mod reference;
+mod sumcheck;
+mod transcript;
+
+mod prover;
+mod verifier;
 
 #[repr(C)]
 /// Represents the internal Keccak state
@@ -60,11 +69,10 @@ pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_v
             }
             state_data.extend_from_slice(state.iota.as_slice());
         }
-
         let mut instance = KeccakInstance { data: state_data };
-       
+
         let ptr = instance.data.as_mut_ptr() as *mut c_void;
-        std::mem::forget(instance.data); 
+        std::mem::forget(instance.data);
         ptr
     }
 }
@@ -78,20 +86,102 @@ pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_v
 pub unsafe extern "C" fn keccacheck_free(ptr: *mut c_void, len: usize) {
     if !ptr.is_null() {
         unsafe {
-        let _ = Vec::from_raw_parts(ptr as *mut u64, len, len);
-        // Dropped here: memory freed safely
-    }
+            let _ = Vec::from_raw_parts(ptr as *mut u64, len, len);
+            // Dropped here: memory freed safely
+        }
     }
 }
 
-//TODO We need to add a two more FFI functions
-// 1) Keccacheck_prove which will return a proof for the stage specified in an enum
+#[repr(C)]
+pub struct KeccacheckResult {
+    pub proof_ptr: *mut c_void,
+    pub input_ptr: *mut c_void,
+    pub output_ptr: *mut c_void,
+}
 
-// 2) Keccacheck_proof_free which will free memory being used for a proof
+
+/// Constructs a GKR proof of a KeccakF permutation
+/// 
+/// Takes a pointer to a u8 slice representing the input to a KeccakF function
+/// and returns the proof in the form of three pointers:
+/// 1) Pointer to the field elements represetning the proof
+/// 2) Pointer to the input to the function
+/// 3) Pointer to the output of the function
+/// 
+/// # Safety
+///
+/// This function is marked `unsafe` because it dereferences a raw pointer and constructs
+/// a slice from it using `std::slice::from_raw_parts`. The caller **must** ensure the following:
+///
+/// - `ptr` must be non-null and properly aligned for `u8`.
+/// - `ptr` must point to a valid memory region that contains at least `instances * 8 * 25` contiguous `u8` elements.
+/// - The memory region starting at `ptr` and extending for `len * 8 * 25* size_of::<u8>()` bytes must be valid
+///   for reads for the lifetime of the call.
+/// - The memory must not be mutated by other threads while this function is executing.
+///
+/// Violating any of these requirements results in **undefined behavior**.
+///
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn keccacheck_prove(ptr: *const u8, instances: usize) -> *mut c_void {
+    unsafe {
+        // Safety: Caller must ensure ptr is valid and instances is correct.
+        let data: &[u8] = std::slice::from_raw_parts(ptr, instances * 25 * 8);
+        let data: Vec<u64> = (0..instances * 25)
+            .map(|i| {
+                let mut bytes = [0u8; 8];
+                bytes.copy_from_slice(&data[i * 8..(i + 1) * 8]);
+                u64::from_be_bytes(bytes)
+            })
+            .collect();
+
+        let (mut proof, mut input, mut output) = prove(&data);
+
+        let proof_ptr = proof.as_mut_ptr() as *mut c_void;
+        let input_ptr = input.as_mut_ptr() as *mut c_void;
+        let output_ptr = output.as_mut_ptr() as *mut c_void;
+
+        // Prevent Rust from freeing the memory so it can be used by caller
+        std::mem::forget(proof);
+        std::mem::forget(input);
+        std::mem::forget(output);
+
+        let result = Box::new(KeccacheckResult {
+            proof_ptr,
+            input_ptr,
+            output_ptr,
+        });
+        // TODO Consider limiting the output of this function to just the Proof 
+        Box::into_raw(result) as *mut c_void
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn keccacheck_proof_free(
+    proof_ptr: *mut c_void,
+    input_ptr: *mut c_void,
+    output_ptr: *mut c_void,
+    instances: usize,
+) {
+    unsafe {
+        if !input_ptr.is_null() {
+            let len = 25 * instances;
+            // SAFETY: Caller must guarantee that input_ptr was allocated as a Vec<u64> of length len
+            let _ = Vec::from_raw_parts(input_ptr as *mut u64, len, len);
+        }
+        if !output_ptr.is_null() {
+            let len = 25 * instances;
+            let _ = Vec::from_raw_parts(output_ptr as *mut u64, len, len);
+        }
+        //See proof size table in README
+        let vars: usize = 6 + instances.ilog2() as usize;
+        let f_elts: usize = 552 * vars + 2929;
+        let _ = Vec::<Fr>::from_raw_parts(proof_ptr as *mut Fr, f_elts, f_elts);
+    }
+}
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::c_void;
+    use std::{ffi::c_void, slice};
 
     use crate::{KeccakInstance, keccacheck_init};
 
@@ -137,9 +227,22 @@ mod tests {
         let ptr: *const [u64] = &data;
 
         let result: *mut c_void = unsafe { keccacheck_init(ptr as *const u8, N * 400) };
-        let instance = unsafe { &*(result as *const KeccakInstance) };
-
-        assert_eq!(output[0].swap_bytes(), instance.data[575]);
-        assert_eq!(output[24].swap_bytes(), instance.data[599])
+        assert!(!result.is_null());
+        let words: &[u64] = unsafe { slice::from_raw_parts(result as *const u64, 600 * N) };
+        for i in 0..N {
+            for j in 0..25 {
+                let expected = output[j];
+                let actual = words[600 * i + 575 + j];
+                assert_eq!(
+                    actual.swap_bytes(),
+                    expected,
+                    "Mismatch at instance {}, word {}, expected {:016x}, got {:016x}",
+                    i,
+                    575 + j,
+                    expected,
+                    actual
+                );
+            }
+        }
     }
 }

@@ -82,7 +82,7 @@ fn verify_round(
 
     let e_eq = util::eq(alpha, &vrs_iota);
     let rc = to_poly(&vec![rc; 1]);
-    let e_rc = eval_mle(&rc, &vrs_iota[(vrs_iota.len()-6)..]);
+    let e_rc = eval_mle(&rc, &vrs_iota[(vrs_iota.len() - 6)..]);
     assert_eq!(e_eq * (beta[0] * xor(chi_00, e_rc) + chi_rlc), ve);
 
     // combine subclaims chi_00 and chi_rlc
