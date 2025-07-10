@@ -6,6 +6,12 @@ import (
 	"unsafe"
 )
 
+type KeccacheckResult struct {
+	ProofPtr  unsafe.Pointer
+	InputPtr  unsafe.Pointer
+	OutputPtr unsafe.Pointer
+}
+
 func TestKeccakInit(t *testing.T) {
 	n := 16
 
@@ -61,4 +67,30 @@ func TestKeccakInit(t *testing.T) {
 	}
 
 	KeccacheckFree(ptr, 600*n)
+}
+
+func TestKeccakProve(t *testing.T) {
+	n := 16
+
+	inputs := make([]*big.Int, 25*n)
+	for i := range inputs {
+		inputs[i] = big.NewInt(0)
+	}
+
+	ptr := KeccacheckProve(inputs)
+	result := (*KeccacheckResult)(ptr)
+
+	input := getU64Slice(result.InputPtr, 25*n)
+
+	for i := range 25 * n {
+		if input[i] != 0 {
+			t.Errorf("Expected input word  %#x to be 0, got %#x", i, input[i])
+		}
+	}
+
+}
+
+func getU64Slice(ptr unsafe.Pointer, length int) []uint64 {
+	slice := unsafe.Slice((*uint64)(ptr), length)
+	return slice
 }
