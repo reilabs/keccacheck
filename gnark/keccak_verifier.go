@@ -10,7 +10,7 @@ import (
 	"github.com/consensys/gnark/frontend"
 )
 
-func VerifyKeccakF(api frontend.API, num_vars int, input, output []big.Int, proof []frontend.Variable) {
+func VerifyKeccakF(api frontend.API, num_vars int, input, output, proof []frontend.Variable) {
 	instances := 1 << (num_vars - 6)
 	verifier := transcript.NewVerifier(proof)
 
@@ -35,12 +35,10 @@ func VerifyKeccakF(api frontend.API, num_vars int, input, output []big.Int, proo
 	sum := verifier.Read(api)
 
 	api.AssertIsEqual(sum, expected_sum)
-
 	iota := make([]frontend.Variable, 25)
 
 	for i := 23; i >= 0; i-- {
 		r, iota = VerifyRound(api, verifier, num_vars, &r, &beta, sum, ROUND_CONSTANTS[i])
-
 		if i != 0 {
 			sum = frontend.Variable(0)
 			for j := range beta {
@@ -66,12 +64,9 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 
 	chi00 := verifier.Read(api)
 	chiRlc := verifier.Read(api)
-
 	eEq := sumcheck.Eq(api, *alpha, vrsIota)
-
-	rcPoly := sumcheck.ToPoly(api, []big.Int{*big.NewInt(int64(rc))}) // ensure panic if >64 bits
+	rcPoly := sumcheck.ToPoly(api, []frontend.Variable{big.NewInt(0).SetUint64(rc)})
 	eRc := sumcheck.EvalMle(api, rcPoly, vrsIota[len(vrsIota)-6:])
-
 	xorVal := sumcheck.Xor(api, chi00, eRc)
 	inner := api.Add(api.Mul((*beta)[0], xorVal), chiRlc)
 	api.AssertIsEqual(api.Mul(eEq, inner), ve)

@@ -32,20 +32,52 @@ func main() {
 
 	log.Info().Msg("create witness")
 	assignment := KeccakfCircuit{}
-	assignment.Input = 5
-	assignment.Output = 15
-	assignment.gkrProver = KeccacheckInit([]*big.Int{big.NewInt(5)}, []*big.Int{big.NewInt(15)})
 
 	// defer KeccacheckFree(assignment.gkrProver)
 	witness, err := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
 	if err != nil {
 		panic(err)
 	}
+	log_n := 0
+	n := 1 << log_n
+
+	inputs := make([]*big.Int, 25*n)
+	for i := range inputs {
+		inputs[i] = big.NewInt(0)
+	}
+
+	ptr := KeccacheckProve(inputs)
+	result := (*KeccacheckResult)(ptr)
+
+	input := getBigIntSlice(result.InputPtr, 25*n)
+
+	var inputSized [25]big.Int
+
+	for i := 0; i < 25; i++ {
+		inputSized[i].Set(input[i])
+	}
+	output := getBigIntSlice(result.OutputPtr, 25*n)
+
+	var outputSized [25]frontend.Variable
+	for i := 0; i < 25; i++ {
+		outputSized[i] = output[i]
+	}
+	assignment.Output = outputSized
+
+	proof := getFSlice(result.ProofPtr, (552*(log_n+6) + 2929))
+
+	var proofSized [6241]frontend.Variable
+
+	for i := 0; i < 6241; i++ {
+		proofSized[i] = proof[i]
+	}
+
+	assignment.Proof = proofSized
 
 	log.Info().Msg("call groth16.Prove")
-	proof, err := groth16.Prove(r1cs, pk, witness)
-	if err != nil {
-		panic(err)
+	gproof, gerr := groth16.Prove(r1cs, pk, witness)
+	if gerr != nil {
+		panic(gerr)
 	}
 
 	log.Info().Msg("call groth16.Verify")
@@ -53,7 +85,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	err = groth16.Verify(proof, vk, witness)
+	err = groth16.Verify(gproof, vk, witness)
 	if err != nil {
 		panic(err)
 	}

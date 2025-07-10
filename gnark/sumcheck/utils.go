@@ -1,9 +1,6 @@
 package sumcheck
 
 import (
-	"fmt"
-	"math/big"
-
 	"github.com/consensys/gnark/frontend"
 )
 
@@ -46,23 +43,14 @@ func Eq(api frontend.API, a, b []frontend.Variable) frontend.Variable {
 	return res
 }
 
-func ToPoly(api frontend.API, x []big.Int) []frontend.Variable {
+func ToPoly(api frontend.API, x []frontend.Variable) []frontend.Variable {
 	res := make([]frontend.Variable, 0, len(x)*64)
+	for _, el := range x {
+		bits := api.ToBinary(el, 64)
+		// bits[0] = LSB, bits[63] = MSB
 
-	one := frontend.Variable(1)
-	zero := frontend.Variable(0)
-
-	for idx, el := range x {
-		if el.BitLen() > 64 {
-			panic(fmt.Sprintf("ToPoly: element at index %d exceeds 64 bits (bit length = %d)", idx, el.BitLen()))
-		}
-		for i := 0; i < 64; i++ {
-			if el.Bit(i) == 1 {
-				res = append(res, one)
-			} else {
-				res = append(res, zero)
-			}
-		}
+		// If you want LSB-first:
+		res = append(res, bits[:]...)
 	}
 	return res
 }
