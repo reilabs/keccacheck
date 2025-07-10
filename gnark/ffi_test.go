@@ -1,9 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 	"unsafe"
+
+	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 )
 
 type KeccacheckResult struct {
@@ -41,7 +44,8 @@ func TestKeccakInit(t *testing.T) {
 }
 
 func TestKeccakProve(t *testing.T) {
-	n := 16
+	log_n := 1
+	n := 1 << log_n
 
 	inputs := make([]*big.Int, 25*n)
 	for i := range inputs {
@@ -70,11 +74,32 @@ func TestKeccakProve(t *testing.T) {
 			}
 		}
 	}
+	proof := getFSlice(result.ProofPtr, (552*(log_n+6) + 2929))
+
+	fmt.Println(proof[6792].String())
+
 }
 
 func getU64Slice(ptr unsafe.Pointer, length int) []uint64 {
 	slice := unsafe.Slice((*uint64)(ptr), length)
 	return slice
+}
+
+func getFSlice(ptr unsafe.Pointer, length int) []fr.Element {
+	u64slice := getU64Slice(ptr, length*4) // get []uint64
+
+	frSlice := make([]fr.Element, length)
+
+	for i := 0; i < length; i++ {
+		fe := new(big.Int)
+		for j := 3; j >= 0; j-- { // reconstruct little-endian
+			fe.Lsh(fe, 64)
+			fe.Add(fe, new(big.Int).SetUint64(u64slice[i*4+j]))
+		}
+		frSlice[i].SetBigInt(fe) // handles Montgomery reduction
+	}
+
+	return frSlice
 }
 
 // Output values represent the expected output of
