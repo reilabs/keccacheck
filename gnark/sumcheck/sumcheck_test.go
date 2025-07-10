@@ -1,6 +1,7 @@
 package sumcheck
 
 import (
+	"reilabs/keccacheck/transcript"
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -18,8 +19,8 @@ type sumcheckCircuit struct {
 }
 
 func (c *sumcheckCircuit) Define(api frontend.API) error {
-	verifier := NewSCVerifier(c.Proof[:])
-	verifier.VerifySumcheck(api, c.num_polys, c.degree, c.ClaimedSum)
+	verifier := transcript.NewVerifier(c.Proof[:])
+	VerifySumcheck(api, verifier, c.num_polys, c.degree, c.ClaimedSum)
 	return nil
 }
 
