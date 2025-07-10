@@ -36,7 +36,7 @@ func VerifyKeccakF(api frontend.API, num_vars int, input, output []big.Int, proo
 
 	api.AssertIsEqual(sum, expected_sum)
 
-	var iota []frontend.Variable
+	var iota = make([]frontend.Variable, 25)
 
 	for i := 23; i >= 0; i-- {
 		r, iota = VerifyRound(api, verifier, num_vars, &r, &beta, sum, ROUND_CONSTANTS[i])
