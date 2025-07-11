@@ -28,7 +28,7 @@ func VerifySumcheck(api frontend.API, verifier *transcript.Verifier, num_polys i
 		for j := range degree {
 			sum = api.Add(sum, p[j])
 		}
-		p0 := api.Sub(e, api.Mul(half, sum))
+		p0 := api.Mul(half, api.Sub(e, sum))
 
 		// add randomness to randomness vector
 		r := verifier.Generate(api)
