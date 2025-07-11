@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"math/big"
 	"unsafe"
 )
@@ -74,7 +73,6 @@ func FreeProofHint(_ *big.Int, inputs []*big.Int, results []*big.Int) error {
 
 // KeccacheckHint is a gnark hint function that calls the C keccacheck_init and keccacheck_free routines.
 func KeccacheckHint(field *big.Int, inputs, outputs []*big.Int) error {
-	fmt.Println("field elements", len(inputs))
 
 	return nil
 }

@@ -2,7 +2,7 @@ use ark_bn254::Fr;
 use std::ffi::c_void;
 
 use gkr::{prover::prove, reference::KeccakRoundState};
-
+use ark_ff::{BigInteger, PrimeField};
 #[repr(C)]
 /// Represents the internal Keccak state
 pub struct KeccakInstance {
@@ -92,13 +92,13 @@ pub struct KeccacheckResult {
 
 
 /// Constructs a GKR proof of a KeccakF permutation
-/// 
+///
 /// Takes a pointer to a u8 slice representing the input to a KeccakF function
 /// and returns the proof in the form of three pointers:
 /// 1) Pointer to the field elements represetning the proof
 /// 2) Pointer to the input to the function
 /// 3) Pointer to the output of the function
-/// 
+///
 /// # Safety
 ///
 /// This function is marked `unsafe` because it dereferences a raw pointer and constructs
@@ -125,7 +125,11 @@ pub unsafe extern "C" fn keccacheck_prove(ptr: *const u8, instances: usize) -> *
             })
             .collect();
 
-        let (mut proof, mut input, mut output) = prove(&data);
+        let (proof, mut input, mut output) = prove(&data);
+        let mut proof: Vec<u8> = proof
+            .iter()
+            .flat_map(|el| el.into_bigint().to_bytes_le())
+            .collect();
 
         let proof_ptr = proof.as_mut_ptr() as *mut c_void;
         let input_ptr = input.as_mut_ptr() as *mut c_void;
@@ -141,7 +145,7 @@ pub unsafe extern "C" fn keccacheck_prove(ptr: *const u8, instances: usize) -> *
             input_ptr,
             output_ptr,
         });
-        // TODO Consider limiting the output of this function to just the Proof 
+        // TODO Consider limiting the output of this function to just the Proof
         Box::into_raw(result) as *mut c_void
     }
 }

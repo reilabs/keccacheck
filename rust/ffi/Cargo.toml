@@ -10,6 +10,7 @@ crate-type = ["staticlib"]
 ark-bn254.workspace = true
 keccak.workspace = true
 gkr = { path = "../gkr" }
+ark-ff.workspace = true
 
 [build-dependencies]
 cbindgen.workspace = true 
