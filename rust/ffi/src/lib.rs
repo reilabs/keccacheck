@@ -1,16 +1,7 @@
 use ark_bn254::Fr;
-use reference::KeccakRoundState;
 use std::ffi::c_void;
 
-use crate::prover::prove;
-
-mod poseidon;
-mod reference;
-mod sumcheck;
-mod transcript;
-
-mod prover;
-mod verifier;
+use gkr::{prover::prove, reference::KeccakRoundState};
 
 #[repr(C)]
 /// Represents the internal Keccak state
@@ -183,7 +174,7 @@ pub unsafe extern "C" fn keccacheck_proof_free(
 mod tests {
     use std::{ffi::c_void, slice};
 
-    use crate::{KeccakInstance, keccacheck_init};
+    use crate::keccacheck_init;
 
     #[test]
     fn test_keccacheck_init() {
