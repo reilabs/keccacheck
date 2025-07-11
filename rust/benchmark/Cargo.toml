@@ -1,0 +1,15 @@
+[package]
+name = "benchmark"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ark-bn254.workspace = true
+ark-ec.workspace = true
+ark-ff.workspace = true
+hex.workspace = true
+keccak.workspace = true
+gkr = { path = "../gkr" }
+rayon.workspace = true
+tracing.workspace = true
+tracing-forest.workspace = true

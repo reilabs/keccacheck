@@ -1,0 +1,16 @@
+[package]
+name = "keccak"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+ark-bn254.workspace = true
+keccak.workspace = true
+gkr = { path = "../gkr" }
+ark-ff.workspace = true
+
+[build-dependencies]
+cbindgen.workspace = true 

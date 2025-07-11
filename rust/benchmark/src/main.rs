@@ -1,18 +1,7 @@
 use ark_bn254::Fr;
 
-use crate::prover::prove;
-use crate::reference::STATE;
-use crate::sumcheck::util::{eval_mle, to_poly};
-use crate::verifier::verify;
+use gkr::{prover::prove, reference::STATE, sumcheck::util::{eval_mle, to_poly}, verifier::verify};
 use std::env;
-
-mod poseidon;
-mod reference;
-mod sumcheck;
-mod transcript;
-
-mod prover;
-mod verifier;
 
 fn main() {
     tracing_forest::init();
