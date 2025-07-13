@@ -17,6 +17,9 @@ pub struct KeccakInstance {
 /// a KeccakF function
 /// We construct a buffer that holds the state of all 24 rounds sequentially.
 /// Each round consists of 200 bytes, the total buffer we should return is 4.8 kB * number of instances
+/// # Safety
+/// The pointer must be a valid pointer to input words to the KeccakF function
+/// It must not have been freed already.
 pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_void {
     // SAFETY: Caller must ensure ptr is valid for len bytes
     unsafe {
@@ -149,6 +152,25 @@ pub unsafe extern "C" fn keccacheck_prove(ptr: *const u8, instances: usize) -> *
     }
 }
 
+/// # Safety
+///
+/// This function is unsafe because it operates on raw pointers received via FFI,
+/// requiring the caller to uphold several invariants for memory safety:
+///
+/// - `proof_ptr`, `input_ptr`, and `output_ptr` must each be a valid
+///   pointer to memory previously allocated by `keccacheck_proof` (or the corresponding
+///   allocation function) with the same ABI and layout expectations.
+/// - The function will deallocate the memory these pointers reference, so after calling
+///   this function, the pointers must not be used again as they are considered dangling.
+/// - `instances` must match the number of instances originally allocated to ensure
+///   correct deallocation logic. Providing an incorrect `instances` value may result
+///   in undefined behavior, including memory corruption or double free.
+/// - The caller must ensure that no other references (raw or safe) are used to access
+///   or modify the memory pointed to by these pointers during or after the call.
+/// - This function is not thread-safe and must not be called concurrently with any
+///   operation that accesses or modifies the memory these pointers reference.
+///
+/// Violating any of these requirements will result in undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn keccacheck_proof_free(
     proof_ptr: *mut c_void,
