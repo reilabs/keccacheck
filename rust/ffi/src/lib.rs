@@ -1,8 +1,8 @@
 use ark_bn254::Fr;
 use std::ffi::c_void;
 
-use gkr::{prover::prove, reference::KeccakRoundState};
 use ark_ff::{BigInteger, PrimeField};
+use gkr::{prover::prove, reference::KeccakRoundState};
 #[repr(C)]
 /// Represents the internal Keccak state
 pub struct KeccakInstance {
@@ -89,7 +89,6 @@ pub struct KeccacheckResult {
     pub input_ptr: *mut c_void,
     pub output_ptr: *mut c_void,
 }
-
 
 /// Constructs a GKR proof of a KeccakF permutation
 ///

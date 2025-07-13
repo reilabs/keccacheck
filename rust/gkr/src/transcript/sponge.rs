@@ -25,13 +25,13 @@ enum SpongeState {
 
 impl Sponge {
     pub fn new() -> Self {
-     Self {
+        Self {
             state: INITIAL_STATE,
             sponge: SpongeState::Initial,
         }
     }
 
-    pub fn absorb(&mut self, value: Fr) {     
+    pub fn absorb(&mut self, value: Fr) {
         match self.sponge {
             SpongeState::Initial => {
                 self.state[0] += value;
@@ -46,7 +46,7 @@ impl Sponge {
                 self.state[0] += value;
                 self.sponge = SpongeState::Absorbing;
             }
-        } 
+        }
     }
 
     pub fn squeeze(&mut self) -> Fr {
