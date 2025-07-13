@@ -191,9 +191,12 @@ pub fn prove_sumcheck_chi(
         sum = p0 + r * (p1 + r * (p2 + r * (p3 + r * p4)));
     }
     let mut subclaims = Vec::with_capacity(pis.len());
-    for j in 0..pis.len() {
-        transcript.write(pis[j][0]);
-        subclaims.push(pis[j][0]);
+    
+
+
+    for pi in pis.iter() {
+        transcript.write(pi[0]);
+        subclaims.push(pi[0]);
     }
 
     let mut checksum = Fr::zero();
@@ -223,10 +226,10 @@ mod tests {
         let num_vars = 7; // two instances
         let instances = 1usize << (num_vars - 6);
 
-        let mut data = (0..(instances * STATE))
+        let data = (0..(instances * STATE))
             .map(|i| i as u64)
             .collect::<Vec<_>>();
-        let state = keccak_round(&mut data, 0);
+        let state = keccak_round(&data, 0);
 
         let mut prover = Prover::new();
         let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
@@ -250,14 +253,14 @@ mod tests {
 
         let mut pi_sum = Fr::zero();
         for i in 0..25 {
-            for k in 0..(1 << num_vars) {
+            for (k , eq_el) in eq.iter().enumerate() {
                 let e_chi = xor(
                     pi[i][k],
                     (Fr::one() - pi[add_col(i, 1)][k]) * pi[add_col(i, 2)][k],
                 );
                 assert_eq!(chi[i][k], e_chi);
 
-                pi_sum += beta[i] * eq[k] * e_chi;
+                pi_sum += beta[i] * eq_el * e_chi;
             }
         }
         assert_eq!(pi_sum, real_chi_sum);
@@ -279,9 +282,7 @@ mod tests {
                 for k in 0..(1 << (num_vars - step - 1)) {
                     let under_sum = to_poly(&[k])[0..(num_vars - step - 1)].to_vec();
                     let mut eval = vec![Fr::zero(); step + 1];
-                    for k in 0..step {
-                        eval[k] = proof.r[k];
-                    }
+                    eval[..step].copy_from_slice(&proof.r[..step]);
                     eval[step] = Fr::zero();
                     eval.extend_from_slice(&under_sum);
                     assert_eq!(eval.len(), num_vars);
