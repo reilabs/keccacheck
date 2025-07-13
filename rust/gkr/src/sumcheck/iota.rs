@@ -59,7 +59,7 @@ pub fn prove_iota(
                 .enumerate()
                 .for_each(|(chunk, slice)| {
                     // iterating from 1 to skip the first state element (i, j) = (0, 0)
-                   for chi in chi_poly.iter().take(25).skip(1) {
+                    for chi in chi_poly.iter().take(25).skip(1) {
                         for (x, v) in slice.iter_mut().enumerate() {
                             let i = chunk * chunk_size + x;
                             *v += chi[i];
@@ -123,7 +123,6 @@ pub fn prove_iota(
 /// Sumcheck for $\sum_x e(x) ⋅ (\beta ⋅ xor(a(x), b(x)) + c(x))$.
 /// Returns $(e, r)$ for reduced claim $e = e(r) ⋅ (\beta ⋅ xor(a(r), b(r)) + c(r))$.
 #[instrument(skip_all)]
-#[allow(clippy::too_many_arguments)]
 pub fn prove_sumcheck_iota(
     transcript: &mut Prover,
     size: usize,
@@ -240,7 +239,7 @@ mod tests {
         let num_vars = 7; // two instances
         let instances = 1usize << (num_vars - 6);
 
-        let  data = (0..(instances * STATE))
+        let data = (0..(instances * STATE))
             .map(|i| i as u64)
             .collect::<Vec<_>>();
         let state = keccak_round(&data, 0);
@@ -253,7 +252,7 @@ mod tests {
         let chi_00 = to_poly(&state.pi_chi[0..instances]);
         let rc = to_poly(&vec![ROUND_CONSTANTS[0]; instances]);
         let mut chi_rlc = vec![Fr::zero(); 1 << num_vars];
-        for (el, b)  in beta.iter().enumerate().take(25).skip(1) {
+        for (el, b) in beta.iter().enumerate().take(25).skip(1) {
             // iterating from 1 to skip the first state element (i, j) = (0, 0)
             let slice = &state.pi_chi[(el * instances)..(el * instances + instances)];
             let poly = to_poly(slice);

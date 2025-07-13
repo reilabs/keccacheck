@@ -142,9 +142,9 @@ pub fn prove_sumcheck_rho(
         sum = p0 + r * (p1 + r * p2);
     }
     let mut subclaims = Vec::with_capacity(thetas.len());
-    for j in 0..thetas.len() {
-        transcript.write(thetas[j][0]);
-        subclaims.push(thetas[j][0]);
+    for theta in thetas.iter() {
+        transcript.write(theta[0]);
+        subclaims.push(theta[0]);
     }
 
     // check result
@@ -174,10 +174,10 @@ mod tests {
         let num_vars = 7; // two instances
         let instances = 1usize << (num_vars - 6);
 
-        let mut data = (0..(instances * STATE))
+        let data = (0..(instances * STATE))
             .map(|i| i as u64)
             .collect::<Vec<_>>();
-        let state = keccak_round(&mut data, 0);
+        let state = keccak_round(&data, 0);
 
         let mut prover = Prover::new();
         let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();

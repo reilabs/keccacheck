@@ -155,9 +155,9 @@ pub fn prove_sumcheck_theta_a(
     }
 
     let mut subclaims = Vec::with_capacity(aij.len());
-    for j in 0..aij.len() {
-        transcript.write(aij[j][0]);
-        subclaims.push(aij[j][0]);
+    for ai in aij.iter() {
+        transcript.write(ai[0]);
+        subclaims.push(ai[0]);
     }
 
     // check result
@@ -190,10 +190,10 @@ mod test {
         let num_vars = 7; // two instances
         let instances = 1usize << (num_vars - 6);
 
-        let mut data = (0..(instances * STATE))
+        let data = (0..(instances * STATE))
             .map(|i| i as u64)
             .collect::<Vec<_>>();
-        let state = keccak_round(&mut data, 0);
+        let state = keccak_round(&data, 0);
 
         let mut prover = Prover::new();
         let alpha_a = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();

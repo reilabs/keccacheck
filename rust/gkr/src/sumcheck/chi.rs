@@ -191,8 +191,6 @@ pub fn prove_sumcheck_chi(
         sum = p0 + r * (p1 + r * (p2 + r * (p3 + r * p4)));
     }
     let mut subclaims = Vec::with_capacity(pis.len());
-    
-
 
     for pi in pis.iter() {
         transcript.write(pi[0]);
@@ -253,7 +251,7 @@ mod tests {
 
         let mut pi_sum = Fr::zero();
         for i in 0..25 {
-            for (k , eq_el) in eq.iter().enumerate() {
+            for (k, eq_el) in eq.iter().enumerate() {
                 let e_chi = xor(
                     pi[i][k],
                     (Fr::one() - pi[add_col(i, 1)][k]) * pi[add_col(i, 2)][k],
