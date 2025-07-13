@@ -1,5 +1,4 @@
 /rust/target
 Cargo.lock
 /.idea
-gnark/libkeccak.a
 rust/ffi/bindings.h
