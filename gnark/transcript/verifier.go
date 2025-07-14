@@ -29,6 +29,12 @@ func (v *Verifier) Read(api frontend.API) frontend.Variable {
 	return value
 }
 
+// Read reveals the next value and absorbs it into the sponge.
+func (v *Verifier) Absorb(api frontend.API, value frontend.Variable) frontend.Variable {
+	v.sponge.absorb(api, value)
+	return value
+}
+
 // Reveal gets the next element from the proof slice.
 func (v *Verifier) Reveal() frontend.Variable {
 	if v.index >= len(v.Proof) {

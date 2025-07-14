@@ -29,6 +29,13 @@ pub fn prove(data: &[u64]) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
 
     let mut prover = Prover::new();
 
+    for i in state[23].iota.iter() {
+        prover.absorb((*i).into());
+    }
+
+    for i in state[0].a.iter() {
+        prover.absorb((*i).into());
+    }
     let span = tracing::span!(tracing::Level::INFO, "prove all rounds").entered();
 
     // TODO: feed output to the prover before obtaining alpha

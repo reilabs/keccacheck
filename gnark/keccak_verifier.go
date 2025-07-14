@@ -14,6 +14,14 @@ func VerifyKeccakF(api frontend.API, num_vars int, input, output, proof []fronte
 	instances := 1 << (num_vars - 6)
 	verifier := transcript.NewVerifier(proof)
 
+	for _, o := range output {
+		verifier.Absorb(api, o)
+	}
+
+	for _, i := range input {
+		verifier.Absorb(api, i)
+	}
+
 	r := make([]frontend.Variable, num_vars)
 
 	for i := range num_vars {
