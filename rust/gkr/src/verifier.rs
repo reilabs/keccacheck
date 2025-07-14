@@ -15,7 +15,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     // TODO: feed output to the verifier before obtaining alpha
     let span = tracing::span!(Level::INFO, "calculate output sum").entered();
 
-let mut r = Vec::with_capacity(num_vars);
+    let mut r = Vec::with_capacity(num_vars);
     r.push(Fr::ONE);
     for _ in 1..num_vars {
         r.push(verifier.generate());

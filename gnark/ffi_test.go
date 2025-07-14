@@ -32,7 +32,7 @@ func TestKeccakProve(t *testing.T) {
 	log_n := 1
 	n := 1 << log_n
 
-	inputs := make([]*big.Int, 25*n)
+	inputs := make([]*big.Int, 25*n+1)
 	for i := range inputs {
 		inputs[i] = big.NewInt(0)
 	}
@@ -44,7 +44,7 @@ func TestKeccakProve(t *testing.T) {
 
 	for i := range 25 * n {
 		if input[i] != 0 {
-			t.Errorf("Expected input word  %#x to be 0, got %#x", i, input[i])
+			t.Errorf("Expected input word  %#v to be 0, got %#x", i, input[i])
 		}
 	}
 
@@ -55,7 +55,7 @@ func TestKeccakProve(t *testing.T) {
 			expected := outputValues[j]
 			actual := output[j*n+i]
 			if actual != expected {
-				t.Errorf("Expected word to be %#x, got %#x", expected, actual)
+				t.Errorf("Expected word  %#v to be %#x, got %#x", j*n+i, expected, actual)
 			}
 		}
 	}
