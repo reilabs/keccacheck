@@ -5,16 +5,12 @@ import (
 )
 
 type KeccakfCircuit struct {
-	Input [25]frontend.Variable `gnark:",public"`
+	Input  [25]frontend.Variable `gnark:",public"`
+	Output [25]frontend.Variable `gnark:",public"`
 }
 
 // Main Verifier circuit definition
 func (circuit *KeccakfCircuit) Define(api frontend.API) error {
-	state_words, err := api.Compiler().NewHint(KeccacheckInitHint, 600, circuit.Input[:]...)
-
-	if err != nil {
-		panic("Failed at keccak initialisation")
-	}
 
 	commiter, ok := api.(frontend.Committer)
 
@@ -22,7 +18,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 		panic("unable to initialise committer")
 	}
 
-	r_0, err := commiter.Commit(state_words[575:600]...)
+	r_0, err := commiter.Commit(circuit.Output[:]...)
 
 	if err != nil {
 		panic("was not able to commit to the outputs")
@@ -34,6 +30,6 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 		panic("failed to generate proof hint")
 	}
 
-	VerifyKeccakF(api, 6, circuit.Input[:], state_words[575:600], proof, r_0)
+	VerifyKeccakF(api, 6, circuit.Input[:], circuit.Output[:], proof, r_0)
 	return nil
 }

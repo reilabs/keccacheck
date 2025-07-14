@@ -3,6 +3,7 @@ package main
 import (
 	"math/big"
 	"testing"
+	"unsafe"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend"
@@ -14,7 +15,6 @@ import (
 func TestKeccakVerify(t *testing.T) {
 	assert := test.NewAssert(t)
 
-	solver.RegisterHint(KeccacheckInitHint)
 	solver.RegisterHint(KeccacheckProveHint)
 
 	log_n := 0
@@ -25,18 +25,25 @@ func TestKeccakVerify(t *testing.T) {
 		inputs[i] = big.NewInt(0)
 	}
 
-	// Size them to fixed arrays
 	var inputSized [25]frontend.Variable
-
 	for i := 0; i < 25; i++ {
 		inputSized[i] = inputs[i]
 
 	}
 
+	output_ptr := KeccacheckInit(inputs)
+	words := unsafe.Slice((*uint64)(output_ptr), 600)
+
+	var outputSized [25]frontend.Variable
+	for i := 0; i < 25; i++ {
+		outputSized[i] = words[575+i]
+	}
+
 	// Prepare the witness and empty circuit
 	circuit := KeccakfCircuit{}
 	witness := KeccakfCircuit{
-		Input: inputSized,
+		Input:  inputSized,
+		Output: outputSized,
 	}
 
 	// Assert the prover succeeds with given backend and curve
