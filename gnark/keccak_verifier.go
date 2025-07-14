@@ -10,22 +10,15 @@ import (
 	"github.com/consensys/gnark/frontend"
 )
 
-func VerifyKeccakF(api frontend.API, num_vars int, input, output, proof []frontend.Variable) {
+func VerifyKeccakF(api frontend.API, num_vars int, input, output, proof []frontend.Variable, r_0 frontend.Variable) {
 	instances := 1 << (num_vars - 6)
 	verifier := transcript.NewVerifier(proof)
 
-	for _, o := range output {
-		verifier.Absorb(api, o)
-	}
-
-	for _, i := range input {
-		verifier.Absorb(api, i)
-	}
-
 	r := make([]frontend.Variable, num_vars)
 
-	for i := range num_vars {
-		r[i] = verifier.Generate(api)
+	r[0] = r_0
+	for i := range num_vars - 1 {
+		r[i+1] = verifier.Generate(api)
 	}
 
 	beta := make([]frontend.Variable, 25)

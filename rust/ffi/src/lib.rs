@@ -13,7 +13,7 @@ pub struct KeccakInstance {
 /// Returns a C style generic pointer to a KeccakInstance
 /// We use this to maintain a referencable Keccak internal state
 /// for all 24 rounds
-/// The data passed in the argument should be the input and output bits of
+/// The data passed in the argument should be the input bits of
 /// a KeccakF function
 /// We construct a buffer that holds the state of all 24 rounds sequentially.
 /// Each round consists of 200 bytes, the total buffer we should return is 4.8 kB * number of instances
@@ -23,8 +23,10 @@ pub struct KeccakInstance {
 pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_void {
     // SAFETY: Caller must ensure ptr is valid for len bytes
     unsafe {
-        assert_eq!(len % 400, 0);
-        let n = len / 400;
+        // We need a multiple of 200 bytes as input consists of 25 words of
+        // 8 bytes each
+        assert_eq!(len % 200, 0);
+        let n = len / 200;
 
         // Gets the words from the data at the pointer
         let data: &[u8] = std::slice::from_raw_parts(ptr, len);
@@ -36,22 +38,13 @@ pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_v
             })
             .collect();
 
-        // Seperate input/output of the KeccakF function
-        let (inp, out) = words.split_at(words.len() / 2);
         let mut input = vec![0u64; 25 * n];
-        input.iter_mut().zip(inp.iter()).for_each(|(s, b)| *s = *b);
-        let mut output = vec![0u64; 25 * n];
-        output.iter_mut().zip(out.iter()).for_each(|(s, b)| *s = *b);
+        input
+            .iter_mut()
+            .zip(words.iter())
+            .for_each(|(s, b)| *s = *b);
 
-        // Sanity check on the input and output
-        for i in 0..n {
-            let mut input_i = [0u64; 25];
-            input_i.clone_from_slice(&input[25 * i..25 * i + 25]);
-            let output_i = &output[25 * i..25 * i + 25];
-            keccak::f1600(&mut input_i);
-            assert_eq!(input_i, output_i);
-        }
-
+        // For each instance we have 25 * 24 = 600 words
         let mut state_data: Vec<u64> = Vec::with_capacity(600 * n);
 
         for i in 0..n {
@@ -63,6 +56,7 @@ pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_v
             }
             state_data.extend_from_slice(state.iota.as_slice());
         }
+
         let mut instance = KeccakInstance { data: state_data };
 
         let ptr = instance.data.as_mut_ptr() as *mut c_void;
@@ -115,7 +109,11 @@ pub struct KeccacheckResult {
 /// Violating any of these requirements results in **undefined behavior**.
 ///
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn keccacheck_prove(ptr: *const u8, instances: usize) -> *mut c_void {
+pub unsafe extern "C" fn keccacheck_prove(
+    ptr: *const u8,
+    instances: usize,
+    r_0_ptr: *const u8,
+) -> *mut c_void {
     unsafe {
         // Safety: Caller must ensure ptr is valid and instances is correct.
         let data: &[u8] = std::slice::from_raw_parts(ptr, instances * 25 * 8);
@@ -126,8 +124,10 @@ pub unsafe extern "C" fn keccacheck_prove(ptr: *const u8, instances: usize) -> *
                 u64::from_be_bytes(bytes)
             })
             .collect();
-
-        let (proof, mut input, mut output) = prove(&data);
+        
+        let r_0_bytes: &[u8] = std::slice::from_raw_parts(r_0_ptr, 32);
+        let r_0 = Fr::from_be_bytes_mod_order(r_0_bytes);
+        let (proof, mut input, mut output) = prove(&data, r_0);
         let mut proof: Vec<u8> = proof
             .iter()
             .flat_map(|el| el.into_bigint().to_bytes_le())

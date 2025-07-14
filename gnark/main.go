@@ -15,7 +15,7 @@ func main() {
 	log := logger.Logger()
 
 	log.Info().Msg("initialize Rust prover")
-	solver.RegisterHint(KeccacheckHint)
+	solver.RegisterHint(KeccacheckInitHint)
 
 	log.Info().Msg("call frontend.Compile")
 	var circuit KeccakfCircuit
@@ -56,23 +56,6 @@ func main() {
 	for i := 0; i < 25; i++ {
 		inputSized[i].Set(input[i])
 	}
-	output := getBigIntSlice(result.OutputPtr, 25*n)
-
-	var outputSized [25]frontend.Variable
-	for i := 0; i < 25; i++ {
-		outputSized[i] = output[i]
-	}
-	assignment.Output = outputSized
-
-	proof := getFSlice(result.ProofPtr, (552*(log_n+6) + 2929))
-
-	var proofSized [6241]frontend.Variable
-
-	for i := 0; i < 6241; i++ {
-		proofSized[i] = proof[i]
-	}
-
-	assignment.Proof = proofSized
 
 	log.Info().Msg("call groth16.Prove")
 	gproof, gerr := groth16.Prove(r1cs, pk, witness)

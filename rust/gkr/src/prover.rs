@@ -13,8 +13,9 @@ use ark_ff::{One, Zero};
 use tracing::instrument;
 
 #[instrument(skip_all, fields(num_vars=(6 + (data.len() / 25).ilog2())))]
-pub fn prove(data: &[u64]) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
+pub fn prove(data: &[u64], r_0: Fr) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     let instances = data.len() / 25;
+  
     let num_vars = 6 + instances.ilog2() as usize;
 
     let data = data.to_vec();
@@ -29,17 +30,17 @@ pub fn prove(data: &[u64]) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
 
     let mut prover = Prover::new();
 
-    for i in state[23].iota.iter() {
-        prover.absorb((*i).into());
-    }
-
-    for i in state[0].a.iter() {
-        prover.absorb((*i).into());
-    }
     let span = tracing::span!(tracing::Level::INFO, "prove all rounds").entered();
 
     // TODO: feed output to the prover before obtaining alpha
-    let mut r = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
+    let mut r = Vec::with_capacity(num_vars);
+    r.push(r_0);
+    
+    for _ in 1..num_vars {
+        r.push(prover.read());
+    }
+
+
     let mut beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
     // write final output sum
@@ -52,7 +53,7 @@ pub fn prove(data: &[u64]) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
             beta[i] * eval_mle(&poly, &r)
         })
         .sum();
-
+    println!("sum at rust prover {:?}",sum);
     prover.write(sum);
     for round in (0..24).rev() {
         let previous_proof = prove_round(

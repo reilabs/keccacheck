@@ -13,13 +13,7 @@ func TestKeccakInit(t *testing.T) {
 	for i := range inputs {
 		inputs[i] = big.NewInt(0)
 	}
-	outputs := make([]*big.Int, len(outputValues)*n)
-	for i := range n {
-		for j, val := range outputValues {
-			outputs[i*len(outputValues)+j] = new(big.Int).SetUint64(val)
-		}
-	}
-	ptr := KeccacheckInit(inputs, outputs)
+	ptr := KeccacheckInit(inputs)
 	words := unsafe.Slice((*uint64)(ptr), 600*n)
 	for i := range n {
 		for j := range 25 {

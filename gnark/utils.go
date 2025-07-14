@@ -45,3 +45,20 @@ func getFSlice(ptr unsafe.Pointer, length int) []frontend.Variable {
 
 	return variables
 }
+
+func getBigInt4Slice(ptr unsafe.Pointer, length int) []*big.Int {
+	u64slice := getU64Slice(ptr, length*4) // assuming each big.Int is 4 uint64s
+
+	bigInts := make([]*big.Int, length)
+
+	for i := 0; i < length; i++ {
+		fe := new(big.Int)
+		for j := 3; j >= 0; j-- { // little-endian
+			fe.Lsh(fe, 64)
+			fe.Add(fe, new(big.Int).SetUint64(u64slice[i*4+j]))
+		}
+		bigInts[i] = fe
+	}
+
+	return bigInts
+}

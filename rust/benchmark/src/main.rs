@@ -1,5 +1,6 @@
 use ark_bn254::Fr;
 
+use ark_ff::Field;
 use gkr::{
     prover::prove,
     reference::STATE,
@@ -24,7 +25,10 @@ fn main() {
     let data = (0..(instances * STATE))
         .map(|i| i as u64)
         .collect::<Vec<_>>();
-    let (proof, input, output) = prove(&data);
+
+    // This is wrong and will fail
+    // TODO change the argument that we feed to the prover to verifier generated randomness
+    let (proof, input, output) = prove(&data, Fr::ONE);
     verify(num_vars, &output, &input, &proof);
 
     let mut reference_input: [u64; 25] = [0; 25];

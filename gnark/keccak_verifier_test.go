@@ -6,12 +6,16 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend"
+	"github.com/consensys/gnark/constraint/solver"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/test"
 )
 
 func TestKeccakVerify(t *testing.T) {
 	assert := test.NewAssert(t)
+
+	solver.RegisterHint(KeccacheckInitHint)
+	solver.RegisterHint(KeccacheckProveHint)
 
 	log_n := 0
 	n := 1 << log_n
@@ -21,39 +25,18 @@ func TestKeccakVerify(t *testing.T) {
 		inputs[i] = big.NewInt(0)
 	}
 
-	// Call prover and get result
-	ptr := KeccacheckProve(inputs)
-	result := (*KeccacheckResult)(ptr)
-
-	// Convert input and output from result
-	input := getBigIntSlice(result.InputPtr, 25*n)
-	output := getBigIntSlice(result.OutputPtr, 25*n)
-
 	// Size them to fixed arrays
 	var inputSized [25]frontend.Variable
-	var outputSized [25]frontend.Variable
+
 	for i := 0; i < 25; i++ {
-		inputSized[i] = input[i]
-		outputSized[i] = output[i]
-	}
+		inputSized[i] = inputs[i]
 
-	proofSize := 552*(log_n+6) + 2929
-	proof := getFSlice(result.ProofPtr, proofSize)
-
-	var proofSized [6241]frontend.Variable
-	if len(proof) != 6241 {
-		t.Fatalf("Expected proof size 6241, but got %d", len(proof))
-	}
-	for i := 0; i < 6241; i++ {
-		proofSized[i] = proof[i]
 	}
 
 	// Prepare the witness and empty circuit
 	circuit := KeccakfCircuit{}
 	witness := KeccakfCircuit{
-		Input:  inputSized,
-		Output: outputSized,
-		Proof:  proofSized,
+		Input: inputSized,
 	}
 
 	// Assert the prover succeeds with given backend and curve
