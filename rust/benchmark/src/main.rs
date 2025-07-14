@@ -27,7 +27,7 @@ fn main() {
         .collect::<Vec<_>>();
 
     // TODO Put a proper commitment here instead putting in constant
-    let (proof, input, output) = prove(&data, Fr::ONE);
+    let (proof, input, output) = prove(&data, Fr::from(12345));
     verify(num_vars, &output, &input, &proof);
 
     let mut reference_input: [u64; 25] = [0; 25];
