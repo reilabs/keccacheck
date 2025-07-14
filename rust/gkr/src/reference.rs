@@ -19,10 +19,10 @@ pub fn apply_pi<T: Copy>(rho: &[T], pi: &mut [T]) {
     // }
 
     let mut last = instances..(instances + instances);
-    for i in 0..24 {
+    for pi_elem in PI.iter() {
         // i+1 is the source position (skipping 0,0)
         // PI[i] is the target position
-        let range = (instances * PI[i])..(instances * (PI[i] + 1));
+        let range = (instances * pi_elem)..(instances * (pi_elem + 1));
         pi[range.clone()].copy_from_slice(&rho[last]);
         last = range;
         // pi[PI[i]] = rho[i + 1];
@@ -37,10 +37,10 @@ pub fn strip_pi<T: Copy>(pi: &[T], rho: &mut [T]) {
     // Position (0,0) doesn't change
     // For all other positions, use the PI mapping
     let mut last = instances..(instances + instances);
-    for i in 0..24 {
+    for pi_elem in PI.iter() {
         // i+1 is the source position (skipping 0,0)
         // PI[i] is the target position
-        let range = (instances * PI[i])..(instances * (PI[i] + 1));
+        let range = (instances * pi_elem)..(instances * (pi_elem + 1));
         rho[last].copy_from_slice(&pi[range.clone()]);
         last = range;
         // rho[i + 1] = pi[PI[i]];
@@ -139,9 +139,9 @@ pub fn keccak_round(a_t: &[u64], round: usize) -> KeccakRoundState {
     // Rho
     // Apply rotation to each lane
     for i in 0..instances {
-        for x in 0..25 {
+        for (x, rho_offset) in RHO_OFFSETS.iter().enumerate() {
             result.rho[x * instances + i] =
-                result.theta[x * instances + i].rotate_left(RHO_OFFSETS[x]);
+                result.theta[x * instances + i].rotate_left(*rho_offset);
             // println!("last {} rot {} -> {}", result.theta[x * instances + i], RHO_OFFSETS[x], result.rho[x * instances + i]);
         }
     }

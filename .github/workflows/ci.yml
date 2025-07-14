@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'rust/**'
+      - 'gnark/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'rust/**'
+      - 'gnark/**'
+
+jobs:
+  ci:
+    name: Rust + Go CI
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # -----------------------------
+      # Rust Setup and Checks
+      # -----------------------------
+      - name: Install Rust (fmt + clippy + test)
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Rust Format Check
+        working-directory: rust
+        run: cargo fmt --all -- --check
+
+      - name: Rust Clippy Lint
+        working-directory: rust
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      
+
+      - name: Rust Tests
+        working-directory: rust
+        run: cargo test --all
+      
+      - name: Rust Build
+        working-directory: rust
+        run: cargo build
+      # -----------------------------
+      # Go Setup and Checks
+      # -----------------------------
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run Makefile
+        working-directory: gnark
+        run: make
+
+      - name: Go Format Check
+        working-directory: gnark
+        run: |
+          fmt_output=$(go fmt ./...)
+          if [ -n "$fmt_output" ]; then
+            echo "Go formatting issues found:"
+            echo "$fmt_output"
+            exit 1
+          fi
+
+      - name: Go Vet
+        working-directory: gnark
+        run: go vet -unsafeptr=false ./...
+
+      - name: Go Tests
+        working-directory: gnark
+        run: go test ./...

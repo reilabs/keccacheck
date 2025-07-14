@@ -1,6 +1,11 @@
 use ark_bn254::Fr;
 
-use gkr::{prover::prove, reference::STATE, sumcheck::util::{eval_mle, to_poly}, verifier::verify};
+use gkr::{
+    prover::prove,
+    reference::STATE,
+    sumcheck::util::{eval_mle, to_poly},
+    verifier::verify,
+};
 use std::env;
 
 fn main() {
@@ -29,7 +34,7 @@ fn main() {
             reference_input[j] = input[j * instances + i];
             reference_output[j] = output[j * instances + i];
         }
-        let mut buf = reference_input.clone();
+        let mut buf = reference_input;
         keccak::f1600(&mut buf);
         assert_eq!(buf, reference_output);
     }
@@ -46,5 +51,5 @@ fn main() {
         Fr::from(7),
     ];
     let eval = eval_mle(&poly, &r);
-    println!("poly {:?} r {:?} eval {:?}", poly, r, eval);
+    println!("poly {poly:?} r {r:?} eval {eval:?}");
 }

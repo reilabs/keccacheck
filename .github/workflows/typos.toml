@@ -1,0 +1,60 @@
+# typos.toml
+
+# Apply these settings to all files by default
+[default]
+
+# Extend the default list of words to ignore
+extend-words = [
+    "uint",          # common in Rust/Go
+    "usize",         # Rust
+    "vec",           # Rust
+    "cli",           # command-line interfaces
+    "stdin",         # standard input
+    "stdout",        # standard output
+    "stderr",        # standard error
+    "sha",           # hashes
+    "ecdsa",         # crypto
+    "msis",          # if you use MSIS schemes
+    "linter",        # tooling
+    "config",        # common abbreviation
+    "repo",          # repository
+]
+
+# Extend regex patterns to ignore
+extend-ignore-re = [
+    "0x[0-9a-fA-F]+",        # hex literals
+    "[a-f0-9]{40}",          # SHA1 hashes
+    "[a-f0-9]{64}",          # SHA256 hashes
+    "[a-f0-9]{128}",         # SHA512 hashes
+    "([0-9a-f]{2}:){5}[0-9a-f]{2}", # MAC addresses
+]
+
+# Add specific valid words for your codebase
+[default.extend-words]
+MSIS = "MSIS"           # keep all-caps if using MSIS
+ECDSA = "ECDSA"
+SHA256 = "SHA256"
+
+# Paths to exclude from checks
+[files]
+extend-exclude = [
+    "**/vendor/**",
+    "**/node_modules/**",
+    "**/target/**",
+    "**/Cargo.lock",
+    "**/package-lock.json",
+    "**/yarn.lock",
+    "**/*.svg",
+    "**/*.png",
+    "**/*.jpg",
+    "**/*.jpeg",
+    "**/*.ico",
+    "**/*.gif",
+    "**/*.pdf",
+    "**/*.mp4",
+]
+
+# Optionally adjust the severity of typos found
+[severity]
+# options: error, warning, note, help
+typo = "error"

@@ -51,8 +51,8 @@ pub fn prove_theta_d(
     {
         let mut c_sum = Fr::zero();
         for j in 0..cs.len() {
-            for x in 0..(1 << num_vars) {
-                c_sum += beta[j] * eq[x] * cs[(j + 4) % 5][x] * rot_c[(j + 1) % 5][x];
+            for (x, eq_elem) in eq.iter().enumerate() {
+                c_sum += beta[j] * eq_elem * cs[(j + 4) % 5][x] * rot_c[(j + 1) % 5][x];
             }
         }
         assert_eq!(c_sum, sum);
@@ -172,14 +172,15 @@ pub fn prove_sumcheck_theta_d(
     }
 
     let mut c_subclaims = Vec::with_capacity(cs.len());
-    for j in 0..cs.len() {
-        transcript.write(cs[j][0]);
-        c_subclaims.push(cs[j][0]);
+    for cs_elem in cs.iter() {
+        transcript.write(cs_elem[0]);
+        c_subclaims.push(cs_elem[0]);
     }
     let mut rot_c_subclaims = Vec::with_capacity(rot_cs.len());
-    for j in 0..rot_cs.len() {
-        transcript.write(rot_cs[j][0]);
-        rot_c_subclaims.push(rot_cs[j][0]);
+
+    for rot_cs_elem in rot_cs.iter() {
+        transcript.write(rot_cs_elem[0]);
+        rot_c_subclaims.push(rot_cs_elem[0]);
     }
 
     // check result
@@ -213,10 +214,10 @@ mod test {
         let num_vars = 7; // two instances
         let instances = 1usize << (num_vars - 6);
 
-        let mut data = (0..(instances * STATE))
+        let data = (0..(instances * STATE))
             .map(|i| i as u64)
             .collect::<Vec<_>>();
-        let state = keccak_round(&mut data, 0);
+        let state = keccak_round(&data, 0);
 
         let mut prover = Prover::new();
         let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();

@@ -151,48 +151,48 @@ pub fn prove_sumcheck_theta_c(
 
                     // Evaluation at 0
                     let mut product = Fr::one();
-                    for k in 0..5 {
-                        product *= ax[k].0.0;
+                    for ax_elem in ax.iter() {
+                        product *= ax_elem.0.0;
                     }
                     p0_c += product * e0[i];
                     p0_rot += product * rot0[i];
 
                     // Evaluation at -1
                     let mut product = Fr::one();
-                    for k in 0..5 {
-                        product *= ax[k].0.1 - ax[k].1.0;
+                    for ax_elem in ax.iter() {
+                        product *= ax_elem.0.1 - ax_elem.1.0;
                     }
                     pem1_c += product * (e0_1 - e1[i]);
                     pem1_rot += product * (rot0_1 - rot1[i]);
 
                     // Evaluation at -2
                     let mut product = Fr::one();
-                    for k in 0..5 {
-                        product *= ax[k].0.2 - ax[k].1.1;
+                    for ax_elem in ax.iter() {
+                        product *= ax_elem.0.2 - ax_elem.1.1;
                     }
                     pem2_c += product * (e0_2 - e1_1);
                     pem2_rot += product * (rot0_2 - rot1_1);
 
                     // Evaluation at 2
                     let mut product = Fr::one();
-                    for k in 0..5 {
-                        product *= ax[k].1.1 - ax[k].0.0;
+                    for ax_elem in ax.iter() {
+                        product *= ax_elem.1.1 - ax_elem.0.0;
                     }
                     pe2_c += product * (e1_1 - e0[i]);
                     pe2_rot += product * (rot1_1 - rot0[i]);
 
                     // Evaluation at 3
                     let mut product = Fr::one();
-                    for k in 0..5 {
-                        product *= ax[k].1.2 - ax[k].0.1;
+                    for ax_elem in ax.iter() {
+                        product *= ax_elem.1.2 - ax_elem.0.1;
                     }
                     pe3_c += product * (e1_2 - e0_1);
                     pe3_rot += product * (rot1_2 - rot0_1);
 
                     // Evaluation at ∞
                     let mut product = Fr::one();
-                    for k in 0..5 {
-                        product *= ax[k].1.0 - ax[k].0.0;
+                    for ax_elem in ax.iter() {
+                        product *= ax_elem.1.0 - ax_elem.0.0;
                     }
                     p6_c += product * (e1[i] - e0[i]);
                     p6_rot += product * (rot1[i] - rot0[i]);
@@ -326,9 +326,9 @@ pub fn prove_sumcheck_theta_c(
     }
 
     let mut subclaims = Vec::with_capacity(aij.len());
-    for j in 0..aij.len() {
-        transcript.write(aij[j][0]);
-        subclaims.push(aij[j][0]);
+    for ai in aij.iter() {
+        transcript.write(ai[0]);
+        subclaims.push(ai[0]);
     }
 
     // check result
@@ -377,10 +377,10 @@ mod test {
         let num_vars = 7; // two instances
         let instances = 1usize << (num_vars - 6);
 
-        let mut data = (0..(instances * STATE))
+        let data = (0..(instances * STATE))
             .map(|i| i as u64)
             .collect::<Vec<_>>();
-        let state = keccak_round(&mut data, 0);
+        let state = keccak_round(&data, 0);
 
         let mut prover = Prover::new();
         let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
