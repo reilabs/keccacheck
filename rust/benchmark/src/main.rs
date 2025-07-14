@@ -26,8 +26,7 @@ fn main() {
         .map(|i| i as u64)
         .collect::<Vec<_>>();
 
-    // This is wrong and will fail
-    // TODO change the argument that we feed to the prover to verifier generated randomness
+    // TODO Put a proper commitment here instead putting in constant
     let (proof, input, output) = prove(&data, Fr::ONE);
     verify(num_vars, &output, &input, &proof);
 

@@ -3,7 +3,7 @@ use crate::sumcheck::util;
 use crate::sumcheck::util::{HALF, add_col, eval_mle, to_poly, verify_sumcheck, xor};
 use crate::transcript::Verifier;
 use ark_bn254::Fr;
-use ark_ff::{One, Zero};
+use ark_ff::{Field, One, Zero};
 use tracing::{Level, instrument};
 
 #[instrument(skip_all)]
@@ -14,9 +14,13 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
 
     // TODO: feed output to the verifier before obtaining alpha
     let span = tracing::span!(Level::INFO, "calculate output sum").entered();
-    let mut r = (0..num_vars)
-        .map(|_| verifier.generate())
-        .collect::<Vec<_>>();
+
+let mut r = Vec::with_capacity(num_vars);
+    r.push(Fr::ONE);
+    for _ in 1..num_vars {
+        r.push(verifier.generate());
+    }
+
     let mut beta = (0..25).map(|_| verifier.generate()).collect::<Vec<_>>();
 
     let expected_sum = (0..25)
