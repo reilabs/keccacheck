@@ -2,5 +2,3 @@
 Cargo.lock
 /.idea
 rust/ffi/bindings.h
-gnark/bindings.h
-gnark/libkeccak.a
