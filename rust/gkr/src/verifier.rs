@@ -3,7 +3,7 @@ use crate::sumcheck::util;
 use crate::sumcheck::util::{HALF, add_col, eval_mle, to_poly, verify_sumcheck, xor};
 use crate::transcript::Verifier;
 use ark_bn254::Fr;
-use ark_ff::{Field, One, Zero};
+use ark_ff::{One, Zero};
 use tracing::{Level, instrument};
 
 #[instrument(skip_all)]

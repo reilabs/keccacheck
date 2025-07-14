@@ -1,6 +1,5 @@
 use ark_bn254::Fr;
 
-use ark_ff::Field;
 use gkr::{
     prover::prove,
     reference::STATE,
