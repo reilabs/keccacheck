@@ -124,7 +124,7 @@ pub unsafe extern "C" fn keccacheck_prove(
                 u64::from_be_bytes(bytes)
             })
             .collect();
-        
+
         let r_0_bytes: &[u8] = std::slice::from_raw_parts(r_0_ptr, 32);
         let r_0 = Fr::from_be_bytes_mod_order(r_0_bytes);
         let (proof, mut input, mut output) = prove(&data, r_0);
