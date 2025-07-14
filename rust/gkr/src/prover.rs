@@ -53,7 +53,7 @@ pub fn prove(data: &[u64], r_0: Fr) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
             beta[i] * eval_mle(&poly, &r)
         })
         .sum();
-    println!("sum at rust prover {:?}",sum);
+    
     prover.write(sum);
     for round in (0..24).rev() {
         let previous_proof = prove_round(
