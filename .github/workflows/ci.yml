@@ -13,79 +13,64 @@ on:
       - 'gnark/**'
 
 jobs:
-  rust_fmt:
-    name: Rust Format Check
+  ci:
+    name: Rust + Go CI
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: rust
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
+      # -----------------------------
+      # Rust Setup and Checks
+      # -----------------------------
+      - name: Install Rust (fmt + clippy + test)
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          components: rustfmt
+          components: rustfmt, clippy
 
-      - name: Check formatting
+      - name: Rust Format Check
+        working-directory: rust
         run: cargo fmt --all -- --check
 
-  rust_clippy:
-    name: Rust Clippy Lint
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Rust Clippy Lint
         working-directory: rust
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          components: clippy
-
-      - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+      
 
-  rust_test:
-    name: Rust Tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
+      - name: Rust Tests
         working-directory: rust
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-
-      - name: Run tests
         run: cargo test --all
-
-  go:
-    name: Go CI
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: gnark
-    steps:
-      - uses: actions/checkout@v4
-
+      
+      - name: Rust Build
+        working-directory: rust
+        run: cargo build
+      # -----------------------------
+      # Go Setup and Checks
+      # -----------------------------
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
 
-      - name: Check formatting
-        run: go fmt ./...
+      - name: Run Makefile
+        working-directory: gnark
+        run: make
 
-      - name: Vet code
-        # Have to ignore the unsafety of FFI functions
+      - name: Go Format Check
+        working-directory: gnark
+        run: |
+          fmt_output=$(go fmt ./...)
+          if [ -n "$fmt_output" ]; then
+            echo "Go formatting issues found:"
+            echo "$fmt_output"
+            exit 1
+          fi
+
+      - name: Go Vet
+        working-directory: gnark
         run: go vet -unsafeptr=false ./...
 
-      - name: Run tests
+      - name: Go Tests
+        working-directory: gnark
         run: go test ./...

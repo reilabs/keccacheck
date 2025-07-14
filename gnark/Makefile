@@ -7,5 +7,3 @@ run:
 	@cp ../rust/target/debug/libkeccak.a .
 	@echo "Running go clean -cache..."
 	@go clean -cache
-	@echo "Running go run ."
-	@go run . 
