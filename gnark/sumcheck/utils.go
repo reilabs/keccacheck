@@ -29,6 +29,19 @@ func EvalMle(api frontend.API, mle []frontend.Variable, r []frontend.Variable) f
 	return coeffs[0]
 }
 
+func EvalMleWithEq(api frontend.API, mle []frontend.Variable, eq []frontend.Variable) frontend.Variable {
+	if len(mle) != len(eq) {
+		panic("mle and eq must have the same length")
+	}
+
+	acc := api.Mul(eq[0], mle[0])
+	for i := 1; i < len(mle); i++ {
+		acc = api.Add(acc, api.Mul(eq[i], mle[i]))
+	}
+
+	return acc
+}
+
 func Eq(api frontend.API, a, b []frontend.Variable) frontend.Variable {
 	if len(a) != len(b) {
 		panic("a and b must have the same length")
@@ -82,18 +95,29 @@ func Rot(api frontend.API, n int, a, b []frontend.Variable) frontend.Variable {
 	return api.Mul(result, prod)
 }
 
-func CalculateEvaluationsOverBooleanHypercubeForEq(api frontend.API, r []frontend.Variable) []frontend.Variable {
-	size := 1 << len(r)
-	result := make([]frontend.Variable, size)
-	for i := range result {
-		result[i] = frontend.Variable(0)
-	}
-	EvalEq(api, &r, &result, frontend.Variable(1))
-	return result
-}
+func EvalEq(api frontend.API, r []frontend.Variable) []frontend.Variable {
+	n := len(r)
 
+	eq := []frontend.Variable{
+		api.Sub(1, r[0]), // x_0 = 0
+		r[0],             // x_0 = 1
+	}
+	for i := 1; i < n; i++ {
+		ri := r[i]
+		oneMinusRi := api.Sub(1, ri)
+
+		newEq := make([]frontend.Variable, 0, len(eq)*2)
+		for _, v := range eq {
+			newEq = append(newEq, api.Mul(v, oneMinusRi)) // x_i = 0
+			newEq = append(newEq, api.Mul(v, ri))         // x_i = 1
+		}
+		eq = newEq
+	}
+
+	return eq
+}
 func CalculateEvaluationsOverBooleanHypercubeForRot(api frontend.API, r []frontend.Variable, i int) []frontend.Variable {
-	eq := CalculateEvaluationsOverBooleanHypercubeForEq(api, r)
+	eq := EvalEq(api, r)
 	return DeriveRotEvaluationsFromEq(api, &eq, RHO_OFFSETS[i])
 }
 
@@ -113,25 +137,6 @@ func DeriveRotEvaluationsFromEq(api frontend.API, eq *[]frontend.Variable, size 
 		}
 	}
 	return result
-}
-func EvalEq(api frontend.API, eval, out *[]frontend.Variable, scalar frontend.Variable) {
-	size := len(*out)
-	if len(*eval) > 0 {
-		x := (*eval)[0]
-		tail := (*eval)[1:]
-
-		mid := size / 2
-		o0 := (*out)[:mid]
-		o1 := (*out)[mid:]
-
-		s1 := api.Mul(scalar, x)
-		s0 := api.Sub(scalar, s1)
-
-		EvalEq(api, &tail, &o0, s0)
-		EvalEq(api, &tail, &o1, s1)
-	} else {
-		(*out)[0] = api.Add((*out)[0], scalar)
-	}
 }
 
 func Xor(api frontend.API, a, b frontend.Variable) frontend.Variable {

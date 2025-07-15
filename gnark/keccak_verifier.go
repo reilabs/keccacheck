@@ -22,8 +22,9 @@ func VerifyKeccakF(api frontend.API, num_vars int, input, output, proof, r []fro
 
 	expected_sum := frontend.Variable(0)
 
+	eval_eq_r := sumcheck.EvalEq(api, r)
 	for i := range 25 {
-		summand := sumcheck.EvalMle(api, sumcheck.ToPoly(api, output[(i*instances):(i*instances+instances)]), r)
+		summand := sumcheck.EvalMleWithEq(api, sumcheck.ToPoly(api, output[(i*instances):(i*instances+instances)]), eval_eq_r)
 		expected_sum = api.Add(expected_sum, api.Mul(summand, beta[i]))
 	}
 	sum := verifier.Read(api)
@@ -47,7 +48,7 @@ func VerifyKeccakF(api frontend.API, num_vars int, input, output, proof, r []fro
 		end := start + instances
 		chunk := input[start:end]
 		poly := sumcheck.ToPoly(api, chunk)
-		eval := sumcheck.EvalMle(api, poly, r)
+		eval := sumcheck.EvalMleWithEq(api, poly, eval_eq_r)
 		api.AssertIsEqual(eval, iota[i])
 	}
 
