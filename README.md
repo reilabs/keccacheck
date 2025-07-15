@@ -374,6 +374,6 @@ solution can just be hardcoded in the implementation.
 # Credits
 
 * Marcin Kostrzewa - the idea for GKR-style prover with a linear combination of keccak state and dropping the usual layering constraint.
-* Grzegorz Świrski - implementation
+* Grzegorz Świrski, Matthew Klein - implementation
 * Ara Adkins - original research into using GKR for keccak proving
 * [ProveKit team](https://github.com/worldfnd/ProveKit) team - poseidon2 & transcript implementation, ideas for a very fast multi-threaded sumcheck implementation
