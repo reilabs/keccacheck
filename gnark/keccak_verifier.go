@@ -119,8 +119,11 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 	// Compute e_eq and e_rot for chi
 
 	eRot := make([]frontend.Variable, 25)
+	prefix := len(vrsChi) - 6
+	eq_vrsChi_prefix := sumcheck.EvalEq(api, vrsChi[prefix:])
+	eq_vrsRhoPrefix := sumcheck.EvalEq(api, vrsRho[prefix:])
 	for i := 0; i < 25; i++ {
-		eRot[i] = sumcheck.Rot(api, i, vrsChi, vrsRho)
+		eRot[i] = sumcheck.Rot(api, i, vrsChi, vrsRho, eq_vrsChi_prefix, eq_vrsRhoPrefix)
 	}
 
 	// Compute checksum for rho verification
@@ -223,8 +226,11 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 		a[i] = verifier.Read(api)
 	}
 
+	prefix = len(vrsD) - 6
+	eq_vrsD_prefix := sumcheck.EvalEq(api, vrsD[prefix:])
+	eq_vrsCPrefix := sumcheck.EvalEq(api, vrsC[prefix:])
 	eEq = sumcheck.Eq(api, vrsD, vrsC)
-	eRot_1 := sumcheck.Rot(api, 1, vrsD, vrsC)
+	eRot_1 := sumcheck.Rot(api, 1, vrsD, vrsC, eq_vrsD_prefix, eq_vrsCPrefix)
 
 	checksum = frontend.Variable(0)
 	for j := 0; j < 5; j++ {

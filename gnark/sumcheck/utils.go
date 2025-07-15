@@ -60,23 +60,21 @@ func ToPoly(api frontend.API, x []frontend.Variable) []frontend.Variable {
 	res := make([]frontend.Variable, 0, len(x)*64)
 	for _, el := range x {
 		bits := api.ToBinary(el, 64)
-		// bits[0] = LSB, bits[63] = MSB
 
-		// If you want LSB-first:
 		res = append(res, bits[:]...)
 	}
 	return res
 }
 
-func Rot(api frontend.API, n int, a, b []frontend.Variable) frontend.Variable {
+func Rot(api frontend.API, n int, a, b, eq_a_prefix, eq_b_prefix []frontend.Variable) frontend.Variable {
 	lenA := len(a)
 	prefix := lenA - 6
 
 	// r = calculate_evaluations_over_boolean_hypercube_for_rot(&a[prefix..], n)
-	r := CalculateEvaluationsOverBooleanHypercubeForRot(api, a[prefix:], n)
+	r := CalculateEvaluationsOverBooleanHypercubeForRot(api, eq_a_prefix, n)
 
 	// result = eval_mle(&r, &b[prefix..])
-	result := EvalMle(api, r, b[prefix:])
+	result := EvalMleWithEq(api, r, eq_b_prefix)
 
 	// Compute the product term
 	prod := frontend.Variable(1)
@@ -97,7 +95,6 @@ func Rot(api frontend.API, n int, a, b []frontend.Variable) frontend.Variable {
 
 func EvalEq(api frontend.API, r []frontend.Variable) []frontend.Variable {
 	n := len(r)
-
 	eq := []frontend.Variable{
 		api.Sub(1, r[0]), // x_0 = 0
 		r[0],             // x_0 = 1
@@ -117,8 +114,7 @@ func EvalEq(api frontend.API, r []frontend.Variable) []frontend.Variable {
 	return eq
 }
 func CalculateEvaluationsOverBooleanHypercubeForRot(api frontend.API, r []frontend.Variable, i int) []frontend.Variable {
-	eq := EvalEq(api, r)
-	return DeriveRotEvaluationsFromEq(api, &eq, RHO_OFFSETS[i])
+	return DeriveRotEvaluationsFromEq(api, &r, RHO_OFFSETS[i])
 }
 
 /// List of evaluations for rot_i(r, x) over the boolean hypercube
