@@ -12,24 +12,37 @@ type KeccakfCircuit struct {
 // Main Verifier circuit definition
 func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 
-	commiter, ok := api.(frontend.Committer)
+	committer, ok := api.(frontend.Committer)
 
 	if !ok {
 		panic("unable to initialise committer")
 	}
 
-	r_0, err := commiter.Commit(circuit.Output[:]...)
+	r := make([]frontend.Variable, 6)
 
+	// First commitment: commit to circuit.Output
+	var err error
+	r[0], err = committer.Commit(circuit.Output[:]...)
+	if err != nil {
+		return err
+	}
+
+	for i := 1; i < 6; i++ {
+		r[i], err = committer.Commit(r[i-1])
+		if err != nil {
+			return err
+		}
+	}
 	if err != nil {
 		panic("was not able to commit to the outputs")
 	}
 
-	hintInputs := append([]frontend.Variable{r_0}, circuit.Input[:]...)
+	hintInputs := append(r, circuit.Input[:]...)
 	proof, err := api.Compiler().NewHint(KeccacheckProveHint, 6241, hintInputs...)
 	if err != nil {
 		panic("failed to generate proof hint")
 	}
 
-	VerifyKeccakF(api, 6, circuit.Input[:], circuit.Output[:], proof, r_0)
+	VerifyKeccakF(api, 6, circuit.Input[:], circuit.Output[:], proof, r)
 	return nil
 }

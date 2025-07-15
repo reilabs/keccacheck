@@ -10,7 +10,6 @@ use std::env;
 
 fn main() {
     tracing_forest::init();
-
     let args: Vec<String> = env::args().collect();
 
     if args.len() != 2 {
@@ -25,8 +24,9 @@ fn main() {
         .map(|i| i as u64)
         .collect::<Vec<_>>();
 
+    let r: Vec<Fr> = (0..num_vars).map(|_| Fr::from(12345)).collect();
     // TODO Put a proper commitment here instead putting in constant
-    let (proof, input, output) = prove(&data, Fr::from(12345));
+    let (proof, input, output) = prove(&data, r);
     verify(num_vars, &output, &input, &proof);
 
     let mut reference_input: [u64; 25] = [0; 25];

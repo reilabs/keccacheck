@@ -29,10 +29,10 @@ func TestKeccakInit(t *testing.T) {
 }
 
 func TestKeccakProve(t *testing.T) {
-	log_n := 1
+	log_n := 0
 	n := 1 << log_n
 
-	inputs := make([]*big.Int, 25*n+1)
+	inputs := make([]*big.Int, 25*n+6)
 	for i := range inputs {
 		inputs[i] = big.NewInt(0)
 	}

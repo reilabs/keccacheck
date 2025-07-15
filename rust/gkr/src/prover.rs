@@ -13,7 +13,7 @@ use ark_ff::{One, Zero};
 use tracing::instrument;
 
 #[instrument(skip_all, fields(num_vars=(6 + (data.len() / 25).ilog2())))]
-pub fn prove(data: &[u64], r_0: Fr) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
+pub fn prove(data: &[u64], mut r: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     let instances = data.len() / 25;
 
     let num_vars = 6 + instances.ilog2() as usize;
@@ -33,13 +33,6 @@ pub fn prove(data: &[u64], r_0: Fr) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     let span = tracing::span!(tracing::Level::INFO, "prove all rounds").entered();
 
     // TODO: feed output to the prover before obtaining alpha
-    let mut r = Vec::with_capacity(num_vars);
-    r.push(r_0);
-
-    for _ in 1..num_vars {
-        r.push(prover.read());
-    }
-
     let mut beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
     // write final output sum
