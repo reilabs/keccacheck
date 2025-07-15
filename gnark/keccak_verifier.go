@@ -42,7 +42,7 @@ func VerifyKeccakF(api frontend.API, num_vars int, input, output, proof, r []fro
 			}
 		}
 	}
-
+	eval_eq_r = sumcheck.EvalEq(api, r)
 	for i := 0; i < 25; i++ {
 		start := i * instances
 		end := start + instances
