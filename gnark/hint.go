@@ -14,16 +14,11 @@ import "C"
 // Takes input and output words and returns a pointer to an
 // array of bytes the keccacheck rounds of the input, the last 25 words of the
 // array returned should match the ouput that is feed to the function
-func KeccacheckInit(inputs []*big.Int, outputs []*big.Int) unsafe.Pointer {
-	bytes := make([]byte, (len(inputs)+len(outputs))*8)
+func KeccacheckInit(inputs []*big.Int) unsafe.Pointer {
+	bytes := make([]byte, (len(inputs))*8)
 	for i, input := range inputs {
 		input.FillBytes(bytes[i*8 : (i+1)*8])
 	}
-	for i, output := range outputs {
-		j := i + len(inputs)
-		output.FillBytes(bytes[j*8 : (j+1)*8])
-	}
-
 	len := C.uintptr_t(len(bytes))
 	ptr := (*C.uint8_t)(C.CBytes(bytes))
 	return C.keccacheck_init(ptr, len)
@@ -34,23 +29,34 @@ func KeccacheckFree(ptr unsafe.Pointer, len int) {
 }
 
 func KeccacheckProve(inputs []*big.Int) unsafe.Pointer {
+	r := inputs[0:6]
+	r_bytes := make([]byte, 32*6)
+	for i, r_i := range r {
+		r_i.FillBytes(r_bytes[i*32 : (i+1)*32])
+	}
+
+	r_ptr := (*C.uint8_t)(C.CBytes(r_bytes))
+	inputs = inputs[6:]
 	instances := C.uintptr_t(len(inputs) / 25)
+
 	bytes := make([]byte, (len(inputs))*8)
 	for i, input := range inputs {
 		input.FillBytes(bytes[i*8 : (i+1)*8])
 	}
 	ptr := (*C.uint8_t)(C.CBytes(bytes))
-	return C.keccacheck_prove(ptr, instances)
+	return C.keccacheck_prove(ptr, instances, r_ptr)
 }
 
 func KeccacheckProveHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 	ptr := KeccacheckProve(inputs)
 
-	// Convert pointer to uintptr -> uint64 -> *big.Int
-	ptrInt := new(big.Int).SetUint64(uint64(uintptr(ptr)))
+	result := (*KeccacheckResult)(ptr)
 
-	// Store in first output slot
-	outputs[0].Set(ptrInt)
+	proof := getBigInt4Slice(result.ProofPtr, 6241)
+
+	for i := 0; i < 6241; i++ {
+		outputs[i].Set(proof[i])
+	}
 
 	return nil
 }
@@ -71,8 +77,16 @@ func FreeProofHint(_ *big.Int, inputs []*big.Int, results []*big.Int) error {
 	return nil
 }
 
-// KeccacheckHint is a gnark hint function that calls the C keccacheck_init and keccacheck_free routines.
-func KeccacheckHint(field *big.Int, inputs, outputs []*big.Int) error {
+// HintKeccacheckInit wraps the KeccacheckInit Go/C function into a gnark hint function.
+func KeccacheckInitHint(_ *big.Int, inputs []*big.Int, results []*big.Int) error {
+
+	ptr := KeccacheckInit(inputs)
+
+	words := unsafe.Slice((*uint64)(ptr), 600)
+
+	for i := 0; i < 600; i++ {
+		results[i].SetUint64(words[i])
+	}
 
 	return nil
 }

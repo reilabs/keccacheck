@@ -39,6 +39,10 @@ impl Prover {
         self.sponge.absorb(value);
         self.proof.push(value);
     }
+
+    pub fn absorb(&mut self, value: Fr) {
+        self.sponge.absorb(value);
+    }
 }
 
 impl<'a> Verifier<'a> {
