@@ -17,7 +17,7 @@ func TestKeccakVerify(t *testing.T) {
 
 	solver.RegisterHint(KeccacheckProveHint)
 
-	log_n := 0
+	log_n := 10
 	n := 1 << log_n
 
 	inputs := make([]*big.Int, 25*n)
@@ -25,8 +25,8 @@ func TestKeccakVerify(t *testing.T) {
 		inputs[i] = big.NewInt(0)
 	}
 
-	var inputSized [25]frontend.Variable
-	for i := 0; i < 25; i++ {
+	var inputSized [25 * 1024]frontend.Variable
+	for i := 0; i < 25*1024; i++ {
 		inputSized[i] = inputs[i]
 
 	}
@@ -34,8 +34,8 @@ func TestKeccakVerify(t *testing.T) {
 	output_ptr := KeccacheckInit(inputs)
 	words := unsafe.Slice((*uint64)(output_ptr), 600)
 
-	var outputSized [25]frontend.Variable
-	for i := 0; i < 25; i++ {
+	var outputSized [25 * 1024]frontend.Variable
+	for i := 0; i < 25*1024; i++ {
 		outputSized[i] = words[575+i]
 	}
 
