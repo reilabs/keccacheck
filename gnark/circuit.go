@@ -9,10 +9,13 @@ import (
 	"github.com/consensys/gnark/profile"
 )
 
+const N int = 2
+const Log_N = 1
+
 type KeccakfCircuit struct {
-	InputD [64 * 25]frontend.Variable `gnark:",public"`
-	Input  [25]frontend.Variable      `gnark:",public"`
-	Output [64 * 25]frontend.Variable `gnark:",public"`
+	InputD [64 * 25 * N]frontend.Variable `gnark:",public"`
+	Input  [25 * N]frontend.Variable      `gnark:",public"`
+	Output [64 * 25 * N]frontend.Variable `gnark:",public"`
 }
 
 // Main Verifier circuit definition
@@ -24,7 +27,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 		panic("unable to initialise committer")
 	}
 
-	r := make([]frontend.Variable, 6)
+	r := make([]frontend.Variable, 6+Log_N)
 
 	// First commitment: commit to circuit.Output
 	var err error
@@ -33,7 +36,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 		return err
 	}
 
-	for i := 1; i < 6; i++ {
+	for i := 1; i < 6+Log_N; i++ {
 		r[i], err = committer.Commit(r[i-1])
 		if err != nil {
 			return err
@@ -44,12 +47,12 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	}
 
 	hintInputs := append(r, circuit.Input[:]...)
-	proof, err := api.Compiler().NewHint(KeccacheckProveHint, 6421, hintInputs...)
+	proof, err := api.Compiler().NewHint(KeccacheckProveHint, 552*(6+Log_N)+2929, hintInputs...)
 	if err != nil {
 		panic("failed to generate proof hint")
 	}
 
-	VerifyKeccakF(api, 6, circuit.InputD[:], circuit.Output[:], proof, r)
+	VerifyKeccakF(api, circuit.InputD[:], circuit.Output[:], proof, r)
 	return nil
 }
 
