@@ -9,8 +9,8 @@ import (
 	"github.com/consensys/gnark/profile"
 )
 
-const N int = 2
-const Log_N = 1
+const N int = 8
+const Log_N = 3
 
 type KeccakfCircuit struct {
 	InputD [64 * 25 * N]frontend.Variable `gnark:",public"`
