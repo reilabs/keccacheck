@@ -10,8 +10,9 @@ import (
 )
 
 type KeccakfCircuit struct {
-	Input  [25]frontend.Variable `gnark:",public"`
-	Output [25]frontend.Variable `gnark:",public"`
+	InputD [64 * 25]frontend.Variable `gnark:",public"`
+	Input  [25]frontend.Variable      `gnark:",public"`
+	Output [64 * 25]frontend.Variable `gnark:",public"`
 }
 
 // Main Verifier circuit definition
@@ -48,7 +49,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 		panic("failed to generate proof hint")
 	}
 
-	VerifyKeccakF(api, 6, circuit.Input[:], circuit.Output[:], proof, r)
+	VerifyKeccakF(api, 6, circuit.InputD[:], circuit.Output[:], proof, r)
 	return nil
 }
 
