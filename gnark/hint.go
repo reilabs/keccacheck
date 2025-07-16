@@ -49,12 +49,12 @@ func KeccacheckProve(inputs []*big.Int) unsafe.Pointer {
 
 func KeccacheckProveHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 	ptr := KeccacheckProve(inputs)
-
+	proof_len := (552 * (Log_N + 6)) + 2929
 	result := (*KeccacheckResult)(ptr)
 
-	proof := getBigInt4Slice(result.ProofPtr, 6241)
+	proof := getBigInt4Slice(result.ProofPtr, proof_len)
 
-	for i := 0; i < 6241; i++ {
+	for i := 0; i < proof_len; i++ {
 		outputs[i].Set(proof[i])
 	}
 
