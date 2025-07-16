@@ -126,9 +126,9 @@ pub unsafe extern "C" fn keccacheck_prove(
             })
             .collect();
 
-        let r_bytes: &[u8] = std::slice::from_raw_parts(r_ptr, 32 * (6 + log_n ));
+        let r_bytes: &[u8] = std::slice::from_raw_parts(r_ptr, 32 * (6 + log_n));
         let mut r = Vec::with_capacity(6 + log_n);
-        for i in 0..(6+log_n){
+        for i in 0..(6 + log_n) {
             let chunk = &r_bytes[i * 32..(i + 1) * 32];
             r.push(Fr::from_be_bytes_mod_order(chunk));
         }

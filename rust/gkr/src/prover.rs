@@ -15,11 +15,11 @@ use tracing::instrument;
 #[instrument(skip_all, fields(num_vars=(6 + (data.len() / 25).ilog2())))]
 pub fn prove(data: &[u64], mut r: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     let instances = data.len() / 25;
-   
+
     let num_vars = 6 + instances.ilog2() as usize;
 
     let data = data.to_vec();
-    
+
     let span = tracing::span!(tracing::Level::INFO, "calculate_states").entered();
     let mut state = Vec::with_capacity(24);
     state.push(KeccakRoundState::at_round(&data, 0));
@@ -41,8 +41,8 @@ pub fn prove(data: &[u64], mut r: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
         .chunks_exact(instances)
         .enumerate()
         .map(|(i, x)| {
-            let poly = to_poly(x);         
-            let summand =  eval_mle(&poly, &r);
+            let poly = to_poly(x);
+            let summand = eval_mle(&poly, &r);
             beta[i] * summand
         })
         .sum();
