@@ -52,14 +52,9 @@ func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable
 
 func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, alpha *[]frontend.Variable, beta *[]frontend.Variable, sum frontend.Variable, rc uint64) ([]frontend.Variable, []frontend.Variable) {
 	ve, vrsIota := sumcheck.VerifySumcheck(api, verifier, numVars, 3, sum)
-
 	chi00 := verifier.Read(api)
-
 	chiRlc := verifier.Read(api)
-	api.Println(chi00)
-	api.Println(chiRlc)
 	eEq := sumcheck.Eq(api, *alpha, vrsIota)
-
 	rcPoly := sumcheck.ToPoly(api, []frontend.Variable{big.NewInt(0).SetUint64(rc)})
 	eRc := sumcheck.EvalMle(api, rcPoly, vrsIota[len(vrsIota)-6:])
 	xorVal := sumcheck.Xor(api, chi00, eRc)
