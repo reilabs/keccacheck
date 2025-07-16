@@ -10,8 +10,7 @@ import (
 	"github.com/consensys/gnark/frontend"
 )
 
-func VerifyKeccakF(api frontend.API, num_vars int, input, output, proof, r []frontend.Variable) {
-	instances := 1 << (num_vars - 6)
+func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable) {
 	verifier := transcript.NewVerifier(proof)
 
 	beta := make([]frontend.Variable, 25)
@@ -21,18 +20,17 @@ func VerifyKeccakF(api frontend.API, num_vars int, input, output, proof, r []fro
 	}
 
 	expected_sum := frontend.Variable(0)
-
+	eval_eq_r := sumcheck.EvalEq(api, r)
 	for i := range 25 {
-		summand := sumcheck.EvalMle(api, sumcheck.ToPoly(api, output[(i*instances):(i*instances+instances)]), r)
+		summand := sumcheck.EvalMleWithEq(api, output[(64*(i*N)):64*(i*N+N)], eval_eq_r)
 		expected_sum = api.Add(expected_sum, api.Mul(summand, beta[i]))
 	}
 	sum := verifier.Read(api)
-
 	api.AssertIsEqual(sum, expected_sum)
 	iota := make([]frontend.Variable, 25)
 
 	for i := 23; i >= 0; i-- {
-		r, iota = VerifyRound(api, verifier, num_vars, &r, &beta, sum, ROUND_CONSTANTS[i])
+		r, iota = VerifyRound(api, verifier, 6+Log_N, &r, &beta, sum, ROUND_CONSTANTS[i])
 		if i != 0 {
 			sum = frontend.Variable(0)
 			for j := range beta {
@@ -41,13 +39,12 @@ func VerifyKeccakF(api frontend.API, num_vars int, input, output, proof, r []fro
 			}
 		}
 	}
-
+	eval_eq_r = sumcheck.EvalEq(api, r)
 	for i := 0; i < 25; i++ {
-		start := i * instances
-		end := start + instances
-		chunk := input[start:end]
-		poly := sumcheck.ToPoly(api, chunk)
-		eval := sumcheck.EvalMle(api, poly, r)
+		start := i * N
+		end := start + N
+		poly := input[64*start : 64*end]
+		eval := sumcheck.EvalMleWithEq(api, poly, eval_eq_r)
 		api.AssertIsEqual(eval, iota[i])
 	}
 
@@ -55,7 +52,6 @@ func VerifyKeccakF(api frontend.API, num_vars int, input, output, proof, r []fro
 
 func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, alpha *[]frontend.Variable, beta *[]frontend.Variable, sum frontend.Variable, rc uint64) ([]frontend.Variable, []frontend.Variable) {
 	ve, vrsIota := sumcheck.VerifySumcheck(api, verifier, numVars, 3, sum)
-
 	chi00 := verifier.Read(api)
 	chiRlc := verifier.Read(api)
 	eEq := sumcheck.Eq(api, *alpha, vrsIota)
@@ -118,8 +114,11 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 	// Compute e_eq and e_rot for chi
 
 	eRot := make([]frontend.Variable, 25)
+	prefix := len(vrsChi) - 6
+	eq_vrsChi_prefix := sumcheck.EvalEq(api, vrsChi[prefix:])
+	eq_vrsRhoPrefix := sumcheck.EvalEq(api, vrsRho[prefix:])
 	for i := 0; i < 25; i++ {
-		eRot[i] = sumcheck.Rot(api, i, vrsChi, vrsRho)
+		eRot[i] = sumcheck.Rot(api, i, vrsChi, vrsRho, eq_vrsChi_prefix, eq_vrsRhoPrefix)
 	}
 
 	// Compute checksum for rho verification
@@ -222,8 +221,11 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 		a[i] = verifier.Read(api)
 	}
 
+	prefix = len(vrsD) - 6
+	eq_vrsD_prefix := sumcheck.EvalEq(api, vrsD[prefix:])
+	eq_vrsCPrefix := sumcheck.EvalEq(api, vrsC[prefix:])
 	eEq = sumcheck.Eq(api, vrsD, vrsC)
-	eRot_1 := sumcheck.Rot(api, 1, vrsD, vrsC)
+	eRot_1 := sumcheck.Rot(api, 1, vrsD, vrsC, eq_vrsD_prefix, eq_vrsCPrefix)
 
 	checksum = frontend.Variable(0)
 	for j := 0; j < 5; j++ {

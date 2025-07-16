@@ -29,10 +29,8 @@ func TestKeccakInit(t *testing.T) {
 }
 
 func TestKeccakProve(t *testing.T) {
-	log_n := 0
-	n := 1 << log_n
 
-	inputs := make([]*big.Int, 25*n+6)
+	inputs := make([]*big.Int, 25*N+6+Log_N)
 	for i := range inputs {
 		inputs[i] = big.NewInt(0)
 	}
@@ -40,26 +38,26 @@ func TestKeccakProve(t *testing.T) {
 	ptr := KeccacheckProve(inputs)
 	result := (*KeccacheckResult)(ptr)
 
-	input := getU64Slice(result.InputPtr, 25*n)
+	input := getU64Slice(result.InputPtr, 25*N)
 
-	for i := range 25 * n {
+	for i := range 25 * N {
 		if input[i] != 0 {
 			t.Errorf("Expected input word  %#v to be 0, got %#x", i, input[i])
 		}
 	}
 
-	output := getU64Slice(result.OutputPtr, 25*n)
+	output := getU64Slice(result.OutputPtr, 25*N)
 
 	for j := range 25 {
-		for i := range n {
+		for i := range N {
 			expected := outputValues[j]
-			actual := output[j*n+i]
+			actual := output[j*N+i]
 			if actual != expected {
-				t.Errorf("Expected word  %#v to be %#x, got %#x", j*n+i, expected, actual)
+				t.Errorf("Expected word  %#v to be %#x, got %#x", j*N+i, expected, actual)
 			}
 		}
 	}
-	getFSlice(result.ProofPtr, (552*(log_n+6) + 2929))
+	getFSlice(result.ProofPtr, (552*(Log_N+6) + 2929))
 
 }
 

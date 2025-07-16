@@ -17,31 +17,42 @@ func TestKeccakVerify(t *testing.T) {
 
 	solver.RegisterHint(KeccacheckProveHint)
 
-	log_n := 0
-	n := 1 << log_n
-
-	inputs := make([]*big.Int, 25*n)
+	inputs := make([]*big.Int, 25*N)
 	for i := range inputs {
 		inputs[i] = big.NewInt(0)
 	}
 
-	var inputSized [25]frontend.Variable
-	for i := 0; i < 25; i++ {
+	var inputDSized [64 * 25 * N]frontend.Variable
+	var inputSized [25 * N]frontend.Variable
+	for i := 0; i < 25*N; i++ {
 		inputSized[i] = inputs[i]
-
+		w := inputs[i]
+		for j := 0; j < 64; j++ {
+			bit := w.Bit(j)
+			inputDSized[64*i+j] = frontend.Variable(bit)
+		}
 	}
 
 	output_ptr := KeccacheckInit(inputs)
-	words := unsafe.Slice((*uint64)(output_ptr), 600)
+	words := unsafe.Slice((*uint64)(output_ptr), 600*N)
 
-	var outputSized [25]frontend.Variable
+	var outputSized [64 * 25 * N]frontend.Variable
+
 	for i := 0; i < 25; i++ {
-		outputSized[i] = words[575+i]
+		for instance := 0; instance < N; instance++ {
+			w := words[575+i]
+			for j := 0; j < 64; j++ {
+				bit := (w >> j) & 1
+				flatIndex := i*N*64 + instance*64 + j
+				outputSized[flatIndex] = frontend.Variable(bit)
+			}
+		}
 	}
 
 	// Prepare the witness and empty circuit
 	circuit := KeccakfCircuit{}
 	witness := KeccakfCircuit{
+		InputD: inputDSized,
 		Input:  inputSized,
 		Output: outputSized,
 	}

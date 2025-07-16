@@ -4,3 +4,4 @@ Cargo.lock
 rust/ffi/bindings.h
 gnark/bindings.h
 gnark/libkeccak.a
+gnark/gnark.pprof
