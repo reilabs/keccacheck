@@ -42,8 +42,7 @@ pub fn prove(data: &[u64], mut r: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
         .enumerate()
         .map(|(i, x)| {
             let poly = to_poly(x);
-            let summand = eval_mle(&poly, &r);
-            beta[i] * summand
+            beta[i] * eval_mle(&poly, &r)
         })
         .sum();
 
