@@ -25,7 +25,7 @@ func main() {
 
 	// Setup
 	fmt.Println("Running setup...")
-	pk, _, err := groth16.Setup(ccs)
+	pk, vk, err := groth16.Setup(ccs)
 	if err != nil {
 		panic(err)
 	}
@@ -73,11 +73,15 @@ func main() {
 	fmt.Printf("Proving starts\n")
 	for i := 1; i <= 10; i++ {
 		start := time.Now()
-		_, err = groth16.Prove(ccs, pk, witness)
+		proof, err := groth16.Prove(ccs, pk, witness)
 		if err != nil {
 			panic(err)
 		}
 		duration := time.Since(start)
 		fmt.Printf("Proving time: %s\n", duration)
+		start = time.Now()
+		_ = groth16.Verify(proof, vk, witness)
+		duration = time.Since(start)
+		fmt.Printf("Verifying time: %s\n", duration)
 	}
 }
