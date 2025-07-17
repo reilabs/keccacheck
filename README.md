@@ -13,17 +13,24 @@ Since these proofs are rather large, the idea is to wrap proof verification into
 To compile the Rust portion of the project and generate the static library:
 
 ```bash
-cargo build && cp target/debug/libkeccak.a ../gnark/libkeccak.a
+cargo build
 ```
 
 ### Go (gnark)
 
-When making changes to the Rust static library, it's important to ensure Go does not serve outdated, cached versions of the compiled code. To avoid this issue, always clean the Go build cache before running:
+When making changes to the Rust static library, it's important to ensure Go does not serve outdated, cached versions of the compiled code. To avoid this issue, use the MakeFile Script:
 
 ```bash
-go clean -cache
+make
+```
+
+To run the executable, simply run:
+
+```bash
 go run .
 ```
+
+This will compile the main circuit, yield the number of constraints and give the proving times for that circuit.
 
 ## Benchmarking
 
