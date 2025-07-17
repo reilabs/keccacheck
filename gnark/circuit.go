@@ -56,7 +56,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	return nil
 }
 
-func Example() {
+func Profile() {
 	// default options generate gnark.pprof in current dir
 	// use pprof as usual (go tool pprof -http=:8080 gnark.pprof) to read the profile file
 	// overlapping profiles are allowed (define profiles inside Define or subfunction to profile
