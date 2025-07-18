@@ -8,29 +8,41 @@ import (
 	"github.com/consensys/gnark/frontend"
 )
 
-var initStrings = [3]string{
-	"2867665590057683943387987502116419498891846156328125724",
-	"17997256069650684234135964296173026564613294187689219101164463450718816256962",
-	"23490056820540387704221111928924589790986076392885762195133186689225695129646",
+var initStrings = [16]string{
+	"314159265358979323846264338327950288419716939937510582097494",
+	"45923078164062862089986280348253421170679821480865132823066470",
+	"93844609550582231725359408128481117450284102701938521105559644",
+	"62294895493038196442881097566593344612847564823378678316527120",
+	"19091456485669234603486104543266482133936072602491412737245870",
+	"06606315588174881520920962829254091715364367892590360011330530",
+	"54882046652138414695194151160943305727036575959195309218611738",
+	"19326117931051185480744623799627495673518857527248912279381830",
+	"11949129833673362440656643086021394946395224737190702179860943",
+	"70277053921717629317675238467481846766940513200056812714526356",
+	"08277857713427577896091736371787214684409012249534301465495853",
+	"71050792279689258923542019956112129021960864034418159813629774",
+	"77130996051870721134999999837297804995105973173281609631859502",
+	"44594553469083026425223082533446850352619311881710100031378387",
+	"52886587533208381420617177669147303598253490428755468731159562",
+	"86388235378759375195778185778053217122680661300192787661119590",
 }
 
 type SpongeState uint8
 
 const (
-	Initial SpongeState = iota
-	Absorbing
-	Squeezing
-	Full
+	Rate      = 10
+	Capacity  = 6
+	StateSize = Rate + Capacity
 )
 
 type Sponge struct {
-	State  [3]frontend.Variable
-	sponge SpongeState
+	State [StateSize]frontend.Variable
+	idx   int // Tracks how many rate elements have been filled
+
 }
 
 func NewSponge() *Sponge {
-	var state [3]frontend.Variable
-
+	var state [StateSize]frontend.Variable
 	for i, s := range initStrings {
 		c, ok := new(big.Int).SetString(s, 10)
 		if !ok {
@@ -40,44 +52,29 @@ func NewSponge() *Sponge {
 	}
 
 	return &Sponge{
-		State:  state,
-		sponge: Initial,
+		State: state,
+		idx:   0,
 	}
 }
 
 func (s *Sponge) absorb(api frontend.API, value frontend.Variable) {
-	switch s.sponge {
-	case Initial:
+	if s.idx < Rate {
+		s.State[s.idx] = api.Add(value, s.State[s.idx])
+		s.idx++
+	} else {
+		// Permute and reset absorb index
+		poseidon2.Permute16(api, &s.State)
 		s.State[0] = api.Add(value, s.State[0])
-		s.sponge = Absorbing
-
-	case Absorbing:
-		s.State[1] = api.Add(value, s.State[1])
-		s.sponge = Full
-
-	case Squeezing, Full:
-		poseidon2.Permute3(api, &s.State)
-		s.State[0] = api.Add(value, s.State[0])
-		s.sponge = Absorbing
+		s.idx = 1
 	}
-
 }
 
 func (s *Sponge) Squeeze(api frontend.API) frontend.Variable {
-	switch s.sponge {
-	case Initial:
-		s.sponge = Squeezing
-		return s.State[0]
-
-	case Squeezing:
-		s.sponge = Full
-		return s.State[1]
-
-	case Absorbing, Full:
-		poseidon2.Permute3(api, &s.State)
-		s.sponge = Squeezing
-		return s.State[0]
-
+	if s.idx >= Rate {
+		poseidon2.Permute16(api, &s.State)
+		s.idx = 0
 	}
-	panic("this cannot happen")
+	out := s.State[s.idx]
+	s.idx++
+	return out
 }
