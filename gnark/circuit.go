@@ -9,7 +9,7 @@ import (
 	"github.com/consensys/gnark/profile"
 )
 
-const N int = 8
+const N = 1 << Log_N
 const Log_N = 3
 
 type KeccakfCircuit struct {
