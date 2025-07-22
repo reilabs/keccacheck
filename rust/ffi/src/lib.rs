@@ -47,15 +47,12 @@ pub unsafe extern "C" fn keccacheck_init(ptr: *const u8, len: usize) -> *mut c_v
         // For each instance we have 25 * 24 = 600 words
         let mut state_data: Vec<u64> = Vec::with_capacity(600 * n);
 
-        for i in 0..n {
-            let input_i = &mut input[25 * i..25 * i + 25];
-            let mut state = KeccakRoundState::at_round(input_i, 0);
-            for _ in 0..23 {
-                state_data.extend_from_slice(state.iota.as_slice());
-                state = state.next();
-            }
+        let mut state = KeccakRoundState::at_round(&input, 0);
+        for _ in 0..23 {
             state_data.extend_from_slice(state.iota.as_slice());
+            state = state.next();
         }
+        state_data.extend_from_slice(state.iota.as_slice());
 
         let mut instance = KeccakInstance { data: state_data };
 
