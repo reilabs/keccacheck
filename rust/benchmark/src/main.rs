@@ -1,10 +1,6 @@
 use ark_bn254::Fr;
 
-use gkr::{
-    prover::prove,
-    reference::STATE,
-    verifier::verify,
-};
+use gkr::{prover::prove, reference::STATE, verifier::verify};
 use std::env;
 
 fn main() {
