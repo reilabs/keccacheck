@@ -44,7 +44,7 @@ jobs:
       
       - name: Rust Build
         working-directory: rust
-        run: cargo build
+        run: cargo build --profile=optimized
       # -----------------------------
       # Go Setup and Checks
       # -----------------------------
