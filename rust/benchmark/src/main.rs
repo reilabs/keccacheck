@@ -1,11 +1,6 @@
 use ark_bn254::Fr;
 
-use gkr::{
-    prover::prove,
-    reference::STATE,
-    sumcheck::util::{eval_mle, to_poly},
-    verifier::verify,
-};
+use gkr::{prover::prove, reference::STATE, verifier::verify};
 use std::env;
 
 fn main() {
@@ -42,16 +37,4 @@ fn main() {
     }
 
     println!("OK.");
-
-    let poly = to_poly(&[10]);
-    let r = vec![
-        Fr::from(2),
-        Fr::from(3),
-        Fr::from(4),
-        Fr::from(5),
-        Fr::from(6),
-        Fr::from(7),
-    ];
-    let eval = eval_mle(&poly, &r);
-    println!("poly {poly:?} r {r:?} eval {eval:?}");
 }
