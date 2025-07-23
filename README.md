@@ -13,7 +13,7 @@ Since these proofs are rather large, the idea is to wrap proof verification into
 To compile the Rust portion of the project and generate the static library:
 
 ```bash
-cargo build
+RUSTFLAGS='-C target-cpu=native' cargo build --profile=optimized
 ```
 
 ### Go (gnark)
