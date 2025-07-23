@@ -15,10 +15,10 @@ func TestKeccakInit(t *testing.T) {
 	}
 	ptr := KeccacheckInit(inputs)
 	words := unsafe.Slice((*uint64)(ptr), 600*n)
-	for i := range n {
-		for j := range 25 {
+	for j := range 25 {
+		for i := range n {
 			expected := outputValues[j]
-			actual := words[600*i+575+j]
+			actual := words[575*n+j*n+i]
 			if actual != expected {
 				t.Errorf("Expected word 600 to be %#x, got %#x", expected, actual)
 			}
