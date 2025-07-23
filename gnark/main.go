@@ -35,17 +35,19 @@ func main() {
 
 	inputs := make([]*big.Int, 25*N)
 	for i := range inputs {
-		inputs[i] = big.NewInt(0)
+		inputs[i] = big.NewInt(int64(i))
 	}
 
 	var inputDSized [64 * 25 * N]frontend.Variable
 	var inputSized [25 * N]frontend.Variable
-	for i := 0; i < 25*N; i++ {
-		inputSized[i] = inputs[i]
-		w := inputs[i]
-		for j := 0; j < 64; j++ {
-			bit := w.Bit(j)
-			inputDSized[64*i+j] = frontend.Variable(bit)
+	for i := 0; i < 25; i++ {
+		for instance := 0; instance < N; instance++ {
+			inputSized[instance*25+i] = inputs[instance*25+i]
+			w := inputs[instance*25+i]
+			for j := 0; j < 64; j++ {
+				bit := w.Bit(j)
+				inputDSized[64*(i*N+instance)+j] = frontend.Variable(bit)
+			}
 		}
 	}
 
@@ -56,11 +58,10 @@ func main() {
 
 	for i := 0; i < 25; i++ {
 		for instance := 0; instance < N; instance++ {
-			w := words[575+i]
+			w := words[575*N+i*N+instance]
 			for j := 0; j < 64; j++ {
 				bit := (w >> j) & 1
-				flatIndex := i*N*64 + instance*64 + j
-				outputSized[flatIndex] = frontend.Variable(bit)
+				outputSized[64*(i*N+instance)+j] = frontend.Variable(bit)
 			}
 		}
 	}
