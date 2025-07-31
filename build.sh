@@ -1,4 +1,4 @@
 cd rust
-cargo build
+RUSTFLAGS='-C target-cpu=native' cargo build --profile=optimized
 cd ../gnark
 make
