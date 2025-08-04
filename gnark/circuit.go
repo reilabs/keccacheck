@@ -13,9 +13,10 @@ const N = 1 << Log_N
 const Log_N = 3
 
 type KeccakfCircuit struct {
-	InputD [64 * 25 * N]frontend.Variable `gnark:",secret"`
-	Input  [25 * N]frontend.Variable      `gnark:",secret"`
-	Output [64 * 25 * N]frontend.Variable `gnark:",public"`
+	InputD  [64 * 25 * N]frontend.Variable `gnark:",secret"`
+	Input   [25 * N]frontend.Variable      `gnark:",secret"`
+	OutputD [64 * 25 * N]frontend.Variable `gnark:",public"`
+	Output  [25 * N]frontend.Variable      `gnark:",public"`
 }
 
 // Main Verifier circuit definition
@@ -25,7 +26,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 		panic("failed to generate proof hint")
 	}
 
-	VerifyKeccakF(api, circuit.InputD[:], circuit.Output[:], proof)
+	VerifyKeccakF(api, circuit.InputD[:], circuit.OutputD[:], circuit.Output[:], proof)
 	return nil
 }
 

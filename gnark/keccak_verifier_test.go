@@ -41,15 +41,16 @@ func TestKeccakVerify(t *testing.T) {
 	output_ptr := KeccacheckInit(inputs)
 	words := unsafe.Slice((*uint64)(output_ptr), 600*N)
 
-	var outputSized [64 * 25 * N]frontend.Variable
-
+	var outputDSized [64 * 25 * N]frontend.Variable
+	var outputSized [25 * N]frontend.Variable
 	for i := 0; i < 25; i++ {
 		for instance := 0; instance < N; instance++ {
 			w := words[575*N+i*N+instance]
+			outputSized[i*N+instance] = w
 			for j := 0; j < 64; j++ {
 				bit := (w >> j) & 1
 				flatIndex := 64*(i*N+instance) + j
-				outputSized[flatIndex] = bit
+				outputDSized[flatIndex] = bit
 			}
 		}
 	}
@@ -57,9 +58,10 @@ func TestKeccakVerify(t *testing.T) {
 	// Prepare the witness and empty circuit
 	circuit := KeccakfCircuit{}
 	witness := KeccakfCircuit{
-		InputD: inputDSized,
-		Input:  inputSized,
-		Output: outputSized,
+		InputD:  inputDSized,
+		Input:   inputSized,
+		OutputD: outputDSized,
+		Output:  outputSized,
 	}
 
 	// Assert the prover succeeds with given backend and curve
@@ -78,7 +80,7 @@ func TestKeccakVerifyFailing(t *testing.T) {
 
 	inputs := make([]*big.Int, 25*N)
 	for i := range inputs {
-		inputs[i] = big.NewInt(int64(i))
+		inputs[i] = big.NewInt(int64(0))
 	}
 	var inputDSized [64 * 25 * N]frontend.Variable
 	var inputSized [25 * N]frontend.Variable
@@ -99,26 +101,29 @@ func TestKeccakVerifyFailing(t *testing.T) {
 	output_ptr := KeccacheckInit(inputs)
 	words := unsafe.Slice((*uint64)(output_ptr), 600*N)
 
-	var outputSized [64 * 25 * N]frontend.Variable
+	var outputDSized [64 * 25 * N]frontend.Variable
+	var outputSized [25 * N]frontend.Variable
 	flip_idx := rand.Intn(25 * N * 64)
 	for i := 0; i < 25; i++ {
 		for instance := 0; instance < N; instance++ {
 			w := words[575*N+i*N+instance]
+			outputSized[i*N+instance] = w
 			for j := 0; j < 64; j++ {
 				bit := (w >> j) & 1
 				flatIndex := 64*(i*N+instance) + j
 				if flatIndex == flip_idx {
 					bit ^= 1
 				}
-				outputSized[flatIndex] = bit
+				outputDSized[flatIndex] = bit
 			}
 		}
 	}
 	circuit := KeccakfCircuit{}
 	witness := KeccakfCircuit{
-		InputD: inputDSized,
-		Input:  inputSized,
-		Output: outputSized,
+		InputD:  inputDSized,
+		Input:   inputSized,
+		OutputD: outputDSized,
+		Output:  outputSized,
 	}
 
 	// Assert the prover succeeds with given backend and curve

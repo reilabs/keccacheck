@@ -10,11 +10,11 @@ import (
 	"github.com/consensys/gnark/frontend"
 )
 
-func VerifyKeccakF(api frontend.API, input, output, proof []frontend.Variable) {
+func VerifyKeccakF(api frontend.API, input, outputD, output, proof []frontend.Variable) {
 	verifier := transcript.NewVerifier(proof)
 	for word := 0; word < 25; word++ {
 		for instance := 0; instance < N; instance++ {
-			verifier.Absorb(api, instance*25+word)
+			verifier.Absorb(api, output[word*N+instance])
 		}
 	}
 	r := make([]frontend.Variable, Log_N+6)
@@ -32,7 +32,7 @@ func VerifyKeccakF(api frontend.API, input, output, proof []frontend.Variable) {
 	expected_sum := frontend.Variable(0)
 	eval_eq_r := sumcheck.EvalEq(api, r)
 	for i := range 25 {
-		summand := sumcheck.EvalMleWithEq(api, output[(64*(i*N)):64*(i*N+N)], eval_eq_r)
+		summand := sumcheck.EvalMleWithEq(api, outputD[(64*(i*N)):64*(i*N+N)], eval_eq_r)
 		expected_sum = api.Add(expected_sum, api.Mul(summand, beta[i]))
 	}
 	sum := verifier.Read(api)

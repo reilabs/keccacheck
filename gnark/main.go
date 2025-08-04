@@ -54,19 +54,21 @@ func main() {
 	output_ptr := KeccacheckInit(inputs)
 	words := unsafe.Slice((*uint64)(output_ptr), 600*N)
 
-	var outputSized [64 * 25 * N]frontend.Variable
-
+	var outputDSized [64 * 25 * N]frontend.Variable
+	var outputSized [25 * N]frontend.Variable
 	for i := 0; i < 25; i++ {
 		for instance := 0; instance < N; instance++ {
 			w := words[575*N+i*N+instance]
+			outputSized[i*N+instance] = w
 			for j := 0; j < 64; j++ {
 				bit := (w >> j) & 1
-				outputSized[64*(i*N+instance)+j] = frontend.Variable(bit)
+				outputDSized[64*(i*N+instance)+j] = frontend.Variable(bit)
 			}
 		}
 	}
 	assignment.Input = inputSized
 	assignment.InputD = inputDSized
+	assignment.OutputD = outputDSized
 	assignment.Output = outputSized
 	witness, _ := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
 

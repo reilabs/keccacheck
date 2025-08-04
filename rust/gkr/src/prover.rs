@@ -32,10 +32,10 @@ pub fn prove(data: &[u64]) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
 
     let span = tracing::span!(tracing::Level::INFO, "prove all rounds").entered();
 
-    state[0]
-        .a
+    state[23]
+        .iota
         .iter()
-        .for_each(|i| prover.absorb(Fr::from(*i as i128)));
+        .for_each(|o| prover.absorb(Fr::from(*o as i128)));
     let mut r: Vec<Fr> = (0..num_vars).map(|_| prover.read()).collect();
 
     // TODO: feed output to the prover before obtaining alpha
