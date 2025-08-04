@@ -109,10 +109,8 @@ pub struct KeccacheckResult {
 pub unsafe extern "C" fn keccacheck_prove(
     ptr: *const u8,
     instances: usize,
-    r_ptr: *const u8,
 ) -> *mut c_void {
     unsafe {
-        let log_n = instances.ilog2() as usize;
         // Safety: Caller must ensure ptr is valid and instances is correct.
         let data: &[u8] = std::slice::from_raw_parts(ptr, instances * 25 * 8);
         let data: Vec<u64> = (0..instances * 25)
@@ -123,13 +121,8 @@ pub unsafe extern "C" fn keccacheck_prove(
             })
             .collect();
 
-        let r_bytes: &[u8] = std::slice::from_raw_parts(r_ptr, 32 * (6 + log_n));
-        let mut r = Vec::with_capacity(6 + log_n);
-        for i in 0..(6 + log_n) {
-            let chunk = &r_bytes[i * 32..(i + 1) * 32];
-            r.push(Fr::from_be_bytes_mod_order(chunk));
-        }
-        let (proof, mut input, mut output) = prove(&data, r);
+      
+        let (proof, mut input, mut output) = prove(&data);
         let mut proof: Vec<u8> = proof
             .iter()
             .flat_map(|el| el.into_bigint().to_bytes_le())

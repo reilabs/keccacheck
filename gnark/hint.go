@@ -29,14 +29,6 @@ func KeccacheckFree(ptr unsafe.Pointer, len int) {
 }
 
 func KeccacheckProve(inputs []*big.Int) unsafe.Pointer {
-	r := inputs[0 : 6+Log_N]
-	r_bytes := make([]byte, 32*(6+Log_N))
-	for i, r_i := range r {
-		r_i.FillBytes(r_bytes[i*32 : (i+1)*32])
-	}
-
-	r_ptr := (*C.uint8_t)(C.CBytes(r_bytes))
-	inputs = inputs[6+Log_N:]
 	instances := C.uintptr_t(len(inputs) / 25)
 
 	bytes := make([]byte, (len(inputs))*8)
@@ -44,7 +36,7 @@ func KeccacheckProve(inputs []*big.Int) unsafe.Pointer {
 		input.FillBytes(bytes[i*8 : (i+1)*8])
 	}
 	ptr := (*C.uint8_t)(C.CBytes(bytes))
-	return C.keccacheck_prove(ptr, instances, r_ptr)
+	return C.keccacheck_prove(ptr, instances)
 }
 
 func KeccacheckProveHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
