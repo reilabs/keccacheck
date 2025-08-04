@@ -53,10 +53,10 @@ impl<'a> Verifier<'a> {
         }
     }
 
-     pub fn absorb(&mut self, value: Fr) {
+    pub fn absorb(&mut self, value: Fr) {
         self.sponge.absorb(value);
     }
-    
+
     pub fn generate(&mut self) -> Fr {
         self.sponge.squeeze()
     }
