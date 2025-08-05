@@ -19,7 +19,7 @@ func TestKeccakVerify(t *testing.T) {
 
 	inputs := make([]*big.Int, 25*N)
 	for i := range inputs {
-		inputs[i] = big.NewInt(int64(i))
+		inputs[i] = big.NewInt(rand.Int63())
 	}
 
 	output_ptr := KeccacheckInit(inputs)
