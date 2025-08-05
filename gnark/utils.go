@@ -62,3 +62,36 @@ func getBigInt4Slice(ptr unsafe.Pointer, length int) []*big.Int {
 
 	return bigInts
 }
+
+func initCircuitFields(input []*big.Int, output []uint64) ([25 * N]frontend.Variable, [25 * N * 64]frontend.Variable, [25 * N * 64]frontend.Variable) {
+	var inputDSized [64 * 25 * N]frontend.Variable
+	var inputSized [25 * N]frontend.Variable
+	// TODO: simplify this
+	// inputs are currently instance by instance sequentially
+	// But decomposed inputs are stored round by round
+	for i := 0; i < 25; i++ {
+		for instance := 0; instance < N; instance++ {
+			inputSized[instance*25+i] = input[instance*25+i]
+			w := input[instance*25+i]
+			for j := 0; j < 64; j++ {
+				bit := w.Bit(j)
+				inputDSized[64*(i*N+instance)+j] = bit
+			}
+		}
+	}
+
+	var outputSized [64 * 25 * N]frontend.Variable
+
+	for i := 0; i < 25; i++ {
+		for instance := 0; instance < N; instance++ {
+			w := output[575*N+i*N+instance]
+			for j := 0; j < 64; j++ {
+				bit := (w >> j) & 1
+				flatIndex := 64*(i*N+instance) + j
+				outputSized[flatIndex] = bit
+			}
+		}
+	}
+
+	return inputSized, inputDSized, outputSized
+}

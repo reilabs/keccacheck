@@ -9,7 +9,6 @@ import (
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/constraint/solver"
-	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/test"
 )
 
@@ -20,41 +19,14 @@ func TestKeccakVerify(t *testing.T) {
 
 	inputs := make([]*big.Int, 25*N)
 	for i := range inputs {
-		inputs[i] = big.NewInt(int64(i))
-	}
-	var inputDSized [64 * 25 * N]frontend.Variable
-	var inputSized [25 * N]frontend.Variable
-	// TODO: simplify this
-	// inputs are currently instance by instance sequentially
-	// But decomposed inputs are stored round by round
-	for i := 0; i < 25; i++ {
-		for instance := 0; instance < N; instance++ {
-			inputSized[instance*25+i] = inputs[instance*25+i]
-			w := inputs[instance*25+i]
-			for j := 0; j < 64; j++ {
-				bit := w.Bit(j)
-				inputDSized[64*(i*N+instance)+j] = bit
-			}
-		}
+		inputs[i] = big.NewInt(rand.Int63())
 	}
 
 	output_ptr := KeccacheckInit(inputs)
-	words := unsafe.Slice((*uint64)(output_ptr), 600*N)
+	outputs := unsafe.Slice((*uint64)(output_ptr), 600*N)
 
-	var outputSized [64 * 25 * N]frontend.Variable
+	inputSized, inputDSized, outputSized := initCircuitFields(inputs, outputs)
 
-	for i := 0; i < 25; i++ {
-		for instance := 0; instance < N; instance++ {
-			w := words[575*N+i*N+instance]
-			for j := 0; j < 64; j++ {
-				bit := (w >> j) & 1
-				flatIndex := 64*(i*N+instance) + j
-				outputSized[flatIndex] = bit
-			}
-		}
-	}
-
-	// Prepare the witness and empty circuit
 	circuit := KeccakfCircuit{}
 	witness := KeccakfCircuit{
 		InputD: inputDSized,
@@ -62,7 +34,7 @@ func TestKeccakVerify(t *testing.T) {
 		Output: outputSized,
 	}
 
-	// Assert the prover succeeds with given backend and curve
+	// Assert the prover succeeds
 	assert.ProverSucceeded(
 		&circuit,
 		&witness,
@@ -80,40 +52,16 @@ func TestKeccakVerifyFailing(t *testing.T) {
 	for i := range inputs {
 		inputs[i] = big.NewInt(int64(i))
 	}
-	var inputDSized [64 * 25 * N]frontend.Variable
-	var inputSized [25 * N]frontend.Variable
-	// TODO: simplify this
-	// inputs are currently instance by instance sequentially
-	// But decomposed inputs are stored round by round
-	for i := 0; i < 25; i++ {
-		for instance := 0; instance < N; instance++ {
-			inputSized[instance*25+i] = inputs[instance*25+i]
-			w := inputs[instance*25+i]
-			for j := 0; j < 64; j++ {
-				bit := w.Bit(j)
-				inputDSized[64*(i*N+instance)+j] = bit
-			}
-		}
-	}
 
 	output_ptr := KeccacheckInit(inputs)
-	words := unsafe.Slice((*uint64)(output_ptr), 600*N)
+	outputs := unsafe.Slice((*uint64)(output_ptr), 600*N)
 
-	var outputSized [64 * 25 * N]frontend.Variable
-	flip_idx := rand.Intn(25 * N * 64)
-	for i := 0; i < 25; i++ {
-		for instance := 0; instance < N; instance++ {
-			w := words[575*N+i*N+instance]
-			for j := 0; j < 64; j++ {
-				bit := (w >> j) & 1
-				flatIndex := 64*(i*N+instance) + j
-				if flatIndex == flip_idx {
-					bit ^= 1
-				}
-				outputSized[flatIndex] = bit
-			}
-		}
-	}
+	//Randomly change one of the input words
+	flip_idx := rand.Intn(25 * N)
+	inputs[flip_idx] = big.NewInt(int64(1))
+
+	inputSized, inputDSized, outputSized := initCircuitFields(inputs, outputs)
+
 	circuit := KeccakfCircuit{}
 	witness := KeccakfCircuit{
 		InputD: inputDSized,
@@ -121,7 +69,7 @@ func TestKeccakVerifyFailing(t *testing.T) {
 		Output: outputSized,
 	}
 
-	// Assert the prover succeeds with given backend and curve
+	// Assert the prover fails
 	assert.ProverFailed(
 		&circuit,
 		&witness,
