@@ -10,7 +10,7 @@ import (
 )
 
 const N = 1 << Log_N
-const Log_N = 3
+const Log_N = 10
 
 type KeccakfCircuit struct {
 	InputD [64 * 25 * N]frontend.Variable `gnark:",secret"`
@@ -32,6 +32,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	// First commitment: commit to circuit.Output
 	var err error
 	r[0], err = committer.Commit(circuit.Output[:]...)
+
 	if err != nil {
 		return err
 	}
@@ -42,6 +43,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 			return err
 		}
 	}
+
 	if err != nil {
 		panic("was not able to commit to the outputs")
 	}

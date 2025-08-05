@@ -57,6 +57,10 @@ impl<'a> Verifier<'a> {
         self.sponge.squeeze()
     }
 
+    pub fn absorb(&mut self, value: Fr) {
+        self.sponge.absorb(value);
+    }
+
     pub fn read(&mut self) -> Fr {
         let value = self.reveal();
         self.sponge.absorb(value);

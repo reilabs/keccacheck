@@ -16,7 +16,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
     let span = tracing::span!(Level::INFO, "calculate output sum").entered();
 
     let mut r: Vec<Fr> = (0..num_vars).map(|_| Fr::from(12345)).collect();
-
+    r.iter().for_each(|challenge| verifier.absorb(*challenge));
     let mut beta = (0..25).map(|_| verifier.generate()).collect::<Vec<_>>();
 
     let expected_sum = (0..25)
