@@ -13,6 +13,9 @@ import (
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 )
 
+const N = 1 << Log_N
+const Log_N = 3
+
 func main() {
 
 	var circuit KeccakfCircuit
