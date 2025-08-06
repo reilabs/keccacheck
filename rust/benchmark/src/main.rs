@@ -1,5 +1,5 @@
 use ark_bn254::Fr;
-
+use ark_ff::PrimeField;
 use gkr::{prover::prove, reference::STATE, verifier::verify};
 use std::env;
 
@@ -19,10 +19,10 @@ fn main() {
         .map(|i| i as u64)
         .collect::<Vec<_>>();
 
-    let r: Vec<Fr> = (0..num_vars).map(|_| Fr::from(12345)).collect();
+    let r = generate_r(&data, num_vars);
     // TODO Put a proper commitment here instead putting in constant
-    let (proof, input, output) = prove(&data, r);
-    verify(num_vars, &output, &input, &proof);
+    let (proof, input, output) = prove(&data, r.clone());
+    verify(num_vars, &output, &input, &proof, r);
 
     let mut reference_input: [u64; 25] = [0; 25];
     let mut reference_output: [u64; 25] = [0; 25];
@@ -37,4 +37,24 @@ fn main() {
     }
 
     println!("OK.");
+}
+
+// Deterministic way of generating log_N + 6 challenges
+// that are fixed to the outputs, but without absorbing all
+// the outputs to the sponge
+pub fn generate_r(data: &[u64], num_vars: usize) -> Vec<Fr> {
+    let mut challenges = Vec::<Fr>::with_capacity(num_vars);
+
+    let mut hasher = blake3::Hasher::new();
+    for value in data {
+        hasher.update(&value.to_le_bytes());
+    }
+    let mut commitment = hasher.finalize();
+
+    for _ in 0..num_vars {
+        challenges.push(Fr::from_be_bytes_mod_order(commitment.as_bytes()));
+        hasher.update(commitment.as_bytes());
+        commitment = hasher.finalize();
+    }
+    challenges
 }
