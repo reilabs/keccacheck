@@ -10,7 +10,7 @@ import (
 )
 
 const N = 1 << Log_N
-const Log_N = 10
+const Log_N = 3
 
 type KeccakfCircuit struct {
 	InputD [64 * 25 * N]frontend.Variable `gnark:",secret"`
