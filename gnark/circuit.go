@@ -32,7 +32,6 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	// First commitment: commit to circuit.Output
 	var err error
 	r[0], err = committer.Commit(circuit.Output[:]...)
-
 	if err != nil {
 		return err
 	}
@@ -43,7 +42,6 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 			return err
 		}
 	}
-
 	if err != nil {
 		panic("was not able to commit to the outputs")
 	}
