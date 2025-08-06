@@ -12,7 +12,9 @@ import (
 
 func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable) {
 	verifier := transcript.NewVerifier(proof)
-
+	for _, challenge := range r {
+		verifier.Absorb(api, challenge)
+	}
 	beta := make([]frontend.Variable, 25)
 
 	for i := range 25 {

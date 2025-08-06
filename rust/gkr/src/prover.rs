@@ -29,7 +29,7 @@ pub fn prove(data: &[u64], mut r: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     span.exit();
 
     let mut prover = Prover::new();
-
+    r.iter().for_each(|challenge| prover.absorb(*challenge));
     let span = tracing::span!(tracing::Level::INFO, "prove all rounds").entered();
 
     // TODO: feed output to the prover before obtaining alpha

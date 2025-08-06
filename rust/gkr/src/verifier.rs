@@ -7,16 +7,12 @@ use ark_ff::{One, Zero};
 use tracing::{Level, instrument};
 
 #[instrument(skip_all)]
-pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr]) {
+pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr], mut r: Vec<Fr>) {
     let instances = 1usize << (num_vars - 6);
 
     let mut verifier = Verifier::new(proof);
-
-    // TODO: feed output to the verifier before obtaining alpha
     let span = tracing::span!(Level::INFO, "calculate output sum").entered();
-
-    let mut r: Vec<Fr> = (0..num_vars).map(|_| Fr::from(12345)).collect();
-
+    r.iter().for_each(|challenge| verifier.absorb(*challenge));
     let mut beta = (0..25).map(|_| verifier.generate()).collect::<Vec<_>>();
 
     let expected_sum = (0..25)
