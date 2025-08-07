@@ -424,14 +424,16 @@ func keccakF1600(a [25]uint64) [25]uint64 {
 }
 
 // GNARK
+const HASH_COUNT = 128
+const STATE_SIZE = 25
 
 type keccakfCircuit struct {
-	In       [512][25]uints.U64
-	Expected [512][25]uints.U64 `gnark:",public"`
+	In       [HASH_COUNT][STATE_SIZE]uints.U64
+	Expected [HASH_COUNT][STATE_SIZE]uints.U64 `gnark:",public"`
 }
 
 func (c *keccakfCircuit) Define(api frontend.API) error {
-	var res [512][25]uints.U64
+	var res [HASH_COUNT][STATE_SIZE]uints.U64
 	for i := range res {
 		res[i] = c.In[i]
 	}
@@ -452,8 +454,6 @@ func (c *keccakfCircuit) Define(api frontend.API) error {
 }
 
 func main() {
-	println("hello")
-
 	var circuit keccakfCircuit
 
 	// Compile the circuit
@@ -470,8 +470,8 @@ func main() {
 	}
 
 	// Calculate witness
-	var nativeIn [512][25]uint64
-	var res [512][25]uint64
+	var nativeIn [HASH_COUNT][STATE_SIZE]uint64
+	var res [HASH_COUNT][STATE_SIZE]uint64
 	for i := range nativeIn {
 		for j := range nativeIn[i] {
 			nativeIn[i][j] = 2
