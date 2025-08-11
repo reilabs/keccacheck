@@ -55,6 +55,7 @@ INFO.       ...
 | num variables    | 6    | 7    | 13    | 16    | 6 + log₂(n)        |
 | proof size (felts) | 6241 | 6793 | 10105 | 11761 | 552 * vars + 2929 |
 | proof size (bn254, kB)	| 195	| 212	| 316	| 368 | |
+|recursive proof size (bn254, groth16, bytes)|356|388|580|676|
 
 
 ## Keccak definition
