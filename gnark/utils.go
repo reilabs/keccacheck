@@ -63,6 +63,17 @@ func getBigInt4Slice(ptr unsafe.Pointer, length int) []*big.Int {
 	return bigInts
 }
 
+func PrepareTestIO() ([]*big.Int, []uint64) {
+	inputs := make([]*big.Int, 25*N)
+	for i := range inputs {
+		inputs[i] = big.NewInt(int64(i))
+	}
+
+	output_ptr := KeccacheckInit(inputs)
+	outputs := unsafe.Slice((*uint64)(output_ptr), 600*N)
+	return inputs, outputs
+}
+
 func initCircuitFields(input []*big.Int, output []uint64) ([25 * N]frontend.Variable, [25 * N * 64]frontend.Variable, [25 * N * 64]frontend.Variable) {
 	var inputDSized [64 * 25 * N]frontend.Variable
 	var inputSized [25 * N]frontend.Variable

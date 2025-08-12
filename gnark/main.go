@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"math/big"
 	"time"
-	"unsafe"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend/groth16"
@@ -36,13 +34,7 @@ func main() {
 	assignment := KeccakfCircuit{}
 	solver.RegisterHint(KeccacheckProveHint)
 
-	inputs := make([]*big.Int, 25*N)
-	for i := range inputs {
-		inputs[i] = big.NewInt(int64(i))
-	}
-
-	output_ptr := KeccacheckInit(inputs)
-	outputs := unsafe.Slice((*uint64)(output_ptr), 600*N)
+	inputs, outputs := PrepareTestIO()
 
 	assignment.Input, assignment.InputD, assignment.Output = initCircuitFields(inputs, outputs)
 
