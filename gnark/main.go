@@ -44,11 +44,8 @@ func main() {
 	output_ptr := KeccacheckInit(inputs)
 	outputs := unsafe.Slice((*uint64)(output_ptr), 600*N)
 
-	inputSized, inputDSized, outputSized := initCircuitFields(inputs, outputs)
+	assignment.Input, assignment.InputD, assignment.Output = initCircuitFields(inputs, outputs)
 
-	assignment.Input = inputSized
-	assignment.InputD = inputDSized
-	assignment.Output = outputSized
 	witness, _ := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
 
 	// Prove
