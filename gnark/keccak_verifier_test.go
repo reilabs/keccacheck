@@ -1,7 +1,6 @@
 package main
 
 import (
-	"math/big"
 	"math/rand"
 	"testing"
 
@@ -40,8 +39,8 @@ func TestKeccakVerifyFailing(t *testing.T) {
 
 	// Make sure that if keccak(inputs) != outputs
 	// Then the prover fails
-	flip_idx := rand.Intn(25 * N)
-	inputs[flip_idx] = big.NewInt(int64(1))
+	flip_idx := rand.Intn(600*N-575*N+1) + 575*N
+	outputs[flip_idx] = rand.Uint64()
 
 	witness := KeccakfCircuit{}
 	witness.Input, witness.InputD, witness.Output = initCircuitFields(inputs, outputs)
