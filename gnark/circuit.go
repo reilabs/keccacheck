@@ -10,9 +10,17 @@ import (
 )
 
 type KeccakfCircuit struct {
-	InputD [64 * 25 * N]frontend.Variable `gnark:",secret"`
-	Input  [25 * N]frontend.Variable      `gnark:",secret"`
-	Output [64 * 25 * N]frontend.Variable `gnark:",public"`
+	InputD []frontend.Variable `gnark:",secret"`
+	Input  []frontend.Variable `gnark:",secret"`
+	Output []frontend.Variable `gnark:",public"`
+}
+
+func NewKeccakfCircuit() *KeccakfCircuit {
+	return &KeccakfCircuit{
+		Input:  make([]frontend.Variable, 25*N),
+		InputD: make([]frontend.Variable, 64*25*N),
+		Output: make([]frontend.Variable, 64*25*N),
+	}
 }
 
 // Main Verifier circuit definition

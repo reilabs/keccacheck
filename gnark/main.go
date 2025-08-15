@@ -16,7 +16,7 @@ const Log_N = 3
 
 func main() {
 
-	var circuit KeccakfCircuit
+	var circuit = *NewKeccakfCircuit()
 
 	// Compile the circuit
 	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)

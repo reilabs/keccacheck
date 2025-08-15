@@ -20,7 +20,7 @@ func TestKeccakVerify(t *testing.T) {
 	witness := KeccakfCircuit{}
 	witness.Input, witness.InputD, witness.Output = initCircuitFields(inputs, outputs)
 
-	circuit := KeccakfCircuit{}
+	var circuit = *NewKeccakfCircuit()
 
 	assert.ProverSucceeded(
 		&circuit,
@@ -45,7 +45,7 @@ func TestKeccakVerifyFailing(t *testing.T) {
 	witness := KeccakfCircuit{}
 	witness.Input, witness.InputD, witness.Output = initCircuitFields(inputs, outputs)
 
-	circuit := KeccakfCircuit{}
+	var circuit = *NewKeccakfCircuit()
 
 	assert.ProverFailed(
 		&circuit,
