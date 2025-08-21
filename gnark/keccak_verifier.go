@@ -17,10 +17,7 @@ func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable
 	}
 	beta := make([]frontend.Variable, 25)
 
-	for i := range 25 {
-		beta[i] = verifier.Generate(api)
-	}
-
+	beta = generateBeta(api, verifier, beta)
 	expected_sum := frontend.Variable(0)
 	eval_eq_r := sumcheck.EvalEq(api, r)
 	for i := range 25 {

@@ -67,7 +67,8 @@ func Profile() {
 	// overlapping profiles are allowed (define profiles inside Define or subfunction to profile
 	// part of the circuit only)
 	p := profile.Start()
-	_, _ = frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &KeccakfCircuit{})
+	circuit := *NewKeccakfCircuit()
+	_, _ = frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
 	p.Stop()
 
 	fmt.Println(p.NbConstraints())

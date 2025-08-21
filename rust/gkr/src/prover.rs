@@ -33,8 +33,8 @@ pub fn prove(data: &[u64], mut r: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     let span = tracing::span!(tracing::Level::INFO, "prove all rounds").entered();
 
     // TODO: feed output to the prover before obtaining alpha
-    let mut beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
-
+    let mut beta = vec![Fr::zero(); 25];
+    generate_beta(&mut prover, &mut beta);
     // write final output sum
     let mut sum: Fr = state[23]
         .iota
@@ -197,7 +197,7 @@ pub fn prove_round(
     )
 }
 
-fn generate_beta<'a>(prover: &mut Prover, slice: &'a mut Vec<Fr>) -> &'a Vec<Fr> {
+fn generate_beta(prover: &mut Prover, slice: &mut [Fr]) {
     let base: Fr = prover.read();
     let mut power = base;
 
@@ -205,6 +205,4 @@ fn generate_beta<'a>(prover: &mut Prover, slice: &'a mut Vec<Fr>) -> &'a Vec<Fr>
         *x = power;
         power *= base;
     });
-
-    slice
 }
