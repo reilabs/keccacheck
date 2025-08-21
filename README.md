@@ -379,6 +379,47 @@ to be a system of linear equations, which can easily be solved, even if the
 solution is going to be way uglier than in the degree-3 case and then this
 solution can just be hardcoded in the implementation.
 
+# Security
+
+Our protocol inherits **perfect completeness** from the sumcheck protocol. 
+
+## Soundness Analysis
+
+The main sources of soundness error are:  
+
+1. **MLE collisions** – A cheating polynomial could evaluate identically to the honest one at a random MLE point with probability at most $\tfrac{n}{|\mathbb{F}|}$. Over $25$ MLEs this contributes $\tfrac{25n}{|\mathbb{F}|}$.  
+2. **Random linear combinations** – Each linear compression step incurrs an additional $\tfrac{1}{|\mathbb{F}|}$ error factor.  
+3. **Sumcheck soundness** – Each round of sumcheck adds at most $\tfrac{O(n)}{|\mathbb{F}|}$ error, with constants depending on the structure of the reduction.  
+
+Tracking these round by round, the total soundness error is bounded by  
+
+$$
+\frac{145 + 554n}{|\mathbb{F}|}.
+$$
+where $n = 6 + \text{log}(instances)$.
+
+For $h = 2^{10}$ hashes, $n = 16$, yielding soundness error: 
+
+$$
+\frac{9009}{|\mathbb{F}|}.
+$$
+
+Thus, a field of size at least $2^{142}$ suffices for $2^{-128}$ soundness error. In practice, curves such as **bn254** comfortably suffice.
+
+---
+
+## Fiat–Shamir Security
+
+The protocol has **round-by-round (RBR) soundness** (Canetti et al. 2018), by extension of the SC protocol, ensuring security under the Fiat–Shamir transform.  
+
+- The **State** function could simulate the verifier’s checks given any transcript, catching inconsistencies with negligible probability.  
+- Transitioning from a cheating state to an honest one is negligible in each round.  
+- Even in the critical $\theta$ stage, where a prover might try to adaptively lie about intermediate values, consistency checks via random polynomial evaluations ensure that any deviation introduces detectable errors with overwhelming probability.  
+
+Thus, the protocol remains sound in the non-interactive setting.  
+
+
+
 # Credits
 
 * Marcin Kostrzewa - the idea for GKR-style prover with a linear combination of keccak state and dropping the usual layering constraint.
