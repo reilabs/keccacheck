@@ -60,8 +60,8 @@ pub fn prove(data: &[u64], mut r: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
         r = previous_proof.r;
         if round != 0 {
             sum = Fr::zero();
+            generate_beta(&mut prover, &mut beta);
             beta.iter_mut().enumerate().for_each(|(i, b)| {
-                *b = prover.read();
                 let v = HALF * (Fr::one() - previous_proof.iota_hat[i]);
                 sum += *b * v;
             });

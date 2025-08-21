@@ -32,8 +32,8 @@ func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable
 		r, iota = VerifyRound(api, verifier, 6+Log_N, &r, &beta, sum, ROUND_CONSTANTS[i])
 		if i != 0 {
 			sum = frontend.Variable(0)
+			beta = generateBeta(api, verifier, beta)
 			for j := range beta {
-				beta[j] = verifier.Generate(api)
 				sum = api.Add(api.Mul(beta[j], iota[j]), sum)
 			}
 		}
