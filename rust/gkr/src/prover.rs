@@ -136,8 +136,8 @@ pub fn prove_round(
     // combine subclaims on theta d
     let mut sum = Fr::zero();
     let mut beta_d = vec![Fr::zero(); theta_proof.d.len()];
+    generate_beta(prover, &mut beta_d);
     beta_d.iter_mut().enumerate().for_each(|(i, b)| {
-        *b = prover.read();
         sum += *b * theta_proof.d[i];
     });
 
@@ -148,12 +148,12 @@ pub fn prove_round(
     let mut sum = Fr::zero();
     let mut beta_c = vec![Fr::zero(); theta_d_proof.c.len()];
     let mut beta_rot_c = vec![Fr::zero(); theta_d_proof.rot_c.len()];
+    generate_beta(prover, &mut beta_c);
     beta_c.iter_mut().enumerate().for_each(|(i, b)| {
-        *b = prover.read();
         sum += *b * theta_d_proof.c[i];
     });
+    generate_beta(prover, &mut beta_rot_c);
     beta_rot_c.iter_mut().enumerate().for_each(|(i, b)| {
-        *b = prover.read();
         sum += *b * theta_d_proof.rot_c[i];
     });
 
@@ -172,15 +172,17 @@ pub fn prove_round(
     let mut sum = Fr::zero();
     let mut beta_a = vec![Fr::zero(); theta_c_proof.a.len()];
 
+    let mut b = vec![Fr::zero(); 5];
+    generate_beta(prover, &mut b);
     theta_proof.ai.iter().enumerate().for_each(|(i, ai)| {
-        let b = prover.read();
         for j in 0..5 {
-            beta[j * 5 + i] *= b;
+            beta[j * 5 + i] *= b[i];
         }
-        sum += b * *ai;
+        sum += b[i] * *ai;
     });
+
+    generate_beta(prover, &mut beta_a);
     beta_a.iter_mut().enumerate().for_each(|(i, b)| {
-        *b = prover.read();
         sum += *b * theta_c_proof.a[i];
     });
 
