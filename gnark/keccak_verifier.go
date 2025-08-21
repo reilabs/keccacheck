@@ -96,9 +96,9 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 	stripPi(pi, rho)
 
 	// --- Combine subclaims on rho ---
+	generateBeta(api, verifier, *beta)
 	expectedSum = frontend.Variable(0)
 	for i := 0; i < len(*beta); i++ {
-		(*beta)[i] = verifier.Generate(api)
 		expectedSum = api.Add(expectedSum, api.Mul((*beta)[i], rho[i]))
 	}
 	// --- Verify rho ---
@@ -138,8 +138,8 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 	}
 
 	expectedSum = frontend.Variable(0)
+	generateBeta(api, verifier, *beta)
 	for i := 0; i < len(*beta); i++ {
-		(*beta)[i] = verifier.Generate(api)
 		expectedSum = api.Add(expectedSum, api.Mul((*beta)[i], thetaXorBase[i]))
 	}
 

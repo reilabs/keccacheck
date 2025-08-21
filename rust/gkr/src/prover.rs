@@ -101,8 +101,8 @@ pub fn prove_round(
 
     // combine subclaims on rho
     let mut sum = Fr::zero();
+    generate_beta(prover, beta);
     beta.iter_mut().enumerate().for_each(|(i, b)| {
-        *b = prover.read();
         sum += *b * rho[i];
     });
 
@@ -117,8 +117,8 @@ pub fn prove_round(
         .collect::<Vec<_>>();
     let mut sum = Fr::zero();
     // we need that beta to combine with the last theta sumcheck!
+    generate_beta(prover, beta);
     beta.iter_mut().enumerate().for_each(|(i, b)| {
-        *b = prover.read();
         sum += *b * theta_xor_base[i];
     });
 
