@@ -17,10 +17,7 @@ func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable
 	}
 	beta := make([]frontend.Variable, 25)
 
-	for i := range 25 {
-		beta[i] = verifier.Generate(api)
-	}
-
+	beta = generateBeta(api, verifier, beta)
 	expected_sum := frontend.Variable(0)
 	eval_eq_r := sumcheck.EvalEq(api, r)
 	for i := range 25 {
@@ -35,8 +32,8 @@ func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable
 		r, iota = VerifyRound(api, verifier, 6+Log_N, &r, &beta, sum, ROUND_CONSTANTS[i])
 		if i != 0 {
 			sum = frontend.Variable(0)
+			beta = generateBeta(api, verifier, beta)
 			for j := range beta {
-				beta[j] = verifier.Generate(api)
 				sum = api.Add(api.Mul(beta[j], iota[j]), sum)
 			}
 		}
@@ -64,7 +61,7 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 	api.AssertIsEqual(api.Mul(eEq, inner), ve)
 
 	x := verifier.Generate(api)
-	y := verifier.Generate(api)
+	y := api.Mul(x, x)
 	(*beta)[0] = api.Mul((*beta)[0], x)
 	for i := 1; i < len(*beta); i++ {
 		(*beta)[i] = api.Mul((*beta)[i], y)
@@ -99,9 +96,9 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 	stripPi(pi, rho)
 
 	// --- Combine subclaims on rho ---
+	generateBeta(api, verifier, *beta)
 	expectedSum = frontend.Variable(0)
 	for i := 0; i < len(*beta); i++ {
-		(*beta)[i] = verifier.Generate(api)
 		expectedSum = api.Add(expectedSum, api.Mul((*beta)[i], rho[i]))
 	}
 	// --- Verify rho ---
@@ -141,8 +138,8 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 	}
 
 	expectedSum = frontend.Variable(0)
+	generateBeta(api, verifier, *beta)
 	for i := 0; i < len(*beta); i++ {
-		(*beta)[i] = verifier.Generate(api)
 		expectedSum = api.Add(expectedSum, api.Mul((*beta)[i], thetaXorBase[i]))
 	}
 
@@ -172,8 +169,9 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 	// --- combine subclaims on theta d ---
 	expectedSum = frontend.Variable(0)
 	betaD := make([]frontend.Variable, 5)
+	generateBeta(api, verifier, betaD)
 	for i := 0; i < 5; i++ {
-		betaD[i] = verifier.Generate(api)
+
 		expectedSum = api.Add(expectedSum, api.Mul(betaD[i], d[i]))
 	}
 
@@ -205,12 +203,12 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 	expectedSum = frontend.Variable(0)
 	betaC := make([]frontend.Variable, 5)
 	betaRotC := make([]frontend.Variable, 5)
+	betaC = generateBeta(api, verifier, betaC)
 	for i := 0; i < 5; i++ {
-		betaC[i] = verifier.Generate(api)
 		expectedSum = api.Add(expectedSum, api.Mul(betaC[i], c[i]))
 	}
+	betaRotC = generateBeta(api, verifier, betaRotC)
 	for i := 0; i < 5; i++ {
-		betaRotC[i] = verifier.Generate(api)
 		expectedSum = api.Add(expectedSum, api.Mul(betaRotC[i], rotC[i]))
 	}
 
@@ -244,17 +242,19 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 	expectedSum = frontend.Variable(0)
 	betaA := make([]frontend.Variable, len(a))
 
+	b := make([]frontend.Variable, 5)
+	b = generateBeta(api, verifier, b)
 	for i, val := range ai {
-		b := verifier.Generate(api)
+
 		for j := 0; j < 5; j++ {
 			idx := j*5 + i
-			(*beta)[idx] = api.Mul((*beta)[idx], b)
+			(*beta)[idx] = api.Mul((*beta)[idx], b[i])
 		}
-		expectedSum = api.Add(expectedSum, api.Mul(b, val))
+		expectedSum = api.Add(expectedSum, api.Mul(b[i], val))
 	}
 
+	generateBeta(api, verifier, betaA)
 	for i := range betaA {
-		betaA[i] = verifier.Generate(api)
 		expectedSum = api.Add(expectedSum, api.Mul(betaA[i], a[i]))
 	}
 
@@ -292,6 +292,16 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 
 	return vrsA, iota
 
+}
+
+func generateBeta(api frontend.API, verifier *transcript.Verifier, slice []frontend.Variable) []frontend.Variable {
+	base := verifier.Generate(api)
+	power := base
+	for i := range slice {
+		slice[i] = power
+		power = api.Mul(power, base)
+	}
+	return slice
 }
 
 func stripPi[T any](pi []T, rho []T) {

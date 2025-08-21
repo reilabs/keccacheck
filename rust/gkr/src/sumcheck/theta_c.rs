@@ -2,7 +2,7 @@ use crate::sumcheck::util::{
     HALF, calculate_evaluations_over_boolean_hypercube_for_eq, derive_rot_evaluations_from_eq,
     to_poly_xor_base, update,
 };
-use crate::transcript::Prover;
+use crate::transcript::{Prover, RandomnessGenerator};
 use ark_bn254::Fr;
 use ark_ff::{MontFp, One, Zero};
 use rayon::prelude::*;
@@ -308,7 +308,7 @@ pub fn prove_sumcheck_theta_c(
         transcript.write(p5);
         transcript.write(p6);
 
-        let r = transcript.read();
+        let r = transcript.generate();
         rs.push(r);
         // TODO: Fold update into evaluation loop.
         ((eq, rot), _) = rayon::join(
@@ -368,7 +368,7 @@ mod test {
         calculate_evaluations_over_boolean_hypercube_for_rot, derive_rot_evaluations_from_eq,
         eval_mle, to_poly_xor_base,
     };
-    use crate::transcript::Prover;
+    use crate::transcript::{Prover, RandomnessGenerator};
     use ark_bn254::Fr;
     use ark_ff::Zero;
 
@@ -383,9 +383,9 @@ mod test {
         let state = keccak_round(&data, 0);
 
         let mut prover = Prover::new();
-        let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
-        let beta_c = (0..COLUMNS).map(|_| prover.read()).collect::<Vec<_>>();
-        let beta_rot_c = (0..COLUMNS).map(|_| prover.read()).collect::<Vec<_>>();
+        let alpha = (0..num_vars).map(|_| prover.generate()).collect::<Vec<_>>();
+        let beta_c = (0..COLUMNS).map(|_| prover.generate()).collect::<Vec<_>>();
+        let beta_rot_c = (0..COLUMNS).map(|_| prover.generate()).collect::<Vec<_>>();
 
         let theta_c = state
             .c

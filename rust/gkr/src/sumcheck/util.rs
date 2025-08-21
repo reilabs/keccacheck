@@ -1,5 +1,5 @@
-use crate::reference::RHO_OFFSETS;
 use crate::transcript::Verifier;
+use crate::{reference::RHO_OFFSETS, transcript::RandomnessGenerator};
 use ark_bn254::Fr;
 use ark_ff::{AdditiveGroup, Field, MontFp, One, Zero};
 

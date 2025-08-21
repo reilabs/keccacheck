@@ -1,6 +1,7 @@
 use crate::sumcheck::util::{
     calculate_evaluations_over_boolean_hypercube_for_eq, to_poly_xor_base,
 };
+use crate::transcript::RandomnessGenerator;
 use crate::{sumcheck::util::update, transcript::Prover};
 use ark_bn254::Fr;
 use ark_ff::Zero;
@@ -134,7 +135,7 @@ pub fn prove_sumcheck_theta_a(
         transcript.write(p1);
         transcript.write(p2);
 
-        let r = transcript.read();
+        let r = transcript.generate();
         rs.push(r);
 
         // TODO: Fold update into evaluation loop.
@@ -182,7 +183,7 @@ mod test {
     use crate::reference::{STATE, keccak_round};
     use crate::sumcheck::theta_a::prove_theta_a;
     use crate::sumcheck::util::{eval_mle, to_poly_xor_base};
-    use crate::transcript::Prover;
+    use crate::transcript::{Prover, RandomnessGenerator};
     use ark_bn254::Fr;
 
     #[test]
@@ -196,11 +197,11 @@ mod test {
         let state = keccak_round(&data, 0);
 
         let mut prover = Prover::new();
-        let alpha_a = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
-        let alpha_b = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
+        let alpha_a = (0..num_vars).map(|_| prover.generate()).collect::<Vec<_>>();
+        let alpha_b = (0..num_vars).map(|_| prover.generate()).collect::<Vec<_>>();
 
-        let beta_a = (0..STATE).map(|_| prover.read()).collect::<Vec<_>>();
-        let beta_b = (0..STATE).map(|_| prover.read()).collect::<Vec<_>>();
+        let beta_a = (0..STATE).map(|_| prover.generate()).collect::<Vec<_>>();
+        let beta_b = (0..STATE).map(|_| prover.generate()).collect::<Vec<_>>();
 
         let result = state
             .a

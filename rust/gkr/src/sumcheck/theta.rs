@@ -2,7 +2,7 @@ use crate::sumcheck::util::{
     HALF, calculate_evaluations_over_boolean_hypercube_for_eq, to_poly_xor_base,
     to_poly_xor_base_coeff, update,
 };
-use crate::transcript::Prover;
+use crate::transcript::{Prover, RandomnessGenerator};
 use ark_bn254::Fr;
 use ark_ff::Zero;
 use rayon::prelude::*;
@@ -150,7 +150,7 @@ pub fn prove_sumcheck_theta(
         transcript.write(p2);
         transcript.write(p3);
 
-        let r = transcript.read();
+        let r = transcript.generate();
         rs.push(r);
         // TODO: Fold update into evaluation loop.
         (eq, _) = rayon::join(
@@ -222,8 +222,8 @@ mod tests {
         let state = keccak_round(&data, 0);
 
         let mut prover = Prover::new();
-        let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
-        let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+        let alpha = (0..num_vars).map(|_| prover.generate()).collect::<Vec<_>>();
+        let beta = (0..25).map(|_| prover.generate()).collect::<Vec<_>>();
 
         let real_theta_sum: Fr = state
             .theta
