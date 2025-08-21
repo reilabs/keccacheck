@@ -87,7 +87,7 @@ pub fn prove_round(
 
     // combine subclaims chi_00 and chi_rlc
     let x = prover.read();
-    let y = prover.read();
+    let y = x * x;
     beta[0] *= x;
     beta.iter_mut().skip(1).for_each(|b| *b *= y);
     let sum = beta[0] * iota_proof.chi_00 + y * iota_proof.chi_rlc;

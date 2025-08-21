@@ -61,7 +61,7 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 	api.AssertIsEqual(api.Mul(eEq, inner), ve)
 
 	x := verifier.Generate(api)
-	y := verifier.Generate(api)
+	y := api.Mul(x, x)
 	(*beta)[0] = api.Mul((*beta)[0], x)
 	for i := 1; i < len(*beta); i++ {
 		(*beta)[i] = api.Mul((*beta)[i], y)
