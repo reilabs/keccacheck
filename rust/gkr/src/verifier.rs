@@ -1,7 +1,7 @@
 use crate::reference::{ROUND_CONSTANTS, strip_pi};
 use crate::sumcheck::util;
 use crate::sumcheck::util::{HALF, add_col, eval_mle, to_poly, verify_sumcheck, xor};
-use crate::transcript::Verifier;
+use crate::transcript::{RandomnessGenerator, Verifier};
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use tracing::{Level, instrument};
@@ -14,7 +14,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr], mut 
     let span = tracing::span!(Level::INFO, "calculate output sum").entered();
     r.iter().for_each(|challenge| verifier.absorb(*challenge));
     let mut beta = vec![Fr::zero(); 25];
-    generate_beta(&mut verifier, &mut beta);
+    verifier.generate_beta(&mut beta);
     let expected_sum = (0..25)
         .map(|i| {
             beta[i]
@@ -41,7 +41,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr], mut 
         );
         if round != 0 {
             sum = Fr::zero();
-            generate_beta(&mut verifier, &mut beta);
+            verifier.generate_beta(&mut beta);
             beta.iter_mut().enumerate().for_each(|(i, b)| {
                 sum += *b * iota[i];
             });
@@ -106,7 +106,7 @@ fn verify_round(
 
     // combine subclaims on rho
     let mut expected_sum = Fr::zero();
-    generate_beta(verifier, beta);
+    verifier.generate_beta(beta);
     beta.iter().enumerate().for_each(|(i, b)| {
         expected_sum += *b * rho[i];
     });
@@ -124,7 +124,7 @@ fn verify_round(
     let theta_xor_base = theta.iter().map(|x| Fr::one() - x - x).collect::<Vec<_>>();
     let mut expected_sum = Fr::zero();
     // we'll need this beta to combine with the last theta sumcheck!
-    generate_beta(verifier, beta);
+    verifier.generate_beta(beta);
     beta.iter().enumerate().for_each(|(i, b)| {
         expected_sum += *b * theta_xor_base[i];
     });
@@ -143,7 +143,7 @@ fn verify_round(
     // combine subclaims on theta d
     let mut expected_sum = Fr::zero();
     let mut beta_d = [Fr::zero(); 5];
-    generate_beta(verifier, &mut beta_d);
+    verifier.generate_beta(&mut beta_d);
     beta_d.iter().enumerate().for_each(|(i, b)| {
         expected_sum += *b * d[i];
     });
@@ -165,11 +165,11 @@ fn verify_round(
     let mut beta_c = [Fr::zero(); 5];
     let mut beta_rot_c = [Fr::zero(); 5];
 
-    generate_beta(verifier, &mut beta_c);
+    verifier.generate_beta(&mut beta_c);
     beta_c.iter().enumerate().for_each(|(i, b)| {
         expected_sum += *b * c[i];
     });
-    generate_beta(verifier, &mut beta_rot_c);
+    verifier.generate_beta(&mut beta_rot_c);
     beta_rot_c.iter().enumerate().for_each(|(i, b)| {
         expected_sum += *b * rot_c[i];
     });
@@ -196,7 +196,7 @@ fn verify_round(
     let mut beta_a = vec![Fr::zero(); a.len()];
 
     let mut b = vec![Fr::zero(); 5];
-    generate_beta(verifier, &mut b);
+    verifier.generate_beta(&mut b);
     ai.iter().enumerate().for_each(|(i, a)| {
         for j in 0..5 {
             beta[j * 5 + i] *= b[i];
@@ -204,7 +204,7 @@ fn verify_round(
         expected_sum += b[i] * *a;
     });
 
-    generate_beta(verifier, &mut beta_a);
+    verifier.generate_beta(&mut beta_a);
     beta_a.iter().enumerate().for_each(|(i, b)| {
         expected_sum += *b * a[i];
     });
@@ -225,14 +225,4 @@ fn verify_round(
     iota.iter_mut().for_each(|i| *i = HALF * (Fr::one() - *i));
 
     (vrs_a, iota)
-}
-
-fn generate_beta(verifier: &mut Verifier, slice: &mut [Fr]) {
-    let base: Fr = verifier.generate();
-    let mut power = base;
-
-    slice.iter_mut().for_each(|x| {
-        *x = power;
-        power *= base;
-    });
 }

@@ -1,6 +1,7 @@
 #[cfg(debug_assertions)]
 use crate::sumcheck::util::eval_mle;
 use crate::sumcheck::util::{calculate_evaluations_over_boolean_hypercube_for_rot, to_poly};
+use crate::transcript::RandomnessGenerator;
 use crate::{sumcheck::util::update, transcript::Prover};
 use ark_bn254::Fr;
 use ark_ff::Zero;
@@ -124,7 +125,7 @@ pub fn prove_sumcheck_rho(
         transcript.write(p1);
         transcript.write(p2);
 
-        let r = transcript.read();
+        let r = transcript.generate();
         rs.push(r);
         // TODO: Fold update into evaluation loop.
         rayon::join(
@@ -180,8 +181,8 @@ mod tests {
         let state = keccak_round(&data, 0);
 
         let mut prover = Prover::new();
-        let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
-        let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+        let alpha = (0..num_vars).map(|_| prover.generate()).collect::<Vec<_>>();
+        let beta = (0..25).map(|_| prover.generate()).collect::<Vec<_>>();
 
         let real_rho_sum: Fr = state
             .rho

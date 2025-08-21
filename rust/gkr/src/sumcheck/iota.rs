@@ -3,6 +3,7 @@ use crate::sumcheck::util::eval_mle;
 use crate::sumcheck::util::{
     calculate_evaluations_over_boolean_hypercube_for_eq, to_poly, to_poly_coeff,
 };
+use crate::transcript::RandomnessGenerator;
 use crate::{
     sumcheck::util::{HALF, update, xor},
     transcript::Prover,
@@ -205,7 +206,7 @@ pub fn prove_sumcheck_iota(
         transcript.write(p2);
         transcript.write(p3);
 
-        let r = transcript.read();
+        let r = transcript.generate();
         rs.push(r);
         // TODO: Fold update into evaluation loop.
         ((e, a), (b, c)) = rayon::join(
@@ -232,6 +233,7 @@ mod tests {
     use super::*;
     use crate::reference::{ROUND_CONSTANTS, STATE, keccak_round};
     use crate::sumcheck::util::to_poly;
+    use crate::transcript::RandomnessGenerator;
     use ark_ff::One;
 
     #[test]
@@ -245,8 +247,8 @@ mod tests {
         let state = keccak_round(&data, 0);
 
         let mut prover = Prover::new();
-        let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
-        let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+        let alpha = (0..num_vars).map(|_| prover.generate()).collect::<Vec<_>>();
+        let beta = (0..25).map(|_| prover.generate()).collect::<Vec<_>>();
 
         let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
         let chi_00 = to_poly(&state.pi_chi[0..instances]);

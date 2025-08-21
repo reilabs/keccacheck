@@ -4,6 +4,7 @@ use crate::sumcheck::util::eval_mle;
 use crate::sumcheck::util::{
     add_col, calculate_evaluations_over_boolean_hypercube_for_eq, to_poly,
 };
+use crate::transcript::RandomnessGenerator;
 use crate::{
     sumcheck::util::{HALF, update, xor},
     transcript::Prover,
@@ -176,7 +177,7 @@ pub fn prove_sumcheck_chi(
         transcript.write(p3);
         transcript.write(p4);
 
-        let r = transcript.read();
+        let r = transcript.generate();
         rs.push(r);
         // TODO: Fold update into evaluation loop.
         (e, _) = rayon::join(
@@ -217,7 +218,10 @@ pub fn prove_sumcheck_chi(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::reference::{STATE, keccak_round};
+    use crate::{
+        reference::{STATE, keccak_round},
+        transcript::RandomnessGenerator,
+    };
 
     #[test]
     fn pi_chi_no_recursion() {
@@ -230,8 +234,8 @@ mod tests {
         let state = keccak_round(&data, 0);
 
         let mut prover = Prover::new();
-        let alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
-        let beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+        let alpha = (0..num_vars).map(|_| prover.generate()).collect::<Vec<_>>();
+        let beta = (0..25).map(|_| prover.generate()).collect::<Vec<_>>();
 
         let eq = calculate_evaluations_over_boolean_hypercube_for_eq(&alpha);
         let mut pi = state.rho.to_vec();

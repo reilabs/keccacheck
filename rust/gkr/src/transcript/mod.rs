@@ -8,6 +8,21 @@ pub struct Prover {
     pub proof: Vec<Fr>,
 }
 
+/// Trait for transcript entities that can generate FS randomness
+pub trait RandomnessGenerator {
+    fn generate(&mut self) -> Fr;
+
+    fn generate_beta(&mut self, slice: &mut [Fr]) {
+        let base: Fr = self.generate();
+        let mut power = base;
+
+        slice.iter_mut().for_each(|x| {
+            *x = power;
+            power *= base;
+        });
+    }
+}
+
 pub struct Verifier<'a> {
     sponge: Sponge,
     proof: &'a [Fr],
@@ -31,10 +46,6 @@ impl Prover {
         self.proof
     }
 
-    pub fn read(&mut self) -> Fr {
-        self.sponge.squeeze()
-    }
-
     pub fn write(&mut self, value: Fr) {
         self.sponge.absorb(value);
         self.proof.push(value);
@@ -51,10 +62,6 @@ impl<'a> Verifier<'a> {
             sponge: Sponge::new(),
             proof,
         }
-    }
-
-    pub fn generate(&mut self) -> Fr {
-        self.sponge.squeeze()
     }
 
     pub fn absorb(&mut self, value: Fr) {
@@ -74,5 +81,17 @@ impl<'a> Verifier<'a> {
             .expect("Ran out of proof elements.");
         self.proof = tail;
         *value
+    }
+}
+
+impl RandomnessGenerator for Prover {
+    fn generate(&mut self) -> Fr {
+        self.sponge.squeeze()
+    }
+}
+
+impl<'a> RandomnessGenerator for Verifier<'a> {
+    fn generate(&mut self) -> Fr {
+        self.sponge.squeeze()
     }
 }

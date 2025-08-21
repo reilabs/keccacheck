@@ -7,7 +7,7 @@ use crate::sumcheck::theta_a::{ThetaAProof, prove_theta_a};
 use crate::sumcheck::theta_c::prove_theta_c;
 use crate::sumcheck::theta_d::prove_theta_d;
 use crate::sumcheck::util::{HALF, eval_mle, to_poly};
-use crate::transcript::Prover;
+use crate::transcript::{Prover, RandomnessGenerator};
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use tracing::instrument;
@@ -34,7 +34,7 @@ pub fn prove(data: &[u64], mut r: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
 
     // TODO: feed output to the prover before obtaining alpha
     let mut beta = vec![Fr::zero(); 25];
-    generate_beta(&mut prover, &mut beta);
+    prover.generate_beta(&mut beta);
     // write final output sum
     let mut sum: Fr = state[23]
         .iota
@@ -60,7 +60,7 @@ pub fn prove(data: &[u64], mut r: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
         r = previous_proof.r;
         if round != 0 {
             sum = Fr::zero();
-            generate_beta(&mut prover, &mut beta);
+            prover.generate_beta(&mut beta);
             beta.iter_mut().enumerate().for_each(|(i, b)| {
                 let v = HALF * (Fr::one() - previous_proof.iota_hat[i]);
                 sum += *b * v;
@@ -86,7 +86,7 @@ pub fn prove_round(
     let iota_proof = prove_iota(prover, num_vars, alpha, beta, &layers.pi_chi, sum, rc);
 
     // combine subclaims chi_00 and chi_rlc
-    let x = prover.read();
+    let x = prover.generate();
     let y = x * x;
     beta[0] *= x;
     beta.iter_mut().skip(1).for_each(|b| *b *= y);
@@ -101,7 +101,7 @@ pub fn prove_round(
 
     // combine subclaims on rho
     let mut sum = Fr::zero();
-    generate_beta(prover, beta);
+    prover.generate_beta(beta);
     beta.iter_mut().enumerate().for_each(|(i, b)| {
         sum += *b * rho[i];
     });
@@ -117,7 +117,7 @@ pub fn prove_round(
         .collect::<Vec<_>>();
     let mut sum = Fr::zero();
     // we need that beta to combine with the last theta sumcheck!
-    generate_beta(prover, beta);
+    prover.generate_beta(beta);
     beta.iter_mut().enumerate().for_each(|(i, b)| {
         sum += *b * theta_xor_base[i];
     });
@@ -136,7 +136,7 @@ pub fn prove_round(
     // combine subclaims on theta d
     let mut sum = Fr::zero();
     let mut beta_d = vec![Fr::zero(); theta_proof.d.len()];
-    generate_beta(prover, &mut beta_d);
+    prover.generate_beta(&mut beta_d);
     beta_d.iter_mut().enumerate().for_each(|(i, b)| {
         sum += *b * theta_proof.d[i];
     });
@@ -148,11 +148,11 @@ pub fn prove_round(
     let mut sum = Fr::zero();
     let mut beta_c = vec![Fr::zero(); theta_d_proof.c.len()];
     let mut beta_rot_c = vec![Fr::zero(); theta_d_proof.rot_c.len()];
-    generate_beta(prover, &mut beta_c);
+    prover.generate_beta(&mut beta_c);
     beta_c.iter_mut().enumerate().for_each(|(i, b)| {
         sum += *b * theta_d_proof.c[i];
     });
-    generate_beta(prover, &mut beta_rot_c);
+    prover.generate_beta(&mut beta_rot_c);
     beta_rot_c.iter_mut().enumerate().for_each(|(i, b)| {
         sum += *b * theta_d_proof.rot_c[i];
     });
@@ -173,7 +173,7 @@ pub fn prove_round(
     let mut beta_a = vec![Fr::zero(); theta_c_proof.a.len()];
 
     let mut b = vec![Fr::zero(); 5];
-    generate_beta(prover, &mut b);
+    prover.generate_beta(&mut b);
     theta_proof.ai.iter().enumerate().for_each(|(i, ai)| {
         for j in 0..5 {
             beta[j * 5 + i] *= b[i];
@@ -181,7 +181,7 @@ pub fn prove_round(
         sum += b[i] * *ai;
     });
 
-    generate_beta(prover, &mut beta_a);
+    prover.generate_beta(&mut beta_a);
     beta_a.iter_mut().enumerate().for_each(|(i, b)| {
         sum += *b * theta_c_proof.a[i];
     });
@@ -197,14 +197,4 @@ pub fn prove_round(
         &layers.a,
         sum,
     )
-}
-
-fn generate_beta(prover: &mut Prover, slice: &mut [Fr]) {
-    let base: Fr = prover.read();
-    let mut power = base;
-
-    slice.iter_mut().for_each(|x| {
-        *x = power;
-        power *= base;
-    });
 }
