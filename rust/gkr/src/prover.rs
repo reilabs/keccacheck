@@ -196,3 +196,15 @@ pub fn prove_round(
         sum,
     )
 }
+
+fn generate_beta<'a>(prover: &mut Prover, slice: &'a mut Vec<Fr>) -> &'a Vec<Fr> {
+    let base: Fr = prover.read();
+    let mut power = base;
+
+    slice.iter_mut().for_each(|x| {
+        *x = power;
+        power *= base;
+    });
+
+    slice
+}
