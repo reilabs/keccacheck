@@ -294,6 +294,14 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 
 }
 
+func generateBeta(api frontend.API, verifier *transcript.Verifier, slice []frontend.Variable) []frontend.Variable {
+	beta := verifier.Generate(api)
+	for i := range slice {
+		slice[i] = beta
+		beta = api.Mul(beta, beta)
+	}
+	return slice
+}
 func stripPi[T any](pi []T, rho []T) {
 	if len(pi) != len(rho) {
 		log.Panicf("pi and rho length mismatch: %d vs %d", len(pi), len(rho))
