@@ -90,10 +90,12 @@ Round(A,RC) {
 Call the output $\iota_{ij}$, each of 6 vars, $i$ and $j$ ranging from 0 to 4, MLEs of the state.
 The verifier will sample a random $\alpha_0$ and ask the verifier to evaluate $\iota_{ij}(\alpha)$ for each $i$, $j$ pair, GKR-style and verify independently that the answer is correct (these are easy for the verifier to evaluate,
 given it needs to know the inputs and outputs anyway).
-To make this faster, the verifier samples 25 random values $\beta_{ij}$ (TODO: can this be powers of a single random value? Probably yes, this is just SZ lemma)
+To make this faster, the verifier samples 25 random values $\beta_{ij}$ 
 and computes
 
 $$ \sum_{i,j} \beta_{ij}\iota_{ij}(\alpha). $$
+
+(As an aside, it is possible to generate $\beta_{ij}$ as successive powers of one value. This results in approximately 150k fewer constraints, regardless of batch size, and an 11 bit security loss.)
 
 I will try to go through a whole round of keccak GKR style, to reduce this problem to computing an
 analogous sum of the outputs of the previous round and then we can loop until we reach the initial state.
