@@ -1,6 +1,6 @@
 # Keccacheck
 
-Keccacheck - a play on words keccak and sumcheck - is a GKR-style prover for Keccak hash functions. Our prover uses lots of rounds of sumcheck internally, hence the name.
+Keccacheck - a portmanteau of Keccak and sumcheck - is a GKR-style prover for Keccak hash functions. Our prover uses many rounds of sumcheck internally, hence the name.
 
 The high level idea is to represent a single Keccak-F as layered polynomials. Multiple instances of Keccak-F can be proven together, increasing the number of variables on each layer by only $log_2(instances)$ - making the verifier very efficient for lots of Keccaks at once.
 
@@ -34,6 +34,8 @@ This will compile the main circuit, yield the number of constraints and give the
 
 ## Benchmarking
 
+### Non-recursive proof
+
 Run `RUSTFLAGS='-C target-cpu=native' cargo run --profile=optimized -- {num_variables}`.
 
 `num_variables` must be greater than 6 (a single keccak instance). This will prove $2^{numVariables - 6}$ instances of keccak.
@@ -48,7 +50,7 @@ INFO        ┝━ prove_iota [ 9.54ms | 0.18% ]
 INFO.       ...
 ```
 
-### Proof size
+#### Proof size
 
 | keccak instances | 1    | 2    | 128   | 1024  | n                  |
 |------------------|------|------|-------|-------|--------------------|
@@ -56,6 +58,16 @@ INFO.       ...
 | proof size (felts) | 6241 | 6793 | 10105 | 11761 | 552 * vars + 2929 |
 | proof size (bn254, KiB)	| 195	| 212	| 316	| 368 | ((552 * vars + 2929) *32)/1024 |
 |recursive proof size (bn254, groth16, bytes)|356|388|580|676|
+
+
+### Recursive proof
+
+Build as per above instructions, then in the `gnark` directory, run `go run .`. The number of instances can be modified in the `main.go` file.
+
+| keccak instances | 1    | 8  | 128   | 1024  | 
+|------------------|------|------|-------|-------|
+| No. Constraints   | 638682   | 791,597   | 1,379,176  | 4,614,574   |
+| Proving time | 1.434881s | 1.75688025s| 3.311138583s| 11.785925375s |
 
 
 ## Keccak definition
