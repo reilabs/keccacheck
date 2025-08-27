@@ -1,6 +1,6 @@
 # Keccacheck
 
-Keccacheck - a play on words keccak and sumcheck - is a GKR-style prover for Keccak hash functions. Our prover uses lots of rounds of sumcheck internally, hence the name.
+Keccacheck - a portmanteau of Keccak and sumcheck - is a GKR-style prover for Keccak hash functions. Our prover uses many rounds of sumcheck internally, hence the name.
 
 The high level idea is to represent a single Keccak-F as layered polynomials. Multiple instances of Keccak-F can be proven together, increasing the number of variables on each layer by only $log_2(instances)$ - making the verifier very efficient for lots of Keccaks at once.
 
@@ -34,6 +34,8 @@ This will compile the main circuit, yield the number of constraints and give the
 
 ## Benchmarking
 
+### Non-recursive proof
+
 Run `RUSTFLAGS='-C target-cpu=native' cargo run --profile=optimized -- {num_variables}`.
 
 `num_variables` must be greater than 6 (a single keccak instance). This will prove $2^{numVariables - 6}$ instances of keccak.
@@ -48,7 +50,7 @@ INFO        ┝━ prove_iota [ 9.54ms | 0.18% ]
 INFO.       ...
 ```
 
-### Proof size
+#### Proof size
 
 | keccak instances | 1    | 2    | 128   | 1024  | n                  |
 |------------------|------|------|-------|-------|--------------------|
@@ -56,6 +58,16 @@ INFO.       ...
 | proof size (felts) | 6241 | 6793 | 10105 | 11761 | 552 * vars + 2929 |
 | proof size (bn254, KiB)	| 195	| 212	| 316	| 368 | ((552 * vars + 2929) *32)/1024 |
 |recursive proof size (bn254, groth16, bytes)|356|388|580|676|
+
+
+### Recursive proof
+
+Build as per above instructions, then in the `gnark` directory, run `go run .`. The number of instances can be modified in the `main.go` file.
+
+| keccak instances | 1    | 8  | 128   | 1024  | 
+|------------------|------|------|-------|-------|
+| No. Constraints   | 638682   | 791,597   | 1,379,176  | 4,614,574   |
+| Proving time | 1.434881s | 1.75688025s| 3.311138583s| 11.785925375s |
 
 
 ## Keccak definition
@@ -90,10 +102,12 @@ Round(A,RC) {
 Call the output $\iota_{ij}$, each of 6 vars, $i$ and $j$ ranging from 0 to 4, MLEs of the state.
 The verifier will sample a random $\alpha_0$ and ask the verifier to evaluate $\iota_{ij}(\alpha)$ for each $i$, $j$ pair, GKR-style and verify independently that the answer is correct (these are easy for the verifier to evaluate,
 given it needs to know the inputs and outputs anyway).
-To make this faster, the verifier samples 25 random values $\beta_{ij}$ (TODO: can this be powers of a single random value? Probably yes, this is just SZ lemma)
+To make this faster, the verifier samples 25 random values $\beta_{ij}$ 
 and computes
 
 $$ \sum_{i,j} \beta_{ij}\iota_{ij}(\alpha). $$
+
+(As an aside, it is possible to generate $\beta_{ij}$ as successive powers of one value. This results in approximately 150k fewer constraints, regardless of batch size, and an 11 bit security loss.)
 
 I will try to go through a whole round of keccak GKR style, to reduce this problem to computing an
 analogous sum of the outputs of the previous round and then we can loop until we reach the initial state.
