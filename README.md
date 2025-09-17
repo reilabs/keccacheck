@@ -170,7 +170,7 @@ $$
 $$
 
 Unsurprisingly, we sumcheck this. The $rot_k$ polynomial is such that
-$rot_k(a,b) = 1$ iff $ a = (b + k)\mod 64 $,
+$rot_k(a,b) = 1$ iff $a = (b + k)\mod 64$,
 where the bitvectors are interpreted as binary integers.
 Computing them will be painful, particularly for the verifier + this is a
 sumcheck over 50 different polys: oof. OTOH, it's _just_ a sum, so this thing
