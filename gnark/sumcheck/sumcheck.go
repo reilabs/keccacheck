@@ -11,14 +11,14 @@ var halfString = "10944121435919637611123202872628637544274182200208017171849102
 
 // Verify sumcheck for $N$-degree univariate polynomials.
 // I.e. N = 1 for linear, 2 for quadratic, etc.
-func VerifySumcheck(api frontend.API, verifier *transcript.Verifier, num_polys int, degree int, e frontend.Variable) (frontend.Variable, []frontend.Variable) {
+func VerifySumcheck(api frontend.API, verifier *transcript.Verifier, num_vars int, degree int, e frontend.Variable) (frontend.Variable, []frontend.Variable) {
 	half, ok := new(big.Int).SetString(halfString, 10)
 	if !ok {
 		panic("Could not parse the half string")
 	}
-	rs := make([]frontend.Variable, num_polys)
+	rs := make([]frontend.Variable, num_vars)
 
-	for i := 0; i < num_polys; i++ {
+	for i := 0; i < num_vars; i++ {
 		// get an array of size degree from the transcript
 		p := make([]frontend.Variable, degree)
 		for j := range degree {
