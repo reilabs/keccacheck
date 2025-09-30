@@ -4,7 +4,17 @@ Keccacheck - a portmanteau of Keccak and sumcheck - is a GKR-style prover for Ke
 
 The high level idea is to represent a single Keccak-F as layered polynomials. Multiple instances of Keccak-F can be proven together, increasing the number of variables on each layer by only $log_2(instances)$ - making the verifier very efficient for lots of Keccaks at once.
 
-Since these proofs are rather large, the idea is to wrap proof verification into another proof system that produces more succint proofs (using gnark).
+Since these proofs are rather large, we wrap proof verification into another proof system that produces more succint proofs (using gnark).
+
+## Performance
+See the performance comparison between our system and Keccak implementation built into Gnark. For sufficiently large batch sizes, our solution offers a 10x speedup, and scales well beyond what's possible with Gnark.
+
+<img width="3204" height="1322" alt="chart" src="https://github.com/user-attachments/assets/ef8738de-f34c-44d4-8513-4f15bad5c248" />
+
+## Read the Paper
+For in-depth information about the techniques used, [read the "Keccacheck: towards a SNARK friendly Keccak" paper at IACR Cryptology Archive titled](https://eprint.iacr.org/2025/1764).
+
+[We also published a high-level overview of the system on Reilabs blog](https://reilabs.io/blog/keccacheck-towards-a-snark-friendly-keccak/).
 
 ##  Building and Running the Project
 
