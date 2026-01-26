@@ -5,6 +5,8 @@ go 1.24.3
 require (
 	github.com/consensys/gnark v0.13.0
 	github.com/consensys/gnark-crypto v0.18.0
+	github.com/reilabs/gnark-nimue v0.0.7-0.20250819071945-7382324c8642
+	github.com/reilabs/gnark-skyscraper v0.0.0-20250819020215-db52e4ee2949
 )
 
 require (
