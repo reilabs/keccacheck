@@ -2,14 +2,12 @@ package whir
 
 import (
 	"math/bits"
+	"reilabs/keccacheck/transcript"
 
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/math/uints"
-	gnarkNimue "github.com/reilabs/gnark-nimue"
-	skyscraper "github.com/reilabs/gnark-skyscraper"
 )
 
-// initialSumcheck performs the initial phase of the sumcheck protocol.
 // It combines multiple polynomial evaluation claims into a single claim using
 // Random Linear Combination (RLC) and runs the initial rounds of the Whir sumcheck.
 //
@@ -18,7 +16,7 @@ import (
 //   - linearStatementEvaluations: Evaluations of the multilinear polynomials.
 func initialSumcheck(
 	api frontend.API,
-	arthur gnarkNimue.Arthur,
+	v *transcript.Verifier,
 	batchingRandomness frontend.Variable,
 	initialOODQueries []frontend.Variable,
 	initialOODAnswers []frontend.Variable,
@@ -28,7 +26,7 @@ func initialSumcheck(
 
 	// 1. Generate random coefficients (beta) from the transcript for combining OOD answers
 	// and linear statement evaluations into a single value.
-	initialCombinationRandomness, err := GenerateCombinationRandomness(api, arthur, len(initialOODAnswers)+len(linearStatementEvaluations[0]))
+	initialCombinationRandomness, err := GenerateCombinationRandomness(api, v, len(initialOODAnswers)+len(linearStatementEvaluations[0]))
 	if err != nil {
 		return InitialSumcheckData{}, nil, nil, err
 	}
@@ -54,7 +52,7 @@ func initialSumcheck(
 
 	// 4. Run the core Whir sumcheck rounds to reduce the claim further.
 	// This updates the 'lastEval' to the value claimed at the end of these rounds.
-	initialSumcheckFoldingRandomness, lastEval, err := runWhirSumcheckRounds(api, lastEval, arthur, whirParams.FoldingFactorArray[0], 3)
+	initialSumcheckFoldingRandomness, lastEval, err := runWhirSumcheckRounds(api, lastEval, v, whirParams.FoldingFactorArray[0], 3)
 	if err != nil {
 		return InitialSumcheckData{}, nil, nil, err
 	}
@@ -67,56 +65,36 @@ func initialSumcheck(
 
 // parseBatchedCommitment reads the Prover's commitments and generates Verifier challenges
 // via the Fiat-Shamir heuristic (using the 'arthur' transcript).
-func parseBatchedCommitment(arthur gnarkNimue.Arthur, whir_params WHIRParams) (frontend.Variable, frontend.Variable, []frontend.Variable, [][]frontend.Variable, error) {
+func parseBatchedCommitment(v *transcript.Verifier, api frontend.API, whir_params WHIRParams) (frontend.Variable, frontend.Variable, []frontend.Variable, [][]frontend.Variable, error) {
 	// 1. Read the Merkle Root hash committed by the prover.
-	rootHash := make([]frontend.Variable, 1)
-	if err := arthur.FillNextScalars(rootHash); err != nil {
-		return nil, nil, nil, [][]frontend.Variable{}, err
-	}
+	rootHash := v.Read(api)
 
 	// 2. Generate Out-Of-Domain (OOD) query points (challenges) from the transcript.
-	oodPoints := make([]frontend.Variable, 1)
+	oodPoints := v.GenerateVector(api, 1)
 	oodAnswers := make([][]frontend.Variable, whir_params.BatchSize)
-	if err := arthur.FillChallengeScalars(oodPoints); err != nil {
-		return nil, nil, nil, nil, err
-	}
 
 	// 3. Read the Prover's answers to the OOD queries for the entire batch.
 	for i := range whir_params.BatchSize {
-		oodAnswer := make([]frontend.Variable, 1)
-		if err := arthur.FillNextScalars(oodAnswer); err != nil {
-			return nil, nil, nil, nil, err
-		}
+		oodAnswer := v.ReadVector(api, 1)
+
 		oodAnswers[i] = oodAnswer
 	}
 
 	// 4. Generate the batching randomness (alpha) used to combine the batched polynomials
 	// in subsequent steps.
-	batchingRandomness := make([]frontend.Variable, 1)
-	if err := arthur.FillChallengeScalars(batchingRandomness); err != nil {
-		return nil, 0, nil, nil, err
-	}
-	return rootHash[0], batchingRandomness[0], oodPoints, oodAnswers, nil
+	batchingRandomness := v.GenerateVector(api, 1)
+	return rootHash, batchingRandomness[0], oodPoints, oodAnswers, nil
 }
 
 // generateFinalCoefficientsAndRandomnessPoints handles the final phase of the protocol,
 // usually associated with the STIR (or FRI-like) folding finalization.
-func generateFinalCoefficientsAndRandomnessPoints(api frontend.API, arthur gnarkNimue.Arthur, whir_params WHIRParams, circuit Merkle, uapi *uints.BinaryField[uints.U64], sc *skyscraper.Skyscraper, domainSize int, expDomainGenerator frontend.Variable) ([]frontend.Variable, []frontend.Variable, error) {
+func generateFinalCoefficientsAndRandomnessPoints(api frontend.API, v *transcript.Verifier, whir_params WHIRParams, circuit Merkle, uapi *uints.BinaryField[uints.U64], domainSize int, expDomainGenerator frontend.Variable) ([]frontend.Variable, []frontend.Variable, error) {
 	// 1. Read the final coefficients sent by the prover.
-	finalCoefficients := make([]frontend.Variable, 1<<whir_params.FinalSumcheckRounds)
-	if err := arthur.FillNextScalars(finalCoefficients); err != nil {
-		return nil, nil, err
-	}
-
-	// 2. Enforce Proof of Work (PoW). This forces the prover to grind on the hash
-	// to make the proof generation expensive enough to deter brute-force attacks on the transcript.
-	if err := RunPoW(api, sc, arthur, whir_params.FinalPowBits); err != nil {
-		return nil, nil, err
-	}
+	finalCoefficients := v.GenerateVector(api, 1<<whir_params.FinalSumcheckRounds)
 
 	// 3. Generate the final query points (indices) for the STIR protocol.
 	// These determine which leaves of the Merkle tree will be opened.
-	finalRandomnessPoints, err := GenerateStirChallengePoints(api, arthur, whir_params.FinalQueries, circuit.LeafIndexes[len(circuit.LeafIndexes)-1], domainSize, uapi, expDomainGenerator, whir_params.FoldingFactorArray[len(whir_params.FoldingFactorArray)-1])
+	finalRandomnessPoints, err := GenerateStirChallengePoints(api, v, whir_params.FinalQueries, circuit.LeafIndexes[len(circuit.LeafIndexes)-1], domainSize, uapi, expDomainGenerator, whir_params.FoldingFactorArray[len(whir_params.FoldingFactorArray)-1])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -161,13 +139,9 @@ func rlcBatchedLeaves(api frontend.API, leaves [][]frontend.Variable, foldSize i
 
 // GenerateCombinationRandomness generates the combination randomness for the given parameters.
 // It generates a random scalar and expands it to the required length.
-func GenerateCombinationRandomness(api frontend.API, arthur gnarkNimue.Arthur, randomnessLength int) ([]frontend.Variable, error) {
-	combRandomnessGen := make([]frontend.Variable, 1)
-	if err := arthur.FillChallengeScalars(combRandomnessGen); err != nil {
-		return nil, err
-	}
-
-	combinationRandomness := ExpandRandomness(api, combRandomnessGen[0], randomnessLength)
+func GenerateCombinationRandomness(api frontend.API, v *transcript.Verifier, randomnessLength int) ([]frontend.Variable, error) {
+	combRandomness := v.Generate(api)
+	combinationRandomness := ExpandRandomness(api, combRandomness, randomnessLength)
 	return combinationRandomness, nil
 
 }
@@ -175,45 +149,27 @@ func GenerateCombinationRandomness(api frontend.API, arthur gnarkNimue.Arthur, r
 func runWhirSumcheckRounds(
 	api frontend.API,
 	lastEval frontend.Variable,
-	arthur gnarkNimue.Arthur,
+	verifier *transcript.Verifier,
 	foldingFactor int,
 	polynomialDegree int,
 ) ([]frontend.Variable, frontend.Variable, error) {
-	sumcheckPolynomial := make([]frontend.Variable, polynomialDegree)
 	foldingRandomness := make([]frontend.Variable, foldingFactor)
-	foldingRandomnessTemp := make([]frontend.Variable, 1)
 
 	for i := range foldingFactor {
-		if err := arthur.FillNextScalars(sumcheckPolynomial); err != nil {
-			return nil, nil, err
-		}
-		if err := arthur.FillChallengeScalars(foldingRandomnessTemp); err != nil {
-			return nil, nil, err
-		}
-		foldingRandomness[i] = foldingRandomnessTemp[0]
+		sumcheckPolynomial := verifier.ReadVector(api, uint(polynomialDegree))
+		foldingRandomnessTemp := verifier.Generate(api)
+		foldingRandomness[i] = foldingRandomnessTemp
 		CheckSumOverBool(api, lastEval, sumcheckPolynomial)
 		lastEval = EvaluateQuadraticPolynomialFromEvaluationList(api, sumcheckPolynomial, foldingRandomness[i])
 	}
 	return foldingRandomness, lastEval, nil
 }
 
-// RunPoW executes a proof-of-work challenge if the difficulty is greater than zero.
-// This is used as part of the Fiat-Shamir transformation to prevent malicious prover behavior.
-func RunPoW(api frontend.API, sc *skyscraper.Skyscraper, arthur gnarkNimue.Arthur, difficulty int) error {
-	if difficulty > 0 {
-		_, _, err := PoW(api, sc, arthur, difficulty)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // GenerateStirChallengePoints generates the stir challenge points for the given parameters.
 // It calculates the folding factor power and generates the stir challenges for the given leaf indexes.
 func GenerateStirChallengePoints(
 	api frontend.API,
-	arthur gnarkNimue.Arthur,
+	v *transcript.Verifier,
 	NQueries int,
 	leafIndexes []uints.U64,
 	domainSize int,
@@ -222,7 +178,7 @@ func GenerateStirChallengePoints(
 	foldingFactor int,
 ) ([]frontend.Variable, error) {
 	foldingFactorPower := 1 << foldingFactor
-	finalIndexes, err := getStirChallenges(api, arthur, NQueries, domainSize, foldingFactorPower)
+	finalIndexes, err := getStirChallenges(api, v, NQueries, domainSize, foldingFactorPower)
 	if err != nil {
 		return nil, err
 	}
@@ -243,30 +199,21 @@ func GenerateStirChallengePoints(
 
 func getStirChallenges(
 	api frontend.API,
-	arthur gnarkNimue.Arthur,
+	verifier *transcript.Verifier,
 	numQueries int,
 	domainSize int,
 	foldingFactorPower int,
 ) ([]frontend.Variable, error) {
+
 	foldedDomainSize := domainSize / foldingFactorPower
-	domainSizeBytes := (bits.Len(uint(foldedDomainSize*2-1)) - 1 + 7) / 8
-
-	stirQueries := make([]uints.U8, domainSizeBytes*numQueries)
-	if err := arthur.FillChallengeBytes(stirQueries); err != nil {
-		return nil, err
-	}
-
-	bitLength := bits.Len(uint(foldedDomainSize)) - 1
+	bitLength := bits.Len(uint(foldedDomainSize - 1))
 
 	indexes := make([]frontend.Variable, numQueries)
-	for i := range numQueries {
-		var value frontend.Variable = 0
-		for j := range domainSizeBytes {
-			value = api.Add(stirQueries[j+i*domainSizeBytes].Val, api.Mul(value, 256))
-		}
 
-		bitsOfValue := api.ToBinary(value)
-		indexes[i] = api.FromBinary(bitsOfValue[:bitLength]...)
+	for i := 0; i < numQueries; i++ {
+		challenge := verifier.Generate(api)
+		challengeBits := api.ToBinary(challenge)
+		indexes[i] = api.FromBinary(challengeBits[:bitLength]...)
 	}
 
 	return indexes, nil
