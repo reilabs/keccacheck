@@ -17,7 +17,18 @@ func VerifyWhir(
 	params WHIRParams,
 ) (totalFoldingRandomness []frontend.Variable, err error) {
 	v := transcript.NewVerifier(proof)
-	_, _, _, _, _ = parseBatchedCommitment(v, api, params)
+
+	commitments := make([]ParsedCommitment, params.BatchSize)
+
+	for i := range params.BatchSize {
+		commitment, err := parseBatchedCommitment(v, api, params)
+
+		if err != nil {
+			return nil, fmt.Errorf("Unable to parse commitment:", err)
+		}
+		commitments[i] = commitment
+	}
+
 	return nil, fmt.Errorf("Not yet implemented")
 }
 

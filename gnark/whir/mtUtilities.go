@@ -64,8 +64,8 @@ func initialSumcheck(
 }
 
 // parseBatchedCommitment reads the Prover's commitments and generates Verifier challenges
-// via the Fiat-Shamir heuristic (using the 'arthur' transcript).
-func parseBatchedCommitment(v *transcript.Verifier, api frontend.API, whir_params WHIRParams) (frontend.Variable, frontend.Variable, []frontend.Variable, [][]frontend.Variable, error) {
+// via the Fiat-Shamir heuristic
+func parseBatchedCommitment(v *transcript.Verifier, api frontend.API, whir_params WHIRParams) (ParsedCommitment, error) {
 	// 1. Read the Merkle Root hash committed by the prover.
 	rootHash := v.Read(api)
 
@@ -80,10 +80,13 @@ func parseBatchedCommitment(v *transcript.Verifier, api frontend.API, whir_param
 		oodAnswers[i] = oodAnswer
 	}
 
-	// 4. Generate the batching randomness (alpha) used to combine the batched polynomials
-	// in subsequent steps.
-	batchingRandomness := v.GenerateVector(api, 1)
-	return rootHash, batchingRandomness[0], oodPoints, oodAnswers, nil
+	commitment := ParsedCommitment{
+		Root:               rootHash,
+		oodPoints:          oodPoints,
+		oodAnswers:         oodAnswers,
+		batchingRandomness: v.GenerateVector(api, 1),
+	}
+	return commitment, nil
 }
 
 // generateFinalCoefficientsAndRandomnessPoints handles the final phase of the protocol,
