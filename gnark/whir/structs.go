@@ -61,6 +61,13 @@ type InitialSumcheckData struct {
 }
 
 type MLConstraint struct {
-	point     []frontend.Variable
-	evalution frontend.Variable
+	Point      []frontend.Variable
+	Evaluation frontend.Variable
 }
+
+type RoundData struct {
+	CombinationRandomness []frontend.Variable
+	Constraints           []MLConstraint
+}
+
+type MLPoint = []frontend.Variable

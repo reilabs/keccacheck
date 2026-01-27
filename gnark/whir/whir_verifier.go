@@ -39,7 +39,7 @@ func VerifyWhir(
 
 	for _, statement := range statements {
 		for _, constraint := range statement.Constraints {
-			allWeights = append(allWeights, constraint.point)
+			allWeights = append(allWeights, constraint.Point)
 		}
 	}
 
@@ -59,6 +59,40 @@ func VerifyWhir(
 		constraintEvalsMatrix[i] = row
 	}
 
+	batchingRandomness := v.Generate(api)
+
+	allConstraints := make([]MLConstraint, len(allWeights))
+
+	roundConstraints := make([](RoundData), 0)
+	// roundFoldingRandomness := make([]MLPoint, 0)
+	claimedSum := frontend.Variable(0)
+
+	for constraintIdx, info := range allWeights {
+
+		combinedEval := frontend.Variable(0)
+
+		pow := frontend.Variable(1)
+
+		for _, polyEvals := range constraintEvalsMatrix {
+			term := api.Mul(pow, polyEvals[constraintIdx])
+			combinedEval = api.Add(combinedEval, term)
+
+			pow = api.Mul(pow, batchingRandomness)
+		}
+
+		allConstraints[constraintIdx] = MLConstraint{
+			Point:      info,
+			Evaluation: combinedEval,
+		}
+	}
+
+	combinationRandomness, claimedSum := combineConstraints(api, v, claimedSum, allConstraints)
+
+	roundConstraints = append(roundConstraints, RoundData{
+		CombinationRandomness: combinationRandomness,
+		Constraints:           allConstraints,
+	})
+
 	return nil, fmt.Errorf("Not yet implemented")
 }
 
@@ -69,7 +103,7 @@ func combineConstraints(api frontend.API, v *transcript.Verifier, claimedSum fro
 	rVector := ExpandRandomness(api, randomness, len(constraints))
 
 	for i := range constraints {
-		claimedSum = api.Add(claimedSum, api.Mul(rVector[i], constraints[i].evalution))
+		claimedSum = api.Add(claimedSum, api.Mul(rVector[i], constraints[i].Evaluation))
 	}
 
 	return rVector, claimedSum
