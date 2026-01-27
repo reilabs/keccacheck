@@ -93,6 +93,8 @@ func VerifyWhir(
 		Constraints:           allConstraints,
 	})
 
+	runWhirSumcheckRounds(api, claimedSum, v, params.FoldingFactorArray[0], 3)
+
 	return nil, fmt.Errorf("Not yet implemented")
 }
 

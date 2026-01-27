@@ -55,6 +55,22 @@ func CheckSumOverBool(api frontend.API, value frontend.Variable, polyEvals []fro
 	api.AssertIsEqual(value, sumOverBools)
 }
 
+// EvaluateQuadraticPolynomialFromEvaluationList performs Lagrange interpolation on a
+// quadratic polynomial P(x) defined by evaluations over the domain {0, 1, 2}.
+//
+// Given the input vector E = [P(0), P(1), P(2)], it computes the value P(r)
+// for an arbitrary point 'r' by deriving the coefficients a, b, c such that:
+//
+//	P(x) = ax^2 + bx + c
+//
+// The coefficients are computed as:
+//
+//	c = P(0)
+//	b = (-P(2) + 4P(1) - 3P(0)) / 2
+//	a = ( P(2) - 2P(1) +  P(0)) / 2
+//
+// This allows the verifier to evaluate the polynomial at a random challenge point
+// using only the evaluations provided by the prover.
 func EvaluateQuadraticPolynomialFromEvaluationList(api frontend.API, evaluations []frontend.Variable, point frontend.Variable) (ans frontend.Variable) {
 	inv2 := api.Inverse(2)
 	b0 := evaluations[0]
