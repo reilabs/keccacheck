@@ -43,6 +43,22 @@ func VerifyWhir(
 		}
 	}
 
+	numPolynomials := len(commitments)
+	numConstraints := len(allWeights)
+
+	constraintEvalsMatrix := make([][]frontend.Variable, numPolynomials)
+
+	for i := 0; i < numPolynomials; i++ {
+		row := make([]frontend.Variable, numConstraints)
+
+		for j := 0; j < numConstraints; j++ {
+			val := v.Read(api)
+			row[j] = val
+		}
+
+		constraintEvalsMatrix[i] = row
+	}
+
 	return nil, fmt.Errorf("Not yet implemented")
 }
 
