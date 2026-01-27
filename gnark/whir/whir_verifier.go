@@ -64,9 +64,11 @@ func VerifyWhir(
 	allConstraints := make([]MLConstraint, len(allWeights))
 
 	roundConstraints := make([](RoundData), 0)
-	// roundFoldingRandomness := make([]MLPoint, 0)
+	roundFoldingRandomness := make([]MLPoint, 0)
 	claimedSum := frontend.Variable(0)
 
+	// Step 3: Reconstruct combined constraints using RLC of the evaluation matrix
+	// For each constraint j: combined_eval[j] = Σᵢ γⁱ·eval[i][j]
 	for constraintIdx, info := range allWeights {
 
 		combinedEval := frontend.Variable(0)
@@ -93,7 +95,13 @@ func VerifyWhir(
 		Constraints:           allConstraints,
 	})
 
-	runWhirSumcheckRounds(api, claimedSum, v, params.FoldingFactorArray[0], 3)
+	foldingRandomness, _, err := runWhirSumcheckRounds(api, claimedSum, v, params.FoldingFactorArray[0], 3)
+
+	if err != nil {
+		return nil, err
+	}
+
+	roundFoldingRandomness = append(roundFoldingRandomness, foldingRandomness)
 
 	return nil, fmt.Errorf("Not yet implemented")
 }
