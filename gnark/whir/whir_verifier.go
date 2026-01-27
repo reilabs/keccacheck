@@ -14,26 +14,32 @@ func VerifyWhir(
 	uapi *uints.BinaryField[uints.U64],
 	proof []frontend.Variable,
 	nVars uint,
+	statements []Statement,
 	params WHIRParams,
 ) (totalFoldingRandomness []frontend.Variable, err error) {
 	v := transcript.NewVerifier(proof)
 
 	commitments := make([]ParsedCommitment, params.BatchSize)
 
-	allWeights := make([][]frontend.Variable, params.BatchSize)
+	allWeights := make([][]frontend.Variable, 0)
+
 	for i := range params.BatchSize {
 		commitment, err := parseBatchedCommitment(v, api, params)
-
 		if err != nil {
-			return nil, fmt.Errorf("Unable to parse commitment: %w", err)
+			return nil, fmt.Errorf("unable to parse commitment: %w", err)
 		}
 		commitments[i] = commitment
 	}
-
-	for i, commitment := range commitments {
+	for _, commitment := range commitments {
 		for _, point := range commitment.OodPoints {
 			mlPoint := ExpandFromUnivariate(api, point, params.MVParamsNumberOfVariables)
-			allWeights[i] = mlPoint
+			allWeights = append(allWeights, mlPoint)
+		}
+	}
+
+	for _, statement := range statements {
+		for _, constraint := range statement.Constraints {
+			allWeights = append(allWeights, constraint.point)
 		}
 	}
 
