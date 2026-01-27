@@ -24,7 +24,7 @@ func VerifyWhir(
 		commitment, err := parseBatchedCommitment(v, api, params)
 
 		if err != nil {
-			return nil, fmt.Errorf("Unable to parse commitment:", err)
+			return nil, fmt.Errorf("Unable to parse commitment: %w", err)
 		}
 		commitments[i] = commitment
 	}
