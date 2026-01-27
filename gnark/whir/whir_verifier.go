@@ -21,6 +21,8 @@ func VerifyWhir(
 	return nil, fmt.Errorf("Not yet implemented")
 }
 
+// Create a random linear combination of constraints
+// Returns the randomness used and the combined claimed sum
 func combineConstraints(api frontend.API, v *transcript.Verifier, claimedSum frontend.Variable, constraints []MLConstraint) ([]frontend.Variable, frontend.Variable) {
 	randomness := v.Generate(api)
 	rVector := ExpandRandomness(api, randomness, len(constraints))
