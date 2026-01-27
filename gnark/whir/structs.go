@@ -55,3 +55,8 @@ type InitialSumcheckData struct {
 	InitialOODQueries            []frontend.Variable
 	InitialCombinationRandomness []frontend.Variable
 }
+
+type MLConstraint struct {
+	point     []frontend.Variable
+	evalution frontend.Variable
+}

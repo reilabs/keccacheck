@@ -21,6 +21,18 @@ func VerifyWhir(
 	return nil, fmt.Errorf("Not yet implemented")
 }
 
+func combineConstraints(api frontend.API, v *transcript.Verifier, claimedSum frontend.Variable, constraints []MLConstraint) ([]frontend.Variable, frontend.Variable) {
+	randomness := v.Generate(api)
+	rVector := ExpandRandomness(api, randomness, len(constraints))
+
+	for i := range constraints {
+		claimedSum = api.Add(claimedSum, api.Mul(rVector[i], constraints[i].evalution))
+	}
+
+	return rVector, claimedSum
+
+}
+
 // NewWhirParams creates a new WHIRParams instance from the given configuration.
 // It processes the folding factors and calculates domain sizes based on the provided config.
 func NewWhirParams(cfg WHIRConfig) WHIRParams {
