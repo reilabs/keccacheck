@@ -7,9 +7,9 @@ import (
 
 type ParsedCommitment struct {
 	Root               frontend.Variable
-	oodPoints          []frontend.Variable
-	oodAnswers         [][]frontend.Variable
-	batchingRandomness frontend.Variable
+	OodPoints          []frontend.Variable
+	OodAnswers         [][]frontend.Variable
+	BatchingRandomness frontend.Variable
 }
 
 type Merkle struct {

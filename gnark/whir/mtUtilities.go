@@ -82,9 +82,9 @@ func parseBatchedCommitment(v *transcript.Verifier, api frontend.API, whir_param
 
 	commitment := ParsedCommitment{
 		Root:               rootHash,
-		oodPoints:          oodPoints,
-		oodAnswers:         oodAnswers,
-		batchingRandomness: v.GenerateVector(api, 1),
+		OodPoints:          oodPoints,
+		OodAnswers:         oodAnswers,
+		BatchingRandomness: v.GenerateVector(api, 1),
 	}
 	return commitment, nil
 }

@@ -20,6 +20,7 @@ func VerifyWhir(
 
 	commitments := make([]ParsedCommitment, params.BatchSize)
 
+	allWeights := make([][]frontend.Variable, params.BatchSize)
 	for i := range params.BatchSize {
 		commitment, err := parseBatchedCommitment(v, api, params)
 
@@ -27,6 +28,13 @@ func VerifyWhir(
 			return nil, fmt.Errorf("Unable to parse commitment: %w", err)
 		}
 		commitments[i] = commitment
+	}
+
+	for i, commitment := range commitments {
+		for _, point := range commitment.OodPoints {
+			mlPoint := ExpandFromUnivariate(api, point, params.MVParamsNumberOfVariables)
+			allWeights[i] = mlPoint
+		}
 	}
 
 	return nil, fmt.Errorf("Not yet implemented")
@@ -44,6 +52,32 @@ func combineConstraints(api frontend.API, v *transcript.Verifier, claimedSum fro
 
 	return rVector, claimedSum
 
+}
+
+// ExpandFromUnivariate converts a univariate evaluation point into a multilinear one.
+//
+// It maps a single point 'y' to a vector of coordinates:
+// [y^(2^(n-1)), ..., y^4, y^2, y]
+//
+// This corresponds to the Big-Endian binary decomposition mapping used in
+// protocols like Sumcheck or Spartan.
+func ExpandFromUnivariate(api frontend.API, point frontend.Variable, numVariables int) []frontend.Variable {
+	res := make([]frontend.Variable, numVariables)
+	current := point
+
+	// We iterate numVariables times.
+	// In the Rust version, they generate [y, y^2, y^4...] and then reverse it.
+	// Here, we simply fill the slice from the end (n-1) down to 0 to achieve
+	// the same Big-Endian result: [HighestPower, ..., LowestPower].
+	for i := 0; i < numVariables; i++ {
+		// Store the current power at the "end" of the available slots
+		res[numVariables-1-i] = current
+
+		// Compute y^(2^k) for the next iteration (Squaring)
+		current = api.Mul(current, current)
+	}
+
+	return res
 }
 
 // NewWhirParams creates a new WHIRParams instance from the given configuration.
