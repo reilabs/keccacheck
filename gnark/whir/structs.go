@@ -12,6 +12,10 @@ type ParsedCommitment struct {
 	BatchingRandomness frontend.Variable
 }
 
+type Statement struct {
+	Constraints []MLConstraint
+	nVars       int
+}
 type Merkle struct {
 	Leaves            [][][]frontend.Variable
 	LeafIndexes       [][]uints.U64
