@@ -78,3 +78,45 @@ func EvaluateQuadraticPolynomialFromEvaluationList(api frontend.API, evaluations
 	b2 := api.Mul(api.Add(evaluations[2], api.Mul(-2, evaluations[1]), evaluations[0]), inv2)
 	return api.Add(api.Mul(point, point, b2), api.Mul(point, b1), b0)
 }
+
+func MultivarPoly(coefs []frontend.Variable, vars []frontend.Variable, api frontend.API) frontend.Variable {
+	if len(vars) == 0 {
+		return coefs[0]
+	}
+	deg_zero := MultivarPoly(coefs[:len(coefs)/2], vars[:len(vars)-1], api)
+	deg_one := api.Mul(vars[len(vars)-1], MultivarPoly(coefs[len(coefs)/2:], vars[:len(vars)-1], api))
+	return api.Add(deg_zero, deg_one)
+}
+
+func UnivarPoly(api frontend.API, coefficients []frontend.Variable, points []frontend.Variable) []frontend.Variable {
+	if len(points) == 0 {
+		return coefficients
+	}
+
+	results := make([]frontend.Variable, len(points))
+	for j := range points {
+		ans := frontend.Variable(0)
+		for i := range coefficients {
+			ans = api.Add(api.Mul(ans, points[j]), coefficients[len(coefficients)-1-i])
+		}
+		results[j] = ans
+	}
+	return results
+}
+
+func EqPolyOutside(api frontend.API, coords []frontend.Variable, point []frontend.Variable) frontend.Variable {
+	acc := frontend.Variable(1)
+	for i := range coords {
+		acc = api.Mul(acc, api.Add(api.Mul(coords[i], point[i]), api.Mul(api.Sub(frontend.Variable(1), coords[i]), api.Sub(frontend.Variable(1), point[i]))))
+	}
+	return acc
+}
+
+func Reverse[T any](s []T) []T {
+	res := make([]T, len(s))
+	copy(res, s)
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		res[i], res[j] = s[j], s[i]
+	}
+	return res
+}

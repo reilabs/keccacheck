@@ -71,3 +71,9 @@ type RoundData struct {
 }
 
 type MLPoint = []frontend.Variable
+
+type MainRoundData struct {
+	OODPoints             [][]frontend.Variable
+	StirChallengesPoints  [][]frontend.Variable
+	CombinationRandomness [][]frontend.Variable
+}
