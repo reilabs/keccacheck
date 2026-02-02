@@ -120,3 +120,10 @@ func Reverse[T any](s []T) []T {
 	}
 	return res
 }
+
+// calculateShiftValue returns the dot product of the concatenated OOD answers
+// and folded values against a vector of random challenges.
+// Used to verify random linear combinations in FRI-based protocols.
+func CalculateShiftValue(oodAnswers []frontend.Variable, combinationRandomness []frontend.Variable, computedFold []frontend.Variable, api frontend.API) frontend.Variable {
+	return DotProduct(api, append(oodAnswers, computedFold...), combinationRandomness)
+}
