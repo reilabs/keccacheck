@@ -263,17 +263,16 @@ func computeFold(leaves [][]frontend.Variable, foldingRandomness []frontend.Vari
 	return computedFold
 }
 
-func PoW(api frontend.API, v *transcript.Verifier, uapi *uints.BinaryField[uints.U64], difficulty int) ([]uints.U8, []uints.U8, error) {
-	challenges := v.GenerateBytes(api, uapi, 32)
-
+func PoW(api frontend.API, v *transcript.Verifier, uapi *uints.BinaryField[uints.U64], difficulty int) (frontend.Variable, []uints.U8, error) {
+	challenge := v.Generate(api)
 	nonce := v.ReadBytes(api, uapi, 8)
-	challengeFieldElement := LittleEndianFromUints(api, challenges)
+
 	nonceFieldElement := BigEndianFromUints(api, nonce)
-	err := CheckPoW(api, challengeFieldElement, nonceFieldElement, difficulty)
+	err := CheckPoW(api, challenge, nonceFieldElement, difficulty)
 	if err != nil {
 		return nil, nil, err
 	}
-	return challenges, nonce, nil
+	return challenge, nonce, nil
 }
 
 func CheckPoW(api frontend.API, challenge frontend.Variable, nonce frontend.Variable, difficulty int) error {
