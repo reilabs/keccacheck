@@ -28,10 +28,11 @@ func (v *Verifier) Generate(api frontend.API) frontend.Variable {
 }
 
 // Generate squeezes a value from the sponge.
+// TODO optimize this for constraints
 func (v *Verifier) GenerateByte(api frontend.API, uapi *uints.BinaryField[uints.U64]) uints.U8 {
 	challengeFelt := v.sponge.Squeeze(api)
 	challengeBits := api.ToBinary(challengeFelt)
-	byteFelt := api.FromBinary(challengeBits[:7]...)
+	byteFelt := api.FromBinary(challengeBits[:8]...)
 	challengeByte := uapi.ByteValueOf(byteFelt)
 	return challengeByte
 }
