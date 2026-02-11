@@ -13,15 +13,21 @@ use crate::transcript::Prover;
 ///
 /// After the sumcheck over instance indices, the verifier obtains:
 /// - `r_x`: the random evaluation point produced during the sumcheck
-/// - `word_rlc`: the value $\sum_i \beta_i \cdot \widetilde{word}_i(r_x)$ at that point
+/// - `word_rlc_eval`: the value $\sum_i \beta_i \cdot \widetilde{word}_i(r_x)$ at that point
 ///
 /// The verifier checks the reduced claim using `eq(alpha, r_x)` (computable locally)
-/// and `word_rlc` (provided by the prover). A subsequent proof must then show that
-/// `word_rlc` is consistent with the underlying output bits.
+/// and `word_rlc_eval` (provided by the prover). A subsequent proof must then show that
+/// `word_rlc_eval` is consistent with the underlying output bits.
 pub struct EqProof {
     pub _sum: Fr,
     pub r_x: Vec<Fr>,
-    pub word_rlc: Fr,
+    pub word_rlc_eval: Fr,
+}
+
+pub struct BitProof {
+    pub _sum: Fr,
+    pub r_y: Vec<Fr>,     // This will always be of length 6
+    pub bit_rlc_eval: Fr, // The final evaluation claim on the bit vector value $\sum_i \beta_i \cdot \tilde{b}_i(r_x, r_y)$ at that point
 }
 
 pub fn prove_outputs(
@@ -51,13 +57,13 @@ pub fn prove_outputs(
         })
         .unwrap(); // reduce_with returns None only for empty iterators; 0..25 is non-empty
 
-    prove_sumcheck_outputs(transcript, instances, &mut eq_alpha, &mut words, sum)
+    prove_sumcheck_words(transcript, instances, &mut eq_alpha, &mut words, sum)
 }
 
 // Sumcheck for
 // $ \sum_{ x \in \{0, 1\}^{\text{log N}} }\widetilde{eq} (\alpha, x)\cdot  \sum_i \beta_i \cdot \widetilde{word}_i(x)$
 #[instrument(skip_all)]
-pub fn prove_sumcheck_outputs(
+pub fn prove_sumcheck_words(
     transcript: &mut Prover,
     size: usize,
     mut e: &mut [Fr],
@@ -109,6 +115,89 @@ pub fn prove_sumcheck_outputs(
     EqProof {
         _sum: sum,
         r_x: rs,
-        word_rlc: words[0],
+        word_rlc_eval: words[0],
+    }
+}
+
+pub fn prove_bits(
+    transcript: &mut Prover,
+    r_x: &[Fr],
+    mut bits: &mut [Fr],
+    beta: &[Fr],
+    sum: Fr,
+) -> BitProof {
+    // Make the bits polynomial bits(r_x,  y)
+    for r in r_x.iter() {
+        bits = update(bits, *r);
+    }
+
+    let mut bits = (0..25)
+        .into_par_iter()
+        .map(|el| {
+            let slice = &bits[(el * 6)..(el * 6 + 6)];
+            slice.iter().map(|&w| beta[el] * w).collect::<Vec<Fr>>()
+        })
+        .reduce_with(|mut a, b| {
+            a.iter_mut().zip(b).for_each(|(a, b)| *a += b);
+            a
+        })
+        .unwrap(); // reduce_with returns None only for empty iterators; 0..25 is non-empty
+
+    // Create the power polynomial
+    let n = 6;
+    let mut powers: Vec<Fr> = (0..n).map(|i| Fr::from(1u64 << i)).collect();
+
+    prove_sumcheck_bits(transcript, &mut bits, &mut powers, sum)
+}
+
+fn prove_sumcheck_bits(
+    transcript: &mut Prover,
+
+    mut bits: &mut [Fr],
+    mut powers: &mut [Fr],
+    mut sum: Fr,
+) -> BitProof {
+    let mut rs: Vec<Fr> = Vec::with_capacity(6);
+
+    for _ in 0..6 {
+        // p(t) = p0 + p1 ⋅ t + p2 ⋅ t^2
+        let mut p0 = Fr::zero();
+        let mut p2 = Fr::zero();
+        let (b0, b1) = bits.split_at(bits.len() / 2);
+        let (w0, w1) = powers.split_at(powers.len() / 2);
+
+        for j in 0..b0.len() {
+            // Evaluation at 0
+            p0 += b0[j] * w0[j];
+
+            // Evaluation at ∞ (leading coefficient)
+            p2 += (b1[j] - b0[j]) * (w1[j] - w0[j]);
+        }
+
+        // Derive p1 from p(0) + p(1) = sum
+        let p1 = sum - p0 - p0 - p2;
+        assert_eq!(sum, p0 + p0 + p1 + p2);
+
+        transcript.write(p1);
+        transcript.write(p2);
+
+        let r = transcript.read();
+        rs.push(r);
+
+        // Fold polynomials at r
+        bits = update(bits, r);
+        powers = update(powers, r);
+
+        // Update sum = p(r)
+        sum = p0 + r * (p1 + r * p2);
+    }
+
+    assert_eq!(bits[0] * powers[0], sum);
+    transcript.write(powers[0]);
+
+    BitProof {
+        _sum: sum,
+        r_y: rs,
+        bit_rlc_eval: bits[0],
     }
 }
