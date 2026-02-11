@@ -35,7 +35,9 @@ pub fn prove(data: &[u64], mut r: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     // TODO: feed output to the prover before obtaining alpha
     let mut beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
-    // write final output sum
+    // Write final output sum
+    // Over here we will instead make a claim about the words
+    // to obtain the sum
     let mut sum: Fr = state[23]
         .iota
         .chunks_exact(instances)
@@ -45,6 +47,8 @@ pub fn prove(data: &[u64], mut r: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
             beta[i] * eval_mle(&poly, &r)
         })
         .sum();
+
+    // We will run one round of reduction to reduce to a claim on the output bits
 
     prover.write(sum);
     for round in (0..24).rev() {
