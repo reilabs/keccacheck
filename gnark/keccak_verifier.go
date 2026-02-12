@@ -10,9 +10,9 @@ import (
 	"github.com/consensys/gnark/frontend"
 )
 
-func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable) {
+func VerifyKeccakF(api frontend.API, input, output, proof, alpha []frontend.Variable) {
 	verifier := transcript.NewVerifier(proof)
-	for _, challenge := range r {
+	for _, challenge := range alpha {
 		verifier.Absorb(api, challenge)
 	}
 	beta := make([]frontend.Variable, 25)
@@ -22,17 +22,38 @@ func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable
 	}
 
 	expected_sum := frontend.Variable(0)
-	eval_eq_r := sumcheck.EvalEq(api, r)
+	eval_eq_r := sumcheck.EvalEq(api, alpha)
 	for i := range 25 {
-		summand := sumcheck.EvalMleWithEq(api, output[(64*(i*N)):64*(i*N+N)], eval_eq_r)
+		summand := sumcheck.EvalMleWithEq(api, output[(i*N):(i*N+N)], eval_eq_r)
 		expected_sum = api.Add(expected_sum, api.Mul(summand, beta[i]))
 	}
+
 	sum := verifier.Read(api)
 	api.AssertIsEqual(sum, expected_sum)
+
+	// We first reduce the claims on words to claims on bits
+	c_1, r_x := sumcheck.VerifySumcheck(api, verifier, Log_N, 2, sum)
+	words_r_x := verifier.Read(api)
+	eq_r_alpha_x := sumcheck.Eq(api, r_x, alpha)
+	api.AssertIsEqual(c_1, api.Mul(words_r_x, eq_r_alpha_x))
+
+	c_2, r_y := sumcheck.VerifySumcheck(api, verifier, 6, 2, words_r_x)
+	b_r_x_r_y := verifier.Read(api)
+
+	powers := make([]frontend.Variable, 1<<6)
+	for i := 0; i < 1<<6; i++ {
+		powers[i] = frontend.Variable(uint64(1) << uint(i))
+	}
+	powers_eval := sumcheck.EvalMle(api, powers, r_y)
+	api.AssertIsEqual(c_2, api.Mul(powers_eval, b_r_x_r_y))
+
+	alpha = append(r_x, r_y...)
+	sum = b_r_x_r_y
+
 	iota := make([]frontend.Variable, 25)
 
 	for i := 23; i >= 0; i-- {
-		r, iota = VerifyRound(api, verifier, 6+Log_N, &r, &beta, sum, ROUND_CONSTANTS[i])
+		alpha, iota = VerifyRound(api, verifier, 6+Log_N, &alpha, &beta, sum, ROUND_CONSTANTS[i])
 		if i != 0 {
 			sum = frontend.Variable(0)
 			for j := range beta {
@@ -41,7 +62,7 @@ func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable
 			}
 		}
 	}
-	eval_eq_r = sumcheck.EvalEq(api, r)
+	eval_eq_r = sumcheck.EvalEq(api, alpha)
 	for i := 0; i < 25; i++ {
 		start := i * N
 		end := start + N

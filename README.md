@@ -65,7 +65,7 @@ INFO.       ...
 | keccak instances | 1    | 2    | 128   | 1024  | n                  |
 |------------------|------|------|-------|-------|--------------------|
 | num variables    | 6    | 7    | 13    | 16    | 6 + log₂(n)        |
-| proof size (felts) | 6241 | 6793 | 10105 | 11761 | 552 * vars + 2929 |
+| proof size (felts) | 6241 | 6793 | 10105 | 11761 | 554 * vars + 2931|
 | proof size (bn254, KiB)	| 195	| 212	| 316	| 368 | ((552 * vars + 2929) *32)/1024 |
 |recursive proof size (bn254, groth16, bytes)|356|388|580|676|
 

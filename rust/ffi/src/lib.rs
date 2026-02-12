@@ -123,9 +123,9 @@ pub unsafe extern "C" fn keccacheck_prove(
             })
             .collect();
 
-        let r_bytes: &[u8] = std::slice::from_raw_parts(r_ptr, 32 * (6 + log_n));
-        let mut r = Vec::with_capacity(6 + log_n);
-        for i in 0..(6 + log_n) {
+        let r_bytes: &[u8] = std::slice::from_raw_parts(r_ptr, 32 * (log_n));
+        let mut r = Vec::with_capacity(log_n);
+        for i in 0..(log_n) {
             let chunk = &r_bytes[i * 32..(i + 1) * 32];
             r.push(Fr::from_be_bytes_mod_order(chunk));
         }
@@ -192,7 +192,7 @@ pub unsafe extern "C" fn keccacheck_proof_free(
         }
         //See proof size table in README
         let vars: usize = 6 + instances.ilog2() as usize;
-        let f_elts: usize = 552 * vars + 2929;
+        let f_elts: usize = 554 * vars + 2931;
         let _ = Vec::<Fr>::from_raw_parts(proof_ptr as *mut Fr, f_elts, f_elts);
     }
 }
