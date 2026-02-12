@@ -169,7 +169,6 @@ pub fn prove_bits(
     let n = 6;
     let mut powers: Vec<Fr> = (0..1 << n).map(|i| Fr::from(1u64 << i)).collect();
 
-    println!("{powers:?}");
     #[cfg(debug_assertions)]
     {
         assert_eq!(bits.len(), (1 << 6));
@@ -190,7 +189,6 @@ fn prove_sumcheck_bits(
     mut sum: Fr,
 ) -> BitProof {
     let mut rs: Vec<Fr> = Vec::with_capacity(6);
-    println!("{:?}, {:?}", bits.len(), powers.len());
     for _ in 0..6 {
         // p(t) = p0 + p1 ⋅ t + p2 ⋅ t^2
         let mut p0 = Fr::zero();
