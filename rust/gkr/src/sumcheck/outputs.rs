@@ -222,7 +222,11 @@ fn prove_sumcheck_bits(
         sum = p0 + r * (p1 + r * p2);
     }
 
-    assert_eq!(bits[0] * powers[0], sum);
+    #[cfg(debug_assertions)]
+    {
+        assert_eq!(bits[0] * powers[0], sum);
+    }
+
     transcript.write(bits[0]);
 
     BitProof {

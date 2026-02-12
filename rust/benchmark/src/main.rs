@@ -19,7 +19,7 @@ fn main() {
         .map(|i| i as u64)
         .collect::<Vec<_>>();
 
-    let r = generate_r(&data, num_vars);
+    let r = generate_r(&data, num_vars - 6);
     // TODO Put a proper commitment here instead putting in constant
     let (proof, input, output) = prove(&data, r.clone());
     verify(num_vars, &output, &input, &proof, r);

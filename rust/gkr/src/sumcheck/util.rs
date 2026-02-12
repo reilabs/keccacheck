@@ -65,6 +65,15 @@ fn eval_eq(eval: &[Fr], out: &mut [Fr], scalar: Fr) {
     }
 }
 
+// Aimply takes slice of u64 and converts to field elements
+pub fn to_field_vec(x: &[u64]) -> Vec<Fr> {
+    let mut res = Vec::with_capacity(x.len());
+    for el in x {
+        res.push(Fr::from(i128::from(*el)))
+    }
+    res
+}
+
 pub fn to_poly(x: &[u64]) -> Vec<Fr> {
     let mut res = Vec::with_capacity(x.len() * 64);
     for el in x {
