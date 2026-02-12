@@ -30,7 +30,6 @@ pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     span.exit();
 
     let mut prover = Prover::new();
-    println!("Length of original challenge: {:?}", alpha.len());
     alpha.iter().for_each(|challenge| prover.absorb(*challenge));
     let span = tracing::span!(tracing::Level::INFO, "prove all rounds").entered();
 
@@ -47,6 +46,7 @@ pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
         .enumerate()
         .map(|(i, word_poly)| beta[i] * eval_mle(word_poly, &alpha))
         .sum();
+    prover.write(c);
 
     // We will run one round of reduction to reduce to a claim on the output bits
     let eq_proof = prove_outputs(&mut prover, num_vars - 6, &alpha, &output_words, &beta, c);
@@ -59,8 +59,6 @@ pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
         &beta,
         eq_proof.word_rlc_eval,
     );
-
-    prover.write(bit_proof.sum);
 
     let mut r = Vec::with_capacity(num_vars);
     r.extend(eq_proof.r_x);

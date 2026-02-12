@@ -1,5 +1,5 @@
 use crate::reference::{ROUND_CONSTANTS, strip_pi};
-use crate::sumcheck::util;
+use crate::sumcheck::util::{self, eq, to_field_vec};
 use crate::sumcheck::util::{HALF, add_col, eval_mle, to_poly, verify_sumcheck, xor};
 use crate::transcript::Verifier;
 use ark_bn254::Fr;
@@ -7,7 +7,7 @@ use ark_ff::{One, Zero};
 use tracing::{Level, instrument};
 
 #[instrument(skip_all)]
-pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr], mut r: Vec<Fr>) {
+pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr], r: Vec<Fr>) {
     let instances = 1usize << (num_vars - 6);
 
     let mut verifier = Verifier::new(proof);
@@ -19,7 +19,7 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr], mut 
         .map(|i| {
             beta[i]
                 * eval_mle(
-                    &to_poly(&output[(i * instances)..(i * instances + instances)]),
+                    &to_field_vec(&output[(i * instances)..(i * instances + instances)]),
                     &r,
                 )
         })
@@ -28,8 +28,33 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr], mut 
     assert_eq!(sum, expected_sum);
     span.exit();
 
+    // Verify the bitwise decomposition of the output words
+    let span = tracing::span!(Level::INFO, "Reduction of output words").entered();
+
+    let (c_1, r_x) = verify_sumcheck::<2>(&mut verifier, num_vars - 6, sum);
+
+    let words_r_x = verifier.read();
+    let eq_alpha_rx = eq(&r, &r_x);
+    assert_eq!(c_1, words_r_x * eq_alpha_rx);
+
+    let (c_2, r_y) = verify_sumcheck::<2>(&mut verifier, 6, words_r_x);
+    let b_r_x_r_y = verifier.read();
+    let powers: Vec<Fr> = (0..1 << 6).map(|i| Fr::from(1u64 << i)).collect();
+
+    let powers_eval = eval_mle(&powers, &r_y);
+
+    assert_eq!(c_2, powers_eval * b_r_x_r_y);
+    span.exit();
+
+    sum = b_r_x_r_y;
     let span = tracing::span!(Level::INFO, "verify all rounds").entered();
     let mut iota = Vec::new();
+
+    // create the main keccacheck round challenge
+    let mut r = Vec::with_capacity(num_vars);
+    r.extend(r_x);
+    r.extend(r_y);
+
     for round in (0..24).rev() {
         (r, iota) = verify_round(
             &mut verifier,
