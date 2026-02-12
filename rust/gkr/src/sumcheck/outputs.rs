@@ -28,6 +28,7 @@ pub struct BitProof {
     pub sum: Fr,
     pub r_y: Vec<Fr>,     // This will always be of length 6
     pub bit_rlc_eval: Fr, // The final evaluation claim on the bit vector value $\sum_i \beta_i \cdot \tilde{b}_i(r_x, r_y)$ at that point
+    pub pow_r_y: Fr,      // the evaluation of the power polynomial at r_y
 }
 
 pub fn prove_outputs(
@@ -43,7 +44,7 @@ pub fn prove_outputs(
     assert_eq!(words.len(), 25 * instances);
 
     let mut eq_alpha = calculate_evaluations_over_boolean_hypercube_for_eq(alpha);
-    // Take chunks of each line, scale by corresponding Beta
+    // Take chunks of each word, scale by corresponding Beta
     // Then sum up all the lens for an rlc over all lanes
     // Resulting polynomial will be log(instances)-variate
     let mut words = (0..25)
@@ -138,20 +139,17 @@ pub fn prove_sumcheck_words(
 pub fn prove_bits(
     transcript: &mut Prover,
     r_x: &[Fr],
-    mut bits: &mut [Fr],
+    bits: &mut [Fr],
     beta: &[Fr],
     sum: Fr,
 ) -> BitProof {
-    // Make the bits polynomial bits(r_x,  y)
-    for r in r_x.iter() {
-        bits = update(bits, *r);
-    }
-    assert_eq!(bits.len(), 25 * (1 << 6));
+    let per_lane = bits.len() / 25;
 
-    let mut bits = (0..25)
+    // RLC over the 25 lanes first, before folding at r_x.
+    let mut bits_rlc = (0..25)
         .into_par_iter()
         .map(|el| {
-            let slice = &bits[(el * 64)..(el * 64 + 64)];
+            let slice = &bits[(el * per_lane)..(el * per_lane + per_lane)];
             slice.iter().map(|&w| beta[el] * w).collect::<Vec<Fr>>()
         })
         .reduce_with(|mut a, b| {
@@ -160,9 +158,27 @@ pub fn prove_bits(
         })
         .unwrap(); // reduce_with returns None only for empty iterators; 0..25 is non-empty
 
+    // Now fold the instance dimension at r_x
+    let mut folded = &mut bits_rlc[..];
+    for r in r_x.iter() {
+        folded = update(folded, *r);
+    }
+    let mut bits = folded.to_vec();
+
     // Create the power polynomial
     let n = 6;
     let mut powers: Vec<Fr> = (0..1 << n).map(|i| Fr::from(1u64 << i)).collect();
+
+    println!("{powers:?}");
+    #[cfg(debug_assertions)]
+    {
+        assert_eq!(bits.len(), (1 << 6));
+        let mut c_sum = Fr::zero();
+        for x in 0..(1 << 6) {
+            c_sum += bits[x] * powers[x];
+        }
+        assert_eq!(c_sum, sum);
+    }
 
     prove_sumcheck_bits(transcript, &mut bits, &mut powers, sum)
 }
@@ -209,11 +225,12 @@ fn prove_sumcheck_bits(
     }
 
     assert_eq!(bits[0] * powers[0], sum);
-    transcript.write(powers[0]);
+    transcript.write(bits[0]);
 
     BitProof {
         sum,
         r_y: rs,
         bit_rlc_eval: bits[0],
+        pow_r_y: powers[0],
     }
 }
