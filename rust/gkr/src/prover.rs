@@ -7,12 +7,15 @@ use crate::sumcheck::theta::prove_theta;
 use crate::sumcheck::theta_a::{ThetaAProof, prove_theta_a};
 use crate::sumcheck::theta_c::prove_theta_c;
 use crate::sumcheck::theta_d::prove_theta_d;
-use crate::sumcheck::util::{HALF, eval_mle, to_field_vec, to_poly};
+use crate::sumcheck::util::{
+    HALF, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_field_vec, to_poly,
+};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use tracing::instrument;
-use whir::algebra::polynomials::CoefficientList;
+use whir::algebra::linear_form::{Covector, LinearForm};
+use whir::algebra::polynomials::{CoefficientList, EvaluationsList};
 use whir::hash;
 use whir::parameters::{FoldingFactor, MultivariateParameters, ProtocolParameters, SoundnessType};
 use whir::protocols::whir::{Config, Witness};
@@ -170,17 +173,62 @@ pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
         prover.write(eval_mle(&h, &point));
     }
 
-    let r_star = prover.read();
+    let mv_parameters = MultivariateParameters::new(num_vars);
 
-    let r_star_eval: Fr = state[0]
+    // TODO Revisit these parameters
+    let whir_params = ProtocolParameters {
+        initial_statement: true,
+        security_level: 32,
+        pow_bits: 0,
+        folding_factor: FoldingFactor::Constant(1),
+        soundness_type: SoundnessType::UniqueDecoding,
+        starting_log_inv_rate: 1,
+        batch_size: 25,
+        hash_id: hash::SHA2,
+    };
+
+    let config = Config::new(mv_parameters, &whir_params);
+    let ds = DomainSeparator::protocol(&whir_params)
+        .session(&format!("Test at {}:{}", file!(), line!()))
+        .instance(&Empty);
+    let mut prover_state = ProverState::new_std(&ds);
+
+    let lane_polynomials: Vec<CoefficientList<Fr>> = state[0]
         .a
         .chunks(instances)
-        .enumerate()
-        .map(|(i, lane)| input_beta[i] * eval_mle(&to_poly(lane), &alpha))
-        .sum();
+        .map(|lane| CoefficientList::new(to_poly(lane)))
+        .collect();
 
-    // We will then prove the evaluation of this point on the bits polynomial
-    // using WHIR
+    let whir_commitment = whir_commit(&config, &mut prover_state, &lane_polynomials);
+
+    for element in &whir_commitment.matrix {
+        prover.absorb(*element);
+    }
+
+    let r_star: Vec<Fr> = (0..num_vars).map(|_| prover.read()).collect();
+    let mut weights_polynomial: Vec<Fr> = Vec::with_capacity(1 << (num_vars + 1));
+
+    let r_star_eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r_star);
+
+    let zero_vec: Vec<Fr> = (0..(1 << num_vars)).map(|_| Fr::zero()).collect();
+    weights_polynomial.extend_from_slice(&zero_vec);
+    weights_polynomial.extend_from_slice(&r_star_eq);
+    let r_star_evaluations: Vec<Fr> = (0..25)
+        .map(|i| eval_mle(lane_polynomials[i].coeffs(), &r_star))
+        .collect();
+
+    let poly_refs = lane_polynomials.iter().collect::<Vec<_>>();
+
+    let linear_weight_list: EvaluationsList<Fr> = CoefficientList::new(weights_polynomial).into();
+    let weight = Covector::new(linear_weight_list.evals().to_vec());
+
+    config.prove(
+        &mut prover_state,
+        &poly_refs,
+        &[&whir_commitment],
+        &[&weight as &dyn LinearForm<Fr>],
+        &r_star_evaluations,
+    );
 
     (prover.finish(), state[0].a.clone(), state[23].iota.clone())
 }
@@ -310,31 +358,12 @@ pub fn prove_round(
     )
 }
 
-fn whir_commit(num_variables: usize, bit_polynomials: Vec<Vec<Fr>>) -> Witness<Fr> {
-    let mut polynomials = Vec::with_capacity(25);
-    for i in 0..25usize {
-        // TODO: See how we cna remove this clone
-        polynomials[i] = CoefficientList::new(bit_polynomials[i].clone())
-    }
-    let mv_parameters = MultivariateParameters::new(num_variables);
-
-    // TODO Revisit these parameters
-    let whir_params = ProtocolParameters {
-        initial_statement: true,
-        security_level: 32,
-        pow_bits: 0,
-        folding_factor: FoldingFactor::Constant(1),
-        soundness_type: SoundnessType::UniqueDecoding,
-        starting_log_inv_rate: 1,
-        batch_size: 25,
-        hash_id: hash::SHA2,
-    };
-    let config = Config::new(mv_parameters, &whir_params);
+fn whir_commit(
+    config: &Config<Fr>,
+    prover_state: &mut ProverState,
+    polynomials: &[CoefficientList<Fr>],
+) -> Witness<Fr> {
     // Define the Fiat-Shamir IOPattern for committing and proving
-    let ds = DomainSeparator::protocol(&whir_params)
-        .session(&format!("Test at {}:{}", file!(), line!()))
-        .instance(&Empty);
-    let mut prover_state = ProverState::new_std(&ds);
     let poly_refs = polynomials.iter().collect::<Vec<_>>();
-    config.commit(&mut prover_state, &poly_refs)
+    config.commit(prover_state, &poly_refs)
 }
