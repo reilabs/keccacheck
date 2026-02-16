@@ -12,6 +12,12 @@ use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use tracing::instrument;
+use whir::algebra::polynomials::CoefficientList;
+use whir::hash;
+use whir::parameters::{FoldingFactor, MultivariateParameters, ProtocolParameters, SoundnessType};
+use whir::protocols::whir::{Config, Witness};
+use whir::transcript::codecs::Empty;
+use whir::transcript::{DomainSeparator, ProverState};
 
 #[instrument(skip_all, fields(num_vars=(6 + (data.len() / 25).ilog2())))]
 pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
@@ -100,6 +106,81 @@ pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
         }
     }
     span.exit();
+
+    let input_words = to_field_vec(&state[0].a);
+    // For the moment, let's have the rlc from the inputs, be exactly the same as from the rounds
+    // This way the input bit polynomial under evaluation is the same
+    // TODO: work out if this is secure
+    let input_beta = beta;
+    let input_alpha = (0..num_vars - 6).map(|_| prover.read()).collect::<Vec<_>>();
+
+    let input_c: Fr = input_words
+        .chunks(instances)
+        .enumerate()
+        .map(|(i, word_poly)| input_beta[i] * eval_mle(word_poly, &input_alpha))
+        .sum();
+    prover.write(c);
+
+    // Reduce to a claim on the input bits
+    let input_eq_proof = prove_outputs(
+        &mut prover,
+        num_vars - 6,
+        &input_alpha,
+        &input_words,
+        &input_beta,
+        input_c,
+    );
+    let mut input_bits = to_poly(&state[0].a);
+
+    let input_bit_proof = prove_bits(
+        &mut prover,
+        &input_eq_proof.r_x,
+        &mut input_bits,
+        &input_beta,
+        input_eq_proof.word_rlc_eval,
+    );
+
+    // Combine two claims on the input bits via line restriction:
+    // Claim 1 (from rounds): per-lane evaluations at point r
+    // Claim 2 (from input reduction): RLC evaluation at point r2
+    let mut r2 = Vec::with_capacity(num_vars);
+    r2.extend_from_slice(&input_eq_proof.r_x);
+    r2.extend_from_slice(&input_bit_proof.r_y);
+
+    let lane_size = 1 << num_vars;
+
+    // Batch 25 lanes with random coefficients
+    let mut h = vec![Fr::zero(); lane_size];
+    for i in 0..25 {
+        let lane = &input_bits[i * lane_size..(i + 1) * lane_size];
+        for j in 0..lane_size {
+            h[j] += input_beta[i] * lane[j];
+        }
+    }
+
+    // g(t) = h((1-t)*r + t*r2) has degree num_vars
+    // g(0) and g(1) known to verifier; send g(2), ..., g(num_vars)
+    for t_val in 2..=num_vars {
+        let t = Fr::from(t_val as u64);
+        let point: Vec<Fr> = r
+            .iter()
+            .zip(r2.iter())
+            .map(|(a, b)| (Fr::one() - t) * a + t * b)
+            .collect();
+        prover.write(eval_mle(&h, &point));
+    }
+
+    let r_star = prover.read();
+
+    let r_star_eval: Fr = state[0]
+        .a
+        .chunks(instances)
+        .enumerate()
+        .map(|(i, lane)| input_beta[i] * eval_mle(&to_poly(lane), &alpha))
+        .sum();
+
+    // We will then prove the evaluation of this point on the bits polynomial
+    // using WHIR
 
     (prover.finish(), state[0].a.clone(), state[23].iota.clone())
 }
@@ -227,4 +308,33 @@ pub fn prove_round(
         &layers.a,
         sum,
     )
+}
+
+fn whir_commit(num_variables: usize, bit_polynomials: Vec<Vec<Fr>>) -> Witness<Fr> {
+    let mut polynomials = Vec::with_capacity(25);
+    for i in 0..25usize {
+        // TODO: See how we cna remove this clone
+        polynomials[i] = CoefficientList::new(bit_polynomials[i].clone())
+    }
+    let mv_parameters = MultivariateParameters::new(num_variables);
+
+    // TODO Revisit these parameters
+    let whir_params = ProtocolParameters {
+        initial_statement: true,
+        security_level: 32,
+        pow_bits: 0,
+        folding_factor: FoldingFactor::Constant(1),
+        soundness_type: SoundnessType::UniqueDecoding,
+        starting_log_inv_rate: 1,
+        batch_size: 25,
+        hash_id: hash::SHA2,
+    };
+    let config = Config::new(mv_parameters, &whir_params);
+    // Define the Fiat-Shamir IOPattern for committing and proving
+    let ds = DomainSeparator::protocol(&whir_params)
+        .session(&format!("Test at {}:{}", file!(), line!()))
+        .instance(&Empty);
+    let mut prover_state = ProverState::new_std(&ds);
+    let poly_refs = polynomials.iter().collect::<Vec<_>>();
+    config.commit(&mut prover_state, &poly_refs)
 }
