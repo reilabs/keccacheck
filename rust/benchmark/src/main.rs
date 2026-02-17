@@ -20,9 +20,8 @@ fn main() {
         .collect::<Vec<_>>();
 
     let r = generate_r(&data, num_vars - 6);
-    // TODO Put a proper commitment here instead putting in constant
-    let (proof, input, output) = prove(&data, r.clone());
-    verify(num_vars, &output, &input, &proof, r);
+    let (proof, whir_proof, input, output) = prove(&data, r.clone());
+    verify(num_vars, &output, &proof, &whir_proof, r);
 
     let mut reference_input: [u64; 25] = [0; 25];
     let mut reference_output: [u64; 25] = [0; 25];

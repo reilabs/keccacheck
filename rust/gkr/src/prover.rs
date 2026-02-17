@@ -22,10 +22,10 @@ use whir::hash;
 use whir::parameters::{FoldingFactor, MultivariateParameters, ProtocolParameters, SoundnessType};
 use whir::protocols::whir::{Config, Witness};
 use whir::transcript::codecs::Empty;
-use whir::transcript::{DomainSeparator, ProverState};
+use whir::transcript::{DomainSeparator, Proof as WhirProof, ProverState};
 
 #[instrument(skip_all, fields(num_vars=(6 + (data.len() / 25).ilog2())))]
-pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
+pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, WhirProof, Vec<u64>, Vec<u64>) {
     let instances = data.len() / 25;
 
     let num_vars = 6 + instances.ilog2() as usize;
@@ -124,7 +124,7 @@ pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
         .enumerate()
         .map(|(i, word_poly)| input_beta[i] * eval_mle(word_poly, &input_alpha))
         .sum();
-    prover.write(c);
+    prover.write(input_c);
 
     // Reduce to a claim on the input bits
     let input_eq_proof = prove_outputs(
@@ -175,24 +175,7 @@ pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
         prover.write(eval_mle(&h, &point));
     }
 
-    let mv_parameters = MultivariateParameters::new(num_vars);
-
-    // TODO Revisit these parameters
-    let whir_params = ProtocolParameters {
-        initial_statement: true,
-        security_level: 32,
-        pow_bits: 0,
-        folding_factor: FoldingFactor::Constant(1),
-        soundness_type: SoundnessType::UniqueDecoding,
-        starting_log_inv_rate: 1,
-        batch_size: 25,
-        hash_id: hash::SHA2,
-    };
-
-    let config = Config::new(mv_parameters, &whir_params);
-    let ds = DomainSeparator::protocol(&whir_params)
-        .session(&format!("Test at {}:{}", file!(), line!()))
-        .instance(&Empty);
+    let (config, ds) = whir_config(num_vars);
     let mut prover_state = ProverState::new_std(&ds);
 
     let lane_polynomials: Vec<CoefficientList<Field256>> = state[0]
@@ -207,11 +190,13 @@ pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
 
     let whir_commitment = whir_commit(&config, &mut prover_state, &lane_polynomials);
 
-    // for element in &whir_commitment.matrix {
-    //     prover.absorb(*element);
-    // }
-
-    let r_star: Vec<Fr> = (0..num_vars).map(|_| prover.read()).collect();
+    // Sample r_star on the line between r and r2
+    let t_star = prover.read();
+    let r_star: Vec<Fr> = r
+        .iter()
+        .zip(r2.iter())
+        .map(|(a, b)| (Fr::one() - t_star) * a + t_star * b)
+        .collect();
     let r_star_f256 = change_type_vec(&r_star);
 
     let r_star_eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r_star_f256);
@@ -220,6 +205,11 @@ pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     let r_star_evaluations: Vec<Field256> = (0..25)
         .map(|i| lane_polynomials[i].evaluate(&r_star_point))
         .collect();
+
+    // Write evaluations to the GKR transcript so the verifier can check them
+    for &eval in &r_star_evaluations {
+        prover.write(change_type_back(eval));
+    }
 
     let poly_refs = lane_polynomials.iter().collect::<Vec<_>>();
 
@@ -233,7 +223,9 @@ pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
         &r_star_evaluations,
     );
 
-    (prover.finish(), state[0].a.clone(), state[23].iota.clone())
+    let whir_proof = prover_state.proof();
+
+    (prover.finish(), whir_proof, state[0].a.clone(), state[23].iota.clone())
 }
 
 #[instrument(skip_all)]
@@ -371,11 +363,36 @@ fn whir_commit(
     config.commit(prover_state, &poly_refs)
 }
 
-fn change_type(f: Fr) -> Field256 {
+pub(crate) fn whir_config(
+    num_vars: usize,
+) -> (Config<Field256>, DomainSeparator<'static, Empty>) {
+    let mv_parameters = MultivariateParameters::new(num_vars);
+    let whir_params = ProtocolParameters {
+        initial_statement: true,
+        security_level: 32,
+        pow_bits: 0,
+        folding_factor: FoldingFactor::Constant(1),
+        soundness_type: SoundnessType::UniqueDecoding,
+        starting_log_inv_rate: 1,
+        batch_size: 25,
+        hash_id: hash::SHA2,
+    };
+    let config = Config::new(mv_parameters, &whir_params);
+    let ds = DomainSeparator::protocol(&whir_params)
+        .session(&"keccacheck-input-commitment")
+        .instance(&Empty);
+    (config, ds)
+}
+
+pub(crate) fn change_type(f: Fr) -> Field256 {
     Field256::new_unchecked(f.0)
 }
 
-fn change_type_vec(f: &[Fr]) -> Vec<Field256> {
+pub(crate) fn change_type_back(f: Field256) -> Fr {
+    Fr::new_unchecked(f.0)
+}
+
+pub(crate) fn change_type_vec(f: &[Fr]) -> Vec<Field256> {
     let mut res: Vec<Field256> = Vec::with_capacity(f.len());
     for i in f.iter() {
         res.push(change_type(*i));

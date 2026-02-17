@@ -1,13 +1,20 @@
+use crate::prover::{change_type, change_type_vec, whir_config};
 use crate::reference::{ROUND_CONSTANTS, strip_pi};
 use crate::sumcheck::util::{self, eq, to_field_vec};
-use crate::sumcheck::util::{HALF, add_col, eval_mle, to_poly, verify_sumcheck, xor};
+use crate::sumcheck::util::{
+    HALF, add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
+    verify_sumcheck, xor,
+};
 use crate::transcript::Verifier;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use tracing::{Level, instrument};
+use whir::algebra::fields::Field256;
+use whir::algebra::linear_form::{Covector, LinearForm};
+use whir::transcript::{Proof as WhirProof, VerifierState};
 
 #[instrument(skip_all)]
-pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr], r: Vec<Fr>) {
+pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], whir_proof: &WhirProof, r: Vec<Fr>) {
     let instances = 1usize << (num_vars - 6);
 
     let mut verifier = Verifier::new(proof);
@@ -74,18 +81,114 @@ pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr], r: V
     }
     span.exit();
 
-    // verify input
-    let span = tracing::span!(Level::INFO, "evaluate input at random point").entered();
-    for i in 0..25 {
-        assert_eq!(
-            eval_mle(
-                &to_poly(&input[(i * instances)..(i * instances + instances)]),
-                &r
-            ),
-            iota[i]
-        );
+    // Verify input via commitment
+    let span = tracing::span!(Level::INFO, "verify input commitment").entered();
+
+    // Input word reduction (mirrors prover)
+    let input_beta = beta;
+    let input_alpha = (0..num_vars - 6)
+        .map(|_| verifier.generate())
+        .collect::<Vec<_>>();
+
+    let input_c = verifier.read();
+
+    // Verify word-level sumcheck
+    let (ic_1, input_r_x) = verify_sumcheck::<2>(&mut verifier, num_vars - 6, input_c);
+    let input_words_rx = verifier.read();
+    let input_eq = eq(&input_alpha, &input_r_x);
+    assert_eq!(ic_1, input_words_rx * input_eq);
+
+    // Verify bit-level sumcheck
+    let (ic_2, input_r_y) = verify_sumcheck::<2>(&mut verifier, 6, input_words_rx);
+    let input_b_rx_ry = verifier.read();
+    let input_powers_eval = eval_mle(&powers, &input_r_y);
+    assert_eq!(ic_2, input_powers_eval * input_b_rx_ry);
+
+    // Build r2 from input reduction
+    let mut r2 = Vec::with_capacity(num_vars);
+    r2.extend_from_slice(&input_r_x);
+    r2.extend_from_slice(&input_r_y);
+
+    // Line restriction verification
+    // g(0) = batched evaluation at r (from round claims)
+    let g0: Fr = iota
+        .iter()
+        .enumerate()
+        .map(|(i, &v)| input_beta[i] * v)
+        .sum();
+    // g(1) = batched evaluation at r2 (from input bit sumcheck)
+    let g1 = input_b_rx_ry;
+
+    // Read g(2), ..., g(num_vars) from proof
+    let mut g_vals = Vec::with_capacity(num_vars + 1);
+    g_vals.push(g0);
+    g_vals.push(g1);
+    for _ in 2..=num_vars {
+        g_vals.push(verifier.read());
     }
+
+    // Reconstruct whir config and receive commitment
+    let (config, ds) = whir_config(num_vars);
+    let mut verifier_state = VerifierState::new_std(&ds, whir_proof);
+    let whir_commitment = config.receive_commitment(&mut verifier_state).unwrap();
+
+    // Sample t_star and compute r_star on the line
+    let t_star = verifier.generate();
+    let r_star: Vec<Fr> = r
+        .iter()
+        .zip(r2.iter())
+        .map(|(a, b)| (Fr::one() - t_star) * a + t_star * b)
+        .collect();
+
+    // Read the 25 lane evaluations at r_star
+    let r_star_evaluations_fr: Vec<Fr> = (0..25).map(|_| verifier.read()).collect();
+
+    // Check line restriction: g(t_star) == sum_i beta[i] * eval[i]
+    let g_t_star = lagrange_interpolate(&g_vals, t_star);
+    let batched_eval: Fr = r_star_evaluations_fr
+        .iter()
+        .enumerate()
+        .map(|(i, &e)| input_beta[i] * e)
+        .sum();
+    assert_eq!(g_t_star, batched_eval);
+
+    // Verify whir opening
+    let r_star_f256 = change_type_vec(&r_star);
+    let r_star_eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r_star_f256);
+    let weight = Covector::new(r_star_eq);
+    let r_star_evaluations: Vec<Field256> = r_star_evaluations_fr
+        .iter()
+        .map(|&e| change_type(e))
+        .collect();
+
+    config
+        .verify(
+            &mut verifier_state,
+            &[&whir_commitment],
+            &[&weight as &dyn LinearForm<Field256>],
+            &r_star_evaluations,
+        )
+        .unwrap();
     span.exit();
+}
+
+/// Lagrange interpolation of a polynomial defined by values at points 0, 1, ..., n
+/// evaluated at point t.
+fn lagrange_interpolate(values: &[Fr], t: Fr) -> Fr {
+    let n = values.len();
+    let mut result = Fr::zero();
+    for i in 0..n {
+        let xi = Fr::from(i as u64);
+        let mut basis = Fr::one();
+        for j in 0..n {
+            if i != j {
+                let xj = Fr::from(j as u64);
+                basis *= (t - xj) / (xi - xj);
+            }
+        }
+        result += values[i] * basis;
+    }
+    result
 }
 
 fn verify_round(
