@@ -49,30 +49,34 @@ func KeccacheckProve(inputs []*big.Int) unsafe.Pointer {
 
 func KeccacheckProveHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 	ptr := KeccacheckProve(inputs)
-	proof_len := (554 * (Log_N + 6)) + 2931
 	result := (*KeccacheckResult)(ptr)
+	proofLen := int(result.ProofLen)
 
-	proof := getBigInt4Slice(result.ProofPtr, proof_len)
+	// First output is the proof length
+	outputs[0].SetInt64(int64(proofLen))
 
-	for i := 0; i < proof_len; i++ {
-		outputs[i].Set(proof[i])
+	// Remaining outputs are proof elements
+	proof := getBigInt4Slice(result.ProofPtr, proofLen)
+	for i := 0; i < proofLen; i++ {
+		outputs[1+i].Set(proof[i])
 	}
 
 	return nil
 }
 
-func KeccacheckProofFree(proof, input, output unsafe.Pointer, instances uint) {
-	C.keccacheck_proof_free(proof, input, output, C.size_t(instances))
+func KeccacheckProofFree(proof, input, output unsafe.Pointer, instances uint, proofLen uint) {
+	C.keccacheck_proof_free(proof, input, output, C.size_t(instances), C.size_t(proofLen))
 }
 
 func FreeProofHint(_ *big.Int, inputs []*big.Int, results []*big.Int) error {
-	// Suppose inputs[0] = proof_ptr, inputs[1] = input_ptr, inputs[2] = output_ptr, inputs[3] = instances
+	// inputs[0] = proof_ptr, inputs[1] = input_ptr, inputs[2] = output_ptr, inputs[3] = instances, inputs[4] = proof_len
 	proof := unsafe.Pointer(uintptr(inputs[0].Uint64()))
 	in := unsafe.Pointer(uintptr(inputs[1].Uint64()))
 	out := unsafe.Pointer(uintptr(inputs[2].Uint64()))
 	instances := uint(inputs[3].Uint64())
+	proofLen := uint(inputs[4].Uint64())
 
-	KeccacheckProofFree(proof, in, out, instances)
+	KeccacheckProofFree(proof, in, out, instances, proofLen)
 
 	return nil
 }

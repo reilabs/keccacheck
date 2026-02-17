@@ -52,10 +52,16 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	}
 
 	hintInputs := append(r, circuit.Input[:]...)
-	proof, err := api.Compiler().NewHint(KeccacheckProveHint, 554*(6+Log_N)+2931, hintInputs...)
+	numVars := 6 + Log_N
+	maxProofLen := 2000 * numVars
+	hintOutputs, err := api.Compiler().NewHint(KeccacheckProveHint, 1+maxProofLen, hintInputs...)
 	if err != nil {
 		panic("failed to generate proof hint")
 	}
+
+	// hintOutputs[0] = actual proof length, hintOutputs[1:] = proof elements (zero-padded)
+	// The verifier reads elements sequentially and stops, so trailing zeros are unused.
+	proof := hintOutputs[1:]
 
 	VerifyKeccakF(api, circuit.InputD[:], circuit.Output[:], proof, r)
 	return nil

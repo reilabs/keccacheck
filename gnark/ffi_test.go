@@ -57,7 +57,7 @@ func TestKeccakProve(t *testing.T) {
 			}
 		}
 	}
-	getFSlice(result.ProofPtr, (554*(Log_N+6) + 2931))
+	getFSlice(result.ProofPtr, int(result.ProofLen))
 
 }
 

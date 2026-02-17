@@ -80,6 +80,7 @@ pub unsafe extern "C" fn keccacheck_free(ptr: *mut c_void, len: usize) {
 #[repr(C)]
 pub struct KeccacheckResult {
     pub proof_ptr: *mut c_void,
+    pub proof_len: usize,
     pub input_ptr: *mut c_void,
     pub output_ptr: *mut c_void,
 }
@@ -135,6 +136,7 @@ pub unsafe extern "C" fn keccacheck_prove(
             .flat_map(|el| el.into_bigint().to_bytes_le())
             .collect();
 
+        let proof_len = proof.len() / 32; // number of Fr elements
         let proof_ptr = proof.as_mut_ptr() as *mut c_void;
         let input_ptr = input.as_mut_ptr() as *mut c_void;
         let output_ptr = output.as_mut_ptr() as *mut c_void;
@@ -146,6 +148,7 @@ pub unsafe extern "C" fn keccacheck_prove(
 
         let result = Box::new(KeccacheckResult {
             proof_ptr,
+            proof_len,
             input_ptr,
             output_ptr,
         });
@@ -179,6 +182,7 @@ pub unsafe extern "C" fn keccacheck_proof_free(
     input_ptr: *mut c_void,
     output_ptr: *mut c_void,
     instances: usize,
+    proof_len: usize,
 ) {
     unsafe {
         if !input_ptr.is_null() {
@@ -190,10 +194,10 @@ pub unsafe extern "C" fn keccacheck_proof_free(
             let len = 25 * instances;
             let _ = Vec::from_raw_parts(output_ptr as *mut u64, len, len);
         }
-        //See proof size table in README
-        let vars: usize = 6 + instances.ilog2() as usize;
-        let f_elts: usize = 554 * vars + 2931;
-        let _ = Vec::<Fr>::from_raw_parts(proof_ptr as *mut Fr, f_elts, f_elts);
+        if !proof_ptr.is_null() {
+            let byte_len = proof_len * 32;
+            let _ = Vec::<u8>::from_raw_parts(proof_ptr as *mut u8, byte_len, byte_len);
+        }
     }
 }
 

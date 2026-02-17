@@ -9,6 +9,7 @@ import (
 
 type KeccacheckResult struct {
 	ProofPtr  unsafe.Pointer
+	ProofLen  uintptr
 	InputPtr  unsafe.Pointer
 	OutputPtr unsafe.Pointer
 }
