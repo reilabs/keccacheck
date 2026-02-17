@@ -129,7 +129,7 @@ pub unsafe extern "C" fn keccacheck_prove(
             let chunk = &r_bytes[i * 32..(i + 1) * 32];
             r.push(Fr::from_be_bytes_mod_order(chunk));
         }
-        let (proof, _whir_proof, mut input, mut output) = prove(&data, r);
+        let (proof, mut input, mut output) = prove(&data, r);
         let mut proof: Vec<u8> = proof
             .iter()
             .flat_map(|el| el.into_bigint().to_bytes_le())

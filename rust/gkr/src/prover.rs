@@ -12,7 +12,7 @@ use crate::sumcheck::util::{
 };
 use crate::transcript::Prover;
 use ark_bn254::Fr;
-use ark_ff::{One, Zero};
+use ark_ff::{BigInteger, One, PrimeField, Zero};
 use tracing::instrument;
 use whir::algebra::fields::Field256;
 use whir::algebra::linear_form::{Covector, LinearForm};
@@ -25,7 +25,7 @@ use whir::transcript::codecs::Empty;
 use whir::transcript::{DomainSeparator, Proof as WhirProof, ProverState};
 
 #[instrument(skip_all, fields(num_vars=(6 + (data.len() / 25).ilog2())))]
-pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, WhirProof, Vec<u64>, Vec<u64>) {
+pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     let instances = data.len() / 25;
 
     let num_vars = 6 + instances.ilog2() as usize;
@@ -224,8 +224,15 @@ pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, WhirProof, Vec<u64>, Vec
     );
 
     let whir_proof = prover_state.proof();
+    let mut proof = prover.finish();
 
-    (prover.finish(), whir_proof, state[0].a.clone(), state[23].iota.clone())
+    // Serialize WhirProof to bytes and append as packed Fr elements.
+    // Using CBOR serialization preserves all fields including debug-only pattern.
+    let whir_bytes = serialize_whir_proof(&whir_proof);
+    proof.push(Fr::from(whir_bytes.len() as u64));
+    proof.extend(pack_bytes_to_fr(&whir_bytes));
+
+    (proof, state[0].a.clone(), state[23].iota.clone())
 }
 
 #[instrument(skip_all)]
@@ -363,9 +370,7 @@ fn whir_commit(
     config.commit(prover_state, &poly_refs)
 }
 
-pub(crate) fn whir_config(
-    num_vars: usize,
-) -> (Config<Field256>, DomainSeparator<'static, Empty>) {
+pub(crate) fn whir_config(num_vars: usize) -> (Config<Field256>, DomainSeparator<'static, Empty>) {
     let mv_parameters = MultivariateParameters::new(num_vars);
     let whir_params = ProtocolParameters {
         initial_statement: true,
@@ -400,6 +405,42 @@ pub(crate) fn change_type_vec(f: &[Fr]) -> Vec<Field256> {
     res
 }
 
+pub(crate) fn serialize_whir_proof(proof: &WhirProof) -> Vec<u8> {
+    let mut buf = Vec::new();
+    ciborium::into_writer(proof, &mut buf).expect("CBOR serialization failed");
+    buf
+}
+
+pub(crate) fn deserialize_whir_proof(bytes: &[u8]) -> WhirProof {
+    ciborium::from_reader(bytes).expect("CBOR deserialization failed")
+}
+
+/// Bytes packed per Fr element (248 bits, safely under the 254-bit bn254 modulus).
+pub(crate) const BYTES_PER_FR: usize = 31;
+
+/// Pack a byte slice into Fr elements, 31 bytes per element.
+pub(crate) fn pack_bytes_to_fr(bytes: &[u8]) -> Vec<Fr> {
+    bytes
+        .chunks(BYTES_PER_FR)
+        .map(|chunk| {
+            let mut buf = [0u8; 32];
+            buf[..chunk.len()].copy_from_slice(chunk);
+            Fr::from_le_bytes_mod_order(&buf)
+        })
+        .collect()
+}
+
+/// Unpack Fr elements back to bytes, recovering exactly `byte_len` bytes.
+pub(crate) fn unpack_fr_to_bytes(elements: &[Fr], byte_len: usize) -> Vec<u8> {
+    let mut result = Vec::with_capacity(byte_len);
+    for fr in elements {
+        let bytes_le = fr.into_bigint().to_bytes_le();
+        let take = BYTES_PER_FR.min(byte_len - result.len());
+        result.extend_from_slice(&bytes_le[..take]);
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -427,6 +468,29 @@ mod tests {
         let x = -Fr::one(); // p - 1
         let y = change_type(x);
         assert_eq!(y, -Field256::one());
+    }
+
+    #[test]
+    fn pack_unpack_roundtrip_exact() {
+        let data = vec![42u8; 31];
+        let packed = pack_bytes_to_fr(&data);
+        assert_eq!(packed.len(), 1);
+        assert_eq!(unpack_fr_to_bytes(&packed, 31), data);
+    }
+
+    #[test]
+    fn pack_unpack_roundtrip_multi() {
+        let data: Vec<u8> = (0..100).collect();
+        let packed = pack_bytes_to_fr(&data);
+        assert_eq!(packed.len(), 4); // ceil(100/31)
+        assert_eq!(unpack_fr_to_bytes(&packed, 100), data);
+    }
+
+    #[test]
+    fn pack_unpack_empty() {
+        let packed = pack_bytes_to_fr(&[]);
+        assert_eq!(packed.len(), 0);
+        assert_eq!(unpack_fr_to_bytes(&packed, 0), vec![]);
     }
 
     #[test]

@@ -75,4 +75,8 @@ impl<'a> Verifier<'a> {
         self.proof = tail;
         *value
     }
+
+    pub fn remaining(&self) -> &'a [Fr] {
+        self.proof
+    }
 }

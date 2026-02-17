@@ -1,4 +1,7 @@
-use crate::prover::{change_type, change_type_vec, whir_config};
+use crate::prover::{
+    BYTES_PER_FR, change_type, change_type_vec, deserialize_whir_proof, unpack_fr_to_bytes,
+    whir_config,
+};
 use crate::reference::{ROUND_CONSTANTS, strip_pi};
 use crate::sumcheck::util::{self, eq, to_field_vec};
 use crate::sumcheck::util::{
@@ -7,14 +10,14 @@ use crate::sumcheck::util::{
 };
 use crate::transcript::Verifier;
 use ark_bn254::Fr;
-use ark_ff::{One, Zero};
+use ark_ff::{BigInteger, One, PrimeField, Zero};
 use tracing::{Level, instrument};
 use whir::algebra::fields::Field256;
 use whir::algebra::linear_form::{Covector, LinearForm};
 use whir::transcript::{Proof as WhirProof, VerifierState};
 
 #[instrument(skip_all)]
-pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], whir_proof: &WhirProof, r: Vec<Fr>) {
+pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], r: Vec<Fr>) {
     let instances = 1usize << (num_vars - 6);
 
     let mut verifier = Verifier::new(proof);
@@ -127,11 +130,6 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], whir_proof: &WhirPr
         g_vals.push(verifier.read());
     }
 
-    // Reconstruct whir config and receive commitment
-    let (config, ds) = whir_config(num_vars);
-    let mut verifier_state = VerifierState::new_std(&ds, whir_proof);
-    let whir_commitment = config.receive_commitment(&mut verifier_state).unwrap();
-
     // Sample t_star and compute r_star on the line
     let t_star = verifier.generate();
     let r_star: Vec<Fr> = r
@@ -152,7 +150,15 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], whir_proof: &WhirPr
         .sum();
     assert_eq!(g_t_star, batched_eval);
 
-    // Verify whir opening
+    // Extract encoded WhirProof from remaining proof elements
+    let remaining = verifier.remaining();
+    let whir_proof = decode_whir_proof(remaining);
+
+    // Reconstruct whir config and verify opening
+    let (config, ds) = whir_config(num_vars);
+    let mut verifier_state = VerifierState::new_std(&ds, &whir_proof);
+    let whir_commitment = config.receive_commitment(&mut verifier_state).unwrap();
+
     let r_star_f256 = change_type_vec(&r_star);
     let r_star_eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r_star_f256);
     let weight = Covector::new(r_star_eq);
@@ -177,7 +183,7 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], whir_proof: &WhirPr
 fn lagrange_interpolate(values: &[Fr], t: Fr) -> Fr {
     let n = values.len();
     let mut result = Fr::zero();
-    for i in 0..n {
+    for (i, value) in values.iter().enumerate() {
         let xi = Fr::from(i as u64);
         let mut basis = Fr::one();
         for j in 0..n {
@@ -186,9 +192,21 @@ fn lagrange_interpolate(values: &[Fr], t: Fr) -> Fr {
                 basis *= (t - xj) / (xi - xj);
             }
         }
-        result += values[i] * basis;
+        result += value * &basis;
     }
     result
+}
+
+fn fr_to_usize(f: Fr) -> usize {
+    let bytes = f.into_bigint().to_bytes_le();
+    u64::from_le_bytes(bytes[..8].try_into().unwrap()) as usize
+}
+
+fn decode_whir_proof(remaining: &[Fr]) -> WhirProof {
+    let byte_len = fr_to_usize(remaining[0]);
+    let fr_count = byte_len.div_ceil(BYTES_PER_FR);
+    let whir_bytes = unpack_fr_to_bytes(&remaining[1..1 + fr_count], byte_len);
+    deserialize_whir_proof(&whir_bytes)
 }
 
 fn verify_round(
