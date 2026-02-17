@@ -14,8 +14,10 @@ use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use tracing::instrument;
+use whir::algebra::fields::Field256;
 use whir::algebra::linear_form::{Covector, LinearForm};
-use whir::algebra::polynomials::{CoefficientList, EvaluationsList};
+use whir::algebra::ntt::inverse_wavelet_transform;
+use whir::algebra::polynomials::{CoefficientList, MultilinearPoint};
 use whir::hash;
 use whir::parameters::{FoldingFactor, MultivariateParameters, ProtocolParameters, SoundnessType};
 use whir::protocols::whir::{Config, Witness};
@@ -193,40 +195,41 @@ pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
         .instance(&Empty);
     let mut prover_state = ProverState::new_std(&ds);
 
-    let lane_polynomials: Vec<CoefficientList<Fr>> = state[0]
+    let lane_polynomials: Vec<CoefficientList<Field256>> = state[0]
         .a
         .chunks(instances)
-        .map(|lane| CoefficientList::new(to_poly(lane)))
+        .map(|lane| {
+            let mut coeffs = change_type_vec(&to_poly(lane));
+            inverse_wavelet_transform(&mut coeffs);
+            CoefficientList::new(coeffs)
+        })
         .collect();
 
     let whir_commitment = whir_commit(&config, &mut prover_state, &lane_polynomials);
 
-    for element in &whir_commitment.matrix {
-        prover.absorb(*element);
-    }
+    // for element in &whir_commitment.matrix {
+    //     prover.absorb(*element);
+    // }
 
     let r_star: Vec<Fr> = (0..num_vars).map(|_| prover.read()).collect();
-    let mut weights_polynomial: Vec<Fr> = Vec::with_capacity(1 << (num_vars + 1));
+    let r_star_f256 = change_type_vec(&r_star);
 
-    let r_star_eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r_star);
+    let r_star_eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r_star_f256);
 
-    let zero_vec: Vec<Fr> = (0..(1 << num_vars)).map(|_| Fr::zero()).collect();
-    weights_polynomial.extend_from_slice(&zero_vec);
-    weights_polynomial.extend_from_slice(&r_star_eq);
-    let r_star_evaluations: Vec<Fr> = (0..25)
-        .map(|i| eval_mle(lane_polynomials[i].coeffs(), &r_star))
+    let r_star_point = MultilinearPoint(r_star_f256);
+    let r_star_evaluations: Vec<Field256> = (0..25)
+        .map(|i| lane_polynomials[i].evaluate(&r_star_point))
         .collect();
 
     let poly_refs = lane_polynomials.iter().collect::<Vec<_>>();
 
-    let linear_weight_list: EvaluationsList<Fr> = CoefficientList::new(weights_polynomial).into();
-    let weight = Covector::new(linear_weight_list.evals().to_vec());
+    let weight = Covector::new(r_star_eq);
 
     config.prove(
         &mut prover_state,
         &poly_refs,
         &[&whir_commitment],
-        &[&weight as &dyn LinearForm<Fr>],
+        &[&weight as &dyn LinearForm<Field256>],
         &r_star_evaluations,
     );
 
@@ -359,11 +362,63 @@ pub fn prove_round(
 }
 
 fn whir_commit(
-    config: &Config<Fr>,
+    config: &Config<Field256>,
     prover_state: &mut ProverState,
-    polynomials: &[CoefficientList<Fr>],
-) -> Witness<Fr> {
+    polynomials: &[CoefficientList<Field256>],
+) -> Witness<Field256> {
     // Define the Fiat-Shamir IOPattern for committing and proving
     let poly_refs = polynomials.iter().collect::<Vec<_>>();
     config.commit(prover_state, &poly_refs)
+}
+
+fn change_type(f: Fr) -> Field256 {
+    Field256::new_unchecked(f.0)
+}
+
+fn change_type_vec(f: &[Fr]) -> Vec<Field256> {
+    let mut res: Vec<Field256> = Vec::with_capacity(f.len());
+    for i in f.iter() {
+        res.push(change_type(*i));
+    }
+    res
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn change_type_zero() {
+        assert_eq!(change_type(Fr::zero()), Field256::zero());
+    }
+
+    #[test]
+    fn change_type_one() {
+        assert_eq!(change_type(Fr::one()), Field256::one());
+    }
+
+    #[test]
+    fn change_type_preserves_value() {
+        let x = Fr::from(12345u64);
+        let y = change_type(x);
+        assert_eq!(y, Field256::from(12345u64));
+    }
+
+    #[test]
+    fn change_type_large_value() {
+        // Use a value close to the modulus
+        let x = -Fr::one(); // p - 1
+        let y = change_type(x);
+        assert_eq!(y, -Field256::one());
+    }
+
+    #[test]
+    fn change_type_preserves_arithmetic() {
+        let a = Fr::from(42u64);
+        let b = Fr::from(7u64);
+        let sum = change_type(a + b);
+        let product = change_type(a * b);
+        assert_eq!(sum, Field256::from(49u64));
+        assert_eq!(product, Field256::from(294u64));
+    }
 }
