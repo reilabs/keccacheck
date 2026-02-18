@@ -1,8 +1,9 @@
-use crate::prover::{
+use crate::protocol_utils::{
     BYTES_PER_FR, change_type, change_type_vec, deserialize_whir_proof, unpack_fr_to_bytes,
     whir_config,
 };
 use crate::reference::{ROUND_CONSTANTS, strip_pi};
+use crate::sumcheck::binary::verify_binary;
 use crate::sumcheck::util::{self, eq, to_field_vec};
 use crate::sumcheck::util::{
     HALF, add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
@@ -84,14 +85,23 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], r: Vec<Fr>) {
     }
     span.exit();
 
-    // Verify input via commitment
+    // Verify input bits via commitment
     let span = tracing::span!(Level::INFO, "verify input commitment").entered();
 
-    // Input word reduction (mirrors prover)
-    let input_beta = beta;
-    let input_alpha = (0..num_vars - 6)
+    let output_beta = beta;
+    let output_r = r;
+
+    // Binary claim verification
+    let binary_beta: Vec<Fr> = (0..25).map(|_| verifier.generate()).collect();
+    let binary_alpha: Vec<Fr> = (0..num_vars).map(|_| verifier.generate()).collect();
+    let binary_proof = verify_binary(&mut verifier, num_vars, &binary_alpha, &binary_beta, 25);
+    let binary_r = binary_proof.r_x;
+
+    // Input word reduction (fresh betas)
+    let input_beta: Vec<Fr> = (0..25).map(|_| verifier.generate()).collect();
+    let input_alpha: Vec<Fr> = (0..num_vars - 6)
         .map(|_| verifier.generate())
-        .collect::<Vec<_>>();
+        .collect();
 
     let input_c = verifier.read();
 
@@ -107,94 +117,67 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], r: Vec<Fr>) {
     let input_powers_eval = eval_mle(&powers, &input_r_y);
     assert_eq!(ic_2, input_powers_eval * input_b_rx_ry);
 
-    // Build r2 from input reduction
-    let mut r2 = Vec::with_capacity(num_vars);
-    r2.extend_from_slice(&input_r_x);
-    r2.extend_from_slice(&input_r_y);
+    let mut input_r = Vec::with_capacity(num_vars);
+    input_r.extend_from_slice(&input_r_x);
+    input_r.extend_from_slice(&input_r_y);
 
-    // Line restriction verification
-    // g(0) = batched evaluation at r (from round claims)
-    let g0: Fr = iota
-        .iter()
-        .enumerate()
-        .map(|(i, &v)| input_beta[i] * v)
-        .sum();
-    // g(1) = batched evaluation at r2 (from input bit sumcheck)
-    let g1 = input_b_rx_ry;
-
-    // Read g(2), ..., g(num_vars) from proof
-    let mut g_vals = Vec::with_capacity(num_vars + 1);
-    g_vals.push(g0);
-    g_vals.push(g1);
-    for _ in 2..=num_vars {
-        g_vals.push(verifier.read());
-    }
-
-    // Sample t_star and compute r_star on the line
-    let t_star = verifier.generate();
-    let r_star: Vec<Fr> = r
-        .iter()
-        .zip(r2.iter())
-        .map(|(a, b)| (Fr::one() - t_star) * a + t_star * b)
+    // Read 75 individual lane evaluations (25 lanes × 3 claim points)
+    let lane_evals: Vec<[Fr; 3]> = (0..25)
+        .map(|_| [verifier.read(), verifier.read(), verifier.read()])
         .collect();
 
-    // Read the 25 lane evaluations at r_star
-    let r_star_evaluations_fr: Vec<Fr> = (0..25).map(|_| verifier.read()).collect();
+    // Check round claim: sum_k output_beta[k] * lane_k(output_r) == sum_k output_beta[k] * iota[k]
+    let round_claim: Fr = (0..25).map(|k| output_beta[k] * lane_evals[k][0]).sum();
+    let expected_round: Fr = (0..25).map(|k| output_beta[k] * iota[k]).sum();
+    assert_eq!(round_claim, expected_round);
 
-    // Check line restriction: g(t_star) == sum_i beta[i] * eval[i]
-    let g_t_star = lagrange_interpolate(&g_vals, t_star);
-    let batched_eval: Fr = r_star_evaluations_fr
+    // Check binary claim: sum_k binary_beta[k] * lane_k(binary_r) matches binary sumcheck
+    let binary_claim: Fr = (0..25).map(|k| binary_beta[k] * lane_evals[k][1]).sum();
+    assert_eq!(binary_claim, binary_proof.batched_eval);
+
+    // Check input claim: sum_k input_beta[k] * lane_k(input_r) == input_b_rx_ry
+    let input_claim: Fr = (0..25).map(|k| input_beta[k] * lane_evals[k][2]).sum();
+    assert_eq!(input_claim, input_b_rx_ry);
+
+    // Sample gamma and build combined linear form
+    let gamma = verifier.generate();
+    let gamma2 = gamma * gamma;
+
+    let eq1 = calculate_evaluations_over_boolean_hypercube_for_eq(&output_r);
+    let eq2 = calculate_evaluations_over_boolean_hypercube_for_eq(&binary_r);
+    let eq3 = calculate_evaluations_over_boolean_hypercube_for_eq(&input_r);
+
+    let combined_eq: Vec<Fr> = eq1
         .iter()
-        .enumerate()
-        .map(|(i, &e)| input_beta[i] * e)
-        .sum();
-    assert_eq!(g_t_star, batched_eval);
+        .zip(eq2.iter())
+        .zip(eq3.iter())
+        .map(|((e1, e2), e3)| *e1 + gamma * *e2 + gamma2 * *e3)
+        .collect();
+    let combined_cov = Covector::new(change_type_vec(&combined_eq));
 
-    // Extract encoded WhirProof from remaining proof elements
+    // 25 combined evaluations: lane_k(r1) + γ·lane_k(r2) + γ²·lane_k(r3)
+    let evaluations: Vec<Field256> = lane_evals
+        .iter()
+        .map(|[e1, e2, e3]| change_type(*e1 + gamma * *e2 + gamma2 * *e3))
+        .collect();
+
+    // Extract and verify WHIR proof
     let remaining = verifier.remaining();
     let whir_proof = decode_whir_proof(remaining);
 
-    // Reconstruct whir config and verify opening
     let (config, ds) = whir_config(num_vars);
     let mut verifier_state = VerifierState::new_std(&ds, &whir_proof);
     let whir_commitment = config.receive_commitment(&mut verifier_state).unwrap();
-
-    let r_star_f256 = change_type_vec(&r_star);
-    let r_star_eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r_star_f256);
-    let weight = Covector::new(r_star_eq);
-    let r_star_evaluations: Vec<Field256> = r_star_evaluations_fr
-        .iter()
-        .map(|&e| change_type(e))
-        .collect();
 
     config
         .verify(
             &mut verifier_state,
             &[&whir_commitment],
-            &[&weight as &dyn LinearForm<Field256>],
-            &r_star_evaluations,
+            &[&combined_cov as &dyn LinearForm<Field256>],
+            &evaluations,
         )
         .unwrap();
     span.exit();
-}
-
-/// Lagrange interpolation of a polynomial defined by values at points 0, 1, ..., n
-/// evaluated at point t.
-fn lagrange_interpolate(values: &[Fr], t: Fr) -> Fr {
-    let n = values.len();
-    let mut result = Fr::zero();
-    for (i, value) in values.iter().enumerate() {
-        let xi = Fr::from(i as u64);
-        let mut basis = Fr::one();
-        for j in 0..n {
-            if i != j {
-                let xj = Fr::from(j as u64);
-                basis *= (t - xj) / (xi - xj);
-            }
-        }
-        result += value * &basis;
-    }
-    result
 }
 
 fn fr_to_usize(f: Fr) -> usize {

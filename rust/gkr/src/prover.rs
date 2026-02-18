@@ -1,4 +1,8 @@
+use crate::protocol_utils::{
+    change_type, change_type_vec, pack_bytes_to_fr, serialize_whir_proof, whir_config,
+};
 use crate::reference::{KeccakRoundState, ROUND_CONSTANTS, strip_pi};
+use crate::sumcheck::binary::prove_binary;
 use crate::sumcheck::chi::prove_chi;
 use crate::sumcheck::iota::prove_iota;
 use crate::sumcheck::outputs::{prove_bits, prove_outputs};
@@ -12,20 +16,17 @@ use crate::sumcheck::util::{
 };
 use crate::transcript::Prover;
 use ark_bn254::Fr;
-use ark_ff::{BigInteger, One, PrimeField, Zero};
+use ark_ff::{One, Zero};
 use tracing::instrument;
 use whir::algebra::fields::Field256;
 use whir::algebra::linear_form::{Covector, LinearForm};
 use whir::algebra::ntt::inverse_wavelet_transform;
-use whir::algebra::polynomials::{CoefficientList, MultilinearPoint};
-use whir::hash;
-use whir::parameters::{FoldingFactor, MultivariateParameters, ProtocolParameters, SoundnessType};
+use whir::algebra::polynomials::CoefficientList;
 use whir::protocols::whir::{Config, Witness};
-use whir::transcript::codecs::Empty;
-use whir::transcript::{DomainSeparator, Proof as WhirProof, ProverState};
+use whir::transcript::ProverState;
 
 #[instrument(skip_all, fields(num_vars=(6 + (data.len() / 25).ilog2())))]
-pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
+pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     let instances = data.len() / 25;
 
     let num_vars = 6 + instances.ilog2() as usize;
@@ -41,139 +42,27 @@ pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     span.exit();
 
     let mut prover = Prover::new();
-    alpha.iter().for_each(|challenge| prover.absorb(*challenge));
-    let span = tracing::span!(tracing::Level::INFO, "prove all rounds").entered();
 
-    // TODO: feed output to the prover before obtaining alpha
-    let mut beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+    output_alpha
+        .iter()
+        .for_each(|challenge| prover.absorb(*challenge));
 
-    // Write final output sum
-    // Over here we will instead make a claim about the words
-    // to obtain the sum
+    let (_output_beta, output_r, _output_c) =
+        reduce_output_words(&mut prover, &output_alpha, &state, num_vars);
 
-    let output_words = to_field_vec(&state[23].iota);
-    let c: Fr = output_words
-        .chunks(instances)
-        .enumerate()
-        .map(|(i, word_poly)| beta[i] * eval_mle(word_poly, &alpha))
-        .sum();
-    prover.write(c);
-
-    // We will run one round of reduction to reduce to a claim on the output bits
-    let eq_proof = prove_outputs(&mut prover, num_vars - 6, &alpha, &output_words, &beta, c);
-    let mut bits = to_poly(&state[23].iota);
-
-    let bit_proof = prove_bits(
-        &mut prover,
-        &eq_proof.r_x,
-        &mut bits,
-        &beta,
-        eq_proof.word_rlc_eval,
-    );
-
-    let mut r = Vec::with_capacity(num_vars);
-    r.extend(eq_proof.r_x);
-    r.extend(bit_proof.r_y);
-    #[cfg(debug_assertions)]
-    {
-        let sum: Fr = state[23]
-            .iota
-            .chunks_exact(instances)
-            .enumerate()
-            .map(|(i, x)| {
-                let poly = to_poly(x);
-                beta[i] * eval_mle(&poly, &r)
-            })
-            .sum();
-        assert_eq!(bit_proof.sum, bit_proof.bit_rlc_eval * bit_proof.pow_r_y);
-        assert_eq!(sum, bit_proof.bit_rlc_eval)
-    }
-
-    let mut sum = bit_proof.bit_rlc_eval;
-    for round in (0..24).rev() {
-        let previous_proof = prove_round(
-            &mut prover,
-            num_vars,
-            &state[round],
-            &r,
-            &mut beta,
-            sum,
-            ROUND_CONSTANTS[round],
-        );
-        r = previous_proof.r;
-        if round != 0 {
-            sum = Fr::zero();
-            beta.iter_mut().enumerate().for_each(|(i, b)| {
-                *b = prover.read();
-                let v = HALF * (Fr::one() - previous_proof.iota_hat[i]);
-                sum += *b * v;
-            });
-        }
-    }
-    span.exit();
-
-    let input_words = to_field_vec(&state[0].a);
-    // For the moment, let's have the rlc from the inputs, be exactly the same as from the rounds
-    // This way the input bit polynomial under evaluation is the same
-    // TODO: work out if this is secure
-    let input_beta = beta;
-    let input_alpha = (0..num_vars - 6).map(|_| prover.read()).collect::<Vec<_>>();
-
-    let input_c: Fr = input_words
-        .chunks(instances)
-        .enumerate()
-        .map(|(i, word_poly)| input_beta[i] * eval_mle(word_poly, &input_alpha))
-        .sum();
-    prover.write(input_c);
-
-    // Reduce to a claim on the input bits
-    let input_eq_proof = prove_outputs(
-        &mut prover,
-        num_vars - 6,
-        &input_alpha,
-        &input_words,
-        &input_beta,
-        input_c,
-    );
     let mut input_bits = to_poly(&state[0].a);
+    // Prove that the input bits are all boolean in value
+    let (_binary_beta, binary_r, _binary_c) =
+        reduce_binary_claim(&mut prover, num_vars, &input_bits);
 
-    let input_bit_proof = prove_bits(
-        &mut prover,
-        &input_eq_proof.r_x,
-        &mut input_bits,
-        &input_beta,
-        input_eq_proof.word_rlc_eval,
-    );
+    // Reduce claim on input words to claim on input bits
+    let (_input_beta, input_r, _input_c) =
+        reduce_input_words(&mut prover, num_vars, &state, &mut input_bits);
 
-    // Combine two claims on the input bits via line restriction:
-    // Claim 1 (from rounds): per-lane evaluations at point r
-    // Claim 2 (from input reduction): RLC evaluation at point r2
-    let mut r2 = Vec::with_capacity(num_vars);
-    r2.extend_from_slice(&input_eq_proof.r_x);
-    r2.extend_from_slice(&input_bit_proof.r_y);
-
-    let lane_size = 1 << num_vars;
-
-    // Batch 25 lanes with random coefficients
-    let mut h = vec![Fr::zero(); lane_size];
-    for i in 0..25 {
-        let lane = &input_bits[i * lane_size..(i + 1) * lane_size];
-        for j in 0..lane_size {
-            h[j] += input_beta[i] * lane[j];
-        }
-    }
-
-    // g(t) = h((1-t)*r + t*r2) has degree num_vars
-    // g(0) and g(1) known to verifier; send g(2), ..., g(num_vars)
-    for t_val in 2..=num_vars {
-        let t = Fr::from(t_val as u64);
-        let point: Vec<Fr> = r
-            .iter()
-            .zip(r2.iter())
-            .map(|(a, b)| (Fr::one() - t) * a + t * b)
-            .collect();
-        prover.write(eval_mle(&h, &point));
-    }
+    // Combine three claims on the input bits via sumcheck within WHIR:
+    // Claim 1 (from rounds): sum_k output_beta[k] * lane_k(output_r) = output_c
+    // Claim 2 (from binary):  sum_k binary_beta[k] * lane_k(binary_r) = binary_c
+    // Claim 3 (from input):   sum_k input_beta[k]  * lane_k(input_r)  = input_c
 
     let (config, ds) = whir_config(num_vars);
     let mut prover_state = ProverState::new_std(&ds);
@@ -190,37 +79,65 @@ pub fn prove(data: &[u64], alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
 
     let whir_commitment = whir_commit(&config, &mut prover_state, &lane_polynomials);
 
-    // Sample r_star on the line between r and r2
-    let t_star = prover.read();
-    let r_star: Vec<Fr> = r
+    let ((eq1, eq2), eq3) = rayon::join(
+        || {
+            rayon::join(
+                || calculate_evaluations_over_boolean_hypercube_for_eq(&output_r),
+                || calculate_evaluations_over_boolean_hypercube_for_eq(&binary_r),
+            )
+        },
+        || calculate_evaluations_over_boolean_hypercube_for_eq(&input_r),
+    );
+
+    // Compute per-lane evaluations at each claim point
+    let lane_bits: Vec<Vec<Fr>> = state[0]
+        .a
+        .chunks(instances)
+        .map(|lane| to_poly(lane))
+        .collect();
+
+    let lane_evals: Vec<[Fr; 3]> = lane_bits
         .iter()
-        .zip(r2.iter())
-        .map(|(a, b)| (Fr::one() - t_star) * a + t_star * b)
-        .collect();
-    let r_star_f256 = change_type_vec(&r_star);
-
-    let r_star_eq = calculate_evaluations_over_boolean_hypercube_for_eq(&r_star_f256);
-
-    let r_star_point = MultilinearPoint(r_star_f256);
-    let r_star_evaluations: Vec<Field256> = (0..25)
-        .map(|i| lane_polynomials[i].evaluate(&r_star_point))
+        .map(|bits| {
+            [&eq1, &eq2, &eq3].map(|eq| bits.iter().zip(eq.iter()).map(|(a, b)| *a * *b).sum())
+        })
         .collect();
 
-    // Write evaluations to the GKR transcript so the verifier can check them
-    for &eval in &r_star_evaluations {
-        prover.write(change_type_back(eval));
+    // Write 75 individual evaluations to transcript so verifier can check
+    // sum_k beta[k] * eval[k] == claimed_sum for each of the 3 claims
+    for evals in &lane_evals {
+        for &eval in evals {
+            prover.write(eval);
+        }
     }
 
-    let poly_refs = lane_polynomials.iter().collect::<Vec<_>>();
+    // Sample gamma to combine the 3 evaluation points into 1 linear form
+    let gamma: Fr = prover.read();
+    let gamma2 = gamma * gamma;
 
-    let weight = Covector::new(r_star_eq);
+    // Combined linear form: eq(·, output_r) + γ·eq(·, binary_r) + γ²·eq(·, input_r)
+    let combined_eq: Vec<Fr> = eq1
+        .iter()
+        .zip(eq2.iter())
+        .zip(eq3.iter())
+        .map(|((e1, e2), e3)| *e1 + gamma * *e2 + gamma2 * *e3)
+        .collect();
+    let combined_cov = Covector::new(change_type_vec(&combined_eq));
+
+    // 25 combined evaluations: lane_k(r1) + γ·lane_k(r2) + γ²·lane_k(r3)
+    let evaluations: Vec<Field256> = lane_evals
+        .iter()
+        .map(|[e1, e2, e3]| change_type(*e1 + gamma * *e2 + gamma2 * *e3))
+        .collect();
+
+    let poly_refs = lane_polynomials.iter().collect::<Vec<_>>();
 
     config.prove(
         &mut prover_state,
         &poly_refs,
         &[&whir_commitment],
-        &[&weight as &dyn LinearForm<Field256>],
-        &r_star_evaluations,
+        &[&combined_cov as &dyn LinearForm<Field256>],
+        &evaluations,
     );
 
     let whir_proof = prover_state.proof();
@@ -360,6 +277,149 @@ pub fn prove_round(
     )
 }
 
+fn reduce_output_words(
+    prover: &mut Prover,
+    alpha: &[Fr],
+    state: &[KeccakRoundState],
+    num_vars: usize,
+) -> (Vec<Fr>, Vec<Fr>, Fr) {
+    let span = tracing::span!(tracing::Level::INFO, "prove all rounds").entered();
+    let instances = 1 << (num_vars - 6);
+    // TODO: feed output to the prover before obtaining alpha
+    let mut beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+
+    // Write final output sum
+    // Over here we will instead make a claim about the words
+    // to obtain the sum
+
+    let output_words = to_field_vec(&state[23].iota);
+    let c: Fr = output_words
+        .chunks(instances)
+        .enumerate()
+        .map(|(i, word_poly)| beta[i] * eval_mle(word_poly, alpha))
+        .sum();
+    prover.write(c);
+
+    // We will run one round of reduction to reduce to a claim on the output bits
+    let eq_proof = prove_outputs(prover, num_vars - 6, alpha, &output_words, &beta, c);
+    let mut bits = to_poly(&state[23].iota);
+
+    let bit_proof = prove_bits(
+        prover,
+        &eq_proof.r_x,
+        &mut bits,
+        &beta,
+        eq_proof.word_rlc_eval,
+    );
+
+    let mut r = Vec::with_capacity(num_vars);
+    r.extend(eq_proof.r_x);
+    r.extend(bit_proof.r_y);
+    #[cfg(debug_assertions)]
+    {
+        let sum: Fr = state[23]
+            .iota
+            .chunks_exact(instances)
+            .enumerate()
+            .map(|(i, x)| {
+                let poly = to_poly(x);
+                beta[i] * eval_mle(&poly, &r)
+            })
+            .sum();
+        assert_eq!(bit_proof.sum, bit_proof.bit_rlc_eval * bit_proof.pow_r_y);
+        assert_eq!(sum, bit_proof.bit_rlc_eval)
+    }
+
+    let mut sum = bit_proof.bit_rlc_eval;
+    for round in (0..24).rev() {
+        let previous_proof = prove_round(
+            prover,
+            num_vars,
+            &state[round],
+            &r,
+            &mut beta,
+            sum,
+            ROUND_CONSTANTS[round],
+        );
+        r = previous_proof.r;
+        if round != 0 {
+            sum = Fr::zero();
+            beta.iter_mut().enumerate().for_each(|(i, b)| {
+                *b = prover.read();
+                let v = HALF * (Fr::one() - previous_proof.iota_hat[i]);
+                sum += *b * v;
+            });
+        }
+    }
+    span.exit();
+    (beta, r, c)
+}
+
+fn reduce_input_words(
+    prover: &mut Prover,
+    num_vars: usize,
+    state: &[KeccakRoundState],
+    input_bits: &mut [Fr],
+) -> (Vec<Fr>, Vec<Fr>, Fr) {
+    let input_words = to_field_vec(&state[0].a);
+    let input_beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+    let input_alpha = (0..num_vars - 6).map(|_| prover.read()).collect::<Vec<_>>();
+
+    let instances = 1 << (num_vars - 6);
+    let input_c: Fr = input_words
+        .chunks(instances)
+        .enumerate()
+        .map(|(i, word_poly)| input_beta[i] * eval_mle(word_poly, &input_alpha))
+        .sum();
+    prover.write(input_c);
+
+    // Reduce to a claim on the input bits
+    let input_eq_proof = prove_outputs(
+        prover,
+        num_vars - 6,
+        &input_alpha,
+        &input_words,
+        &input_beta,
+        input_c,
+    );
+
+    let input_bit_proof = prove_bits(
+        prover,
+        &input_eq_proof.r_x,
+        input_bits,
+        &input_beta,
+        input_eq_proof.word_rlc_eval,
+    );
+
+    let mut input_eval_point = Vec::with_capacity(num_vars);
+
+    input_eval_point.extend_from_slice(&input_eq_proof.r_x);
+    input_eval_point.extend_from_slice(&input_bit_proof.r_y);
+    (input_beta, input_eval_point, input_bit_proof.bit_rlc_eval)
+}
+
+fn reduce_binary_claim(
+    prover: &mut Prover,
+    num_vars: usize,
+    input_bits: &[Fr],
+) -> (Vec<Fr>, Vec<Fr>, Fr) {
+    let lane_size = 1 << num_vars;
+    let binary_beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+    let binary_alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
+    let mut binary_lanes: Vec<Vec<Fr>> = (0..25)
+        .map(|i| input_bits[i * lane_size..(i + 1) * lane_size].to_vec())
+        .collect();
+    let binary_proof = prove_binary(
+        prover,
+        num_vars,
+        &binary_alpha,
+        &mut binary_lanes,
+        &binary_beta,
+    );
+
+    (binary_beta, binary_proof.r_x, binary_proof.batched_eval)
+}
+
 fn whir_commit(
     config: &Config<Field256>,
     prover_state: &mut ProverState,
@@ -370,136 +430,3 @@ fn whir_commit(
     config.commit(prover_state, &poly_refs)
 }
 
-pub(crate) fn whir_config(num_vars: usize) -> (Config<Field256>, DomainSeparator<'static, Empty>) {
-    let mv_parameters = MultivariateParameters::new(num_vars);
-    let whir_params = ProtocolParameters {
-        initial_statement: true,
-        security_level: 32,
-        pow_bits: 0,
-        folding_factor: FoldingFactor::Constant(1),
-        soundness_type: SoundnessType::UniqueDecoding,
-        starting_log_inv_rate: 1,
-        batch_size: 25,
-        hash_id: hash::SHA2,
-    };
-    let config = Config::new(mv_parameters, &whir_params);
-    let ds = DomainSeparator::protocol(&whir_params)
-        .session(&"keccacheck-input-commitment")
-        .instance(&Empty);
-    (config, ds)
-}
-
-pub(crate) fn change_type(f: Fr) -> Field256 {
-    Field256::new_unchecked(f.0)
-}
-
-pub(crate) fn change_type_back(f: Field256) -> Fr {
-    Fr::new_unchecked(f.0)
-}
-
-pub(crate) fn change_type_vec(f: &[Fr]) -> Vec<Field256> {
-    let mut res: Vec<Field256> = Vec::with_capacity(f.len());
-    for i in f.iter() {
-        res.push(change_type(*i));
-    }
-    res
-}
-
-pub(crate) fn serialize_whir_proof(proof: &WhirProof) -> Vec<u8> {
-    let mut buf = Vec::new();
-    ciborium::into_writer(proof, &mut buf).expect("CBOR serialization failed");
-    buf
-}
-
-pub(crate) fn deserialize_whir_proof(bytes: &[u8]) -> WhirProof {
-    ciborium::from_reader(bytes).expect("CBOR deserialization failed")
-}
-
-/// Bytes packed per Fr element (248 bits, safely under the 254-bit bn254 modulus).
-pub(crate) const BYTES_PER_FR: usize = 31;
-
-/// Pack a byte slice into Fr elements, 31 bytes per element.
-pub(crate) fn pack_bytes_to_fr(bytes: &[u8]) -> Vec<Fr> {
-    bytes
-        .chunks(BYTES_PER_FR)
-        .map(|chunk| {
-            let mut buf = [0u8; 32];
-            buf[..chunk.len()].copy_from_slice(chunk);
-            Fr::from_le_bytes_mod_order(&buf)
-        })
-        .collect()
-}
-
-/// Unpack Fr elements back to bytes, recovering exactly `byte_len` bytes.
-pub(crate) fn unpack_fr_to_bytes(elements: &[Fr], byte_len: usize) -> Vec<u8> {
-    let mut result = Vec::with_capacity(byte_len);
-    for fr in elements {
-        let bytes_le = fr.into_bigint().to_bytes_le();
-        let take = BYTES_PER_FR.min(byte_len - result.len());
-        result.extend_from_slice(&bytes_le[..take]);
-    }
-    result
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn change_type_zero() {
-        assert_eq!(change_type(Fr::zero()), Field256::zero());
-    }
-
-    #[test]
-    fn change_type_one() {
-        assert_eq!(change_type(Fr::one()), Field256::one());
-    }
-
-    #[test]
-    fn change_type_preserves_value() {
-        let x = Fr::from(12345u64);
-        let y = change_type(x);
-        assert_eq!(y, Field256::from(12345u64));
-    }
-
-    #[test]
-    fn change_type_large_value() {
-        // Use a value close to the modulus
-        let x = -Fr::one(); // p - 1
-        let y = change_type(x);
-        assert_eq!(y, -Field256::one());
-    }
-
-    #[test]
-    fn pack_unpack_roundtrip_exact() {
-        let data = vec![42u8; 31];
-        let packed = pack_bytes_to_fr(&data);
-        assert_eq!(packed.len(), 1);
-        assert_eq!(unpack_fr_to_bytes(&packed, 31), data);
-    }
-
-    #[test]
-    fn pack_unpack_roundtrip_multi() {
-        let data: Vec<u8> = (0..100).collect();
-        let packed = pack_bytes_to_fr(&data);
-        assert_eq!(packed.len(), 4); // ceil(100/31)
-        assert_eq!(unpack_fr_to_bytes(&packed, 100), data);
-    }
-
-    #[test]
-    fn pack_unpack_empty() {
-        let packed = pack_bytes_to_fr(&[]);
-        assert_eq!(packed.len(), 0);
-        assert_eq!(unpack_fr_to_bytes(&packed, 0), vec![]);
-    }
-
-    #[test]
-    fn change_type_preserves_arithmetic() {
-        let a = Fr::from(42u64);
-        let b = Fr::from(7u64);
-        let sum = change_type(a + b);
-        let product = change_type(a * b);
-        assert_eq!(sum, Field256::from(49u64));
-        assert_eq!(product, Field256::from(294u64));
-    }
-}

@@ -12,7 +12,7 @@ use tracing::instrument;
 
 pub struct BinaryProof {
     pub r_x: Vec<Fr>,
-    pub bits_rlc_eval: Fr,
+    pub batched_eval: Fr,
 }
 
 /// Proves that k bit polynomials have boolean evaluations over the hypercube.
@@ -142,9 +142,10 @@ fn prove_sumcheck_binary(
         assert_eq!(sum, checksum);
     }
 
+    let batched_eval: Fr = evals.iter().zip(beta.iter()).map(|(e, b)| *e * *b).sum();
     BinaryProof {
         r_x: rs,
-        bits_rlc_eval: evals[0],
+        batched_eval,
     }
 }
 
@@ -166,10 +167,8 @@ pub fn verify_binary(
     }
     assert_eq!(final_val, eq_val * checksum);
 
-    BinaryProof {
-        r_x,
-        bits_rlc_eval: evals[0],
-    }
+    let batched_eval: Fr = evals.iter().zip(beta.iter()).map(|(e, b)| *e * *b).sum();
+    BinaryProof { r_x, batched_eval }
 }
 
 #[cfg(test)]
@@ -199,6 +198,9 @@ mod tests {
         let v_proof = verify_binary(&mut verifier, num_vars, &v_alpha, &v_beta, 1);
 
         assert_eq!(proof.r_x, v_proof.r_x);
-        assert_eq!(proof.bits_rlc_eval, eval_mle(&bits_orig, &proof.r_x));
+        assert_eq!(
+            proof.batched_eval,
+            beta[0] * eval_mle(&bits_orig, &proof.r_x)
+        );
     }
 }

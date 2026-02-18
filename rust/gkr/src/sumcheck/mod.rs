@@ -1,6 +1,5 @@
 pub mod binary;
 pub mod chi;
-pub mod inputs;
 pub mod iota;
 pub mod outputs;
 pub mod rho;
