@@ -90,11 +90,7 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64
     );
 
     // Compute per-lane evaluations at each claim point
-    let lane_bits: Vec<Vec<Fr>> = state[0]
-        .a
-        .chunks(instances)
-        .map(|lane| to_poly(lane))
-        .collect();
+    let lane_bits: Vec<Vec<Fr>> = state[0].a.chunks(instances).map(to_poly).collect();
 
     let lane_evals: Vec<[Fr; 3]> = lane_bits
         .iter()
@@ -429,4 +425,3 @@ fn whir_commit(
     let poly_refs = polynomials.iter().collect::<Vec<_>>();
     config.commit(prover_state, &poly_refs)
 }
-
