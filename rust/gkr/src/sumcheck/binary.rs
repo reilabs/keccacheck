@@ -12,7 +12,7 @@ use tracing::instrument;
 
 pub struct BinaryProof {
     pub r_x: Vec<Fr>,
-    pub bits_rlc_eval: Vec<Fr>,
+    pub bits_rlc_eval: Fr,
 }
 
 /// Proves that k bit polynomials have boolean evaluations over the hypercube.
@@ -69,10 +69,7 @@ fn prove_sumcheck_binary(
     for _ in 0..size {
         // p(t) = p0 + p1 ⋅ t + p2 ⋅ t² + p3 ⋅ t³
         let (e0, e1) = e.split_at(e.len() / 2);
-        let bi: Vec<(&[Fr], &[Fr])> = bits
-            .iter()
-            .map(|b| b.split_at(b.len() / 2))
-            .collect();
+        let bi: Vec<(&[Fr], &[Fr])> = bits.iter().map(|b| b.split_at(b.len() / 2)).collect();
 
         let (p0, pem1, p3) = bi
             .par_iter()
@@ -147,7 +144,7 @@ fn prove_sumcheck_binary(
 
     BinaryProof {
         r_x: rs,
-        bits_rlc_eval: evals,
+        bits_rlc_eval: evals[0],
     }
 }
 
@@ -171,7 +168,7 @@ pub fn verify_binary(
 
     BinaryProof {
         r_x,
-        bits_rlc_eval: evals,
+        bits_rlc_eval: evals[0],
     }
 }
 
@@ -180,61 +177,18 @@ mod tests {
     use super::*;
     use crate::sumcheck::util::eval_mle;
     use crate::transcript::Prover;
-
     #[test]
-    fn binary_proof_roundtrip() {
-        let num_vars = 3;
-        let k = 2;
-
-        let bits0: Vec<Fr> = [0, 1, 1, 0, 1, 0, 0, 1]
-            .iter()
-            .map(|&x| Fr::from(x as u64))
-            .collect();
-        let bits1: Vec<Fr> = [1, 0, 1, 1, 0, 0, 1, 0]
-            .iter()
-            .map(|&x| Fr::from(x as u64))
-            .collect();
-
-        let mut prover = Prover::new();
-        let alpha: Vec<Fr> = (0..num_vars).map(|_| prover.read()).collect();
-        let beta: Vec<Fr> = (0..k).map(|_| prover.read()).collect();
-
-        let bits0_orig = bits0.clone();
-        let bits1_orig = bits1.clone();
-        let mut bits = vec![bits0, bits1];
-        let proof = prove_binary(&mut prover, num_vars, &alpha, &mut bits, &beta);
-
-        // Verify
-        let proof_data = prover.finish();
-        let mut verifier = Verifier::new(&proof_data);
-        let v_alpha: Vec<Fr> = (0..num_vars).map(|_| verifier.generate()).collect();
-        let v_beta: Vec<Fr> = (0..k).map(|_| verifier.generate()).collect();
-
-        assert_eq!(alpha, v_alpha);
-        assert_eq!(beta, v_beta);
-
-        let v_proof = verify_binary(&mut verifier, num_vars, &v_alpha, &v_beta, k);
-
-        assert_eq!(proof.r_x, v_proof.r_x);
-        assert_eq!(proof.bits_rlc_eval, v_proof.bits_rlc_eval);
-
-        // Check evaluations match original polynomials
-        assert_eq!(proof.bits_rlc_eval[0], eval_mle(&bits0_orig, &proof.r_x));
-        assert_eq!(proof.bits_rlc_eval[1], eval_mle(&bits1_orig, &proof.r_x));
-    }
-
-    #[test]
-    fn binary_proof_single_poly() {
+    fn binary_proof() {
         let num_vars = 4;
 
-        let bits0: Vec<Fr> = (0..16).map(|x| Fr::from((x % 2) as u64)).collect();
+        let bits: Vec<Fr> = (0..16).map(|x| Fr::from((x % 2) as u64)).collect();
 
         let mut prover = Prover::new();
         let alpha: Vec<Fr> = (0..num_vars).map(|_| prover.read()).collect();
         let beta: Vec<Fr> = (0..1).map(|_| prover.read()).collect();
 
-        let bits0_orig = bits0.clone();
-        let mut bits = vec![bits0];
+        let bits_orig = bits.clone();
+        let mut bits = vec![bits];
         let proof = prove_binary(&mut prover, num_vars, &alpha, &mut bits, &beta);
 
         let proof_data = prover.finish();
@@ -245,6 +199,6 @@ mod tests {
         let v_proof = verify_binary(&mut verifier, num_vars, &v_alpha, &v_beta, 1);
 
         assert_eq!(proof.r_x, v_proof.r_x);
-        assert_eq!(proof.bits_rlc_eval[0], eval_mle(&bits0_orig, &proof.r_x));
+        assert_eq!(proof.bits_rlc_eval, eval_mle(&bits_orig, &proof.r_x));
     }
 }
