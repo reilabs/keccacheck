@@ -20,6 +20,7 @@
 // https://eprint.iacr.org/2024/310.pdf
 #![allow(dead_code)]
 mod constants;
+pub mod hash_engine;
 
 use {
     self::constants::{RC3, RC16},
