@@ -1,11 +1,16 @@
+use std::sync::Once;
+
 use ark_bn254::Fr;
 use ark_ff::{BigInteger, PrimeField};
 use whir::algebra::fields::Field256;
-use whir::hash;
 use whir::parameters::{FoldingFactor, MultivariateParameters, ProtocolParameters, SoundnessType};
 use whir::protocols::whir::Config;
 use whir::transcript::codecs::Empty;
 use whir::transcript::{DomainSeparator, Proof as WhirProof};
+
+use crate::poseidon::hash_engine::POSEIDON2;
+
+static REGISTER_POSEIDON2: Once = Once::new();
 
 pub(crate) fn change_type(f: Fr) -> Field256 {
     Field256::new_unchecked(f.0)
@@ -56,6 +61,7 @@ pub(crate) fn unpack_fr_to_bytes(elements: &[Fr], byte_len: usize) -> Vec<u8> {
 }
 
 pub(crate) fn whir_config(num_vars: usize) -> (Config<Field256>, DomainSeparator<'static, Empty>) {
+    REGISTER_POSEIDON2.call_once(crate::poseidon::hash_engine::register);
     let mv_parameters = MultivariateParameters::new(num_vars);
     let whir_params = ProtocolParameters {
         initial_statement: true,
@@ -65,7 +71,7 @@ pub(crate) fn whir_config(num_vars: usize) -> (Config<Field256>, DomainSeparator
         soundness_type: SoundnessType::UniqueDecoding,
         starting_log_inv_rate: 1,
         batch_size: 25,
-        hash_id: hash::SHA2,
+        hash_id: POSEIDON2,
     };
     let config = Config::new(mv_parameters, &whir_params);
     let ds = DomainSeparator::protocol(&whir_params)
