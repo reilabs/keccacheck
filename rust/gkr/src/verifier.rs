@@ -86,7 +86,6 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], r: Vec<Fr>) {
     span.exit();
 
     // Verify input bits via commitment
-    let span = tracing::span!(Level::INFO, "verify input commitment").entered();
 
     let output_beta = beta;
     let output_r = r;
@@ -99,9 +98,7 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], r: Vec<Fr>) {
 
     // Input word reduction (fresh betas)
     let input_beta: Vec<Fr> = (0..25).map(|_| verifier.generate()).collect();
-    let input_alpha: Vec<Fr> = (0..num_vars - 6)
-        .map(|_| verifier.generate())
-        .collect();
+    let input_alpha: Vec<Fr> = (0..num_vars - 6).map(|_| verifier.generate()).collect();
 
     let input_c = verifier.read();
 
@@ -168,7 +165,7 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], r: Vec<Fr>) {
     let (config, ds) = whir_config(num_vars);
     let mut verifier_state = VerifierState::new_std(&ds, &whir_proof);
     let whir_commitment = config.receive_commitment(&mut verifier_state).unwrap();
-
+    let span = tracing::span!(Level::INFO, "verify whir").entered();
     config
         .verify(
             &mut verifier_state,
