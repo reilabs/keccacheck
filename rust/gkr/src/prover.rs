@@ -59,16 +59,35 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64
     let (_input_beta, input_r, _input_c) =
         reduce_input_words(&mut prover, num_vars, &state, &mut input_bits);
 
-    // Combine three claims on the input bits via sumcheck within WHIR:
-    // Claim 1 (from rounds): sum_k output_beta[k] * lane_k(output_r) = output_c
-    // Claim 2 (from binary):  sum_k binary_beta[k] * lane_k(binary_r) = binary_c
-    // Claim 3 (from input):   sum_k input_beta[k]  * lane_k(input_r)  = input_c
+    let whir_proof = prove_whir(
+        &mut prover,
+        num_vars,
+        &state[0].a,
+        &output_r,
+        &binary_r,
+        &input_r,
+    );
+
+    let mut proof = prover.finish();
+    proof.extend(whir_proof);
+
+    (proof, state[0].a.clone(), state[23].iota.clone())
+}
+
+fn prove_whir(
+    prover: &mut Prover,
+    num_vars: usize,
+    a: &[u64],
+    output_r: &[Fr],
+    binary_r: &[Fr],
+    input_r: &[Fr],
+) -> Vec<Fr> {
+    let instances = 1 << (num_vars - 6);
 
     let (config, ds) = whir_config(num_vars);
     let mut prover_state = ProverState::new_std(&ds);
 
-    let lane_polynomials: Vec<CoefficientList<Field256>> = state[0]
-        .a
+    let lane_polynomials: Vec<CoefficientList<Field256>> = a
         .chunks(instances)
         .map(|lane| {
             let mut coeffs = change_type_vec(&to_poly(lane));
@@ -82,15 +101,15 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64
     let ((eq1, eq2), eq3) = rayon::join(
         || {
             rayon::join(
-                || calculate_evaluations_over_boolean_hypercube_for_eq(&output_r),
-                || calculate_evaluations_over_boolean_hypercube_for_eq(&binary_r),
+                || calculate_evaluations_over_boolean_hypercube_for_eq(output_r),
+                || calculate_evaluations_over_boolean_hypercube_for_eq(binary_r),
             )
         },
-        || calculate_evaluations_over_boolean_hypercube_for_eq(&input_r),
+        || calculate_evaluations_over_boolean_hypercube_for_eq(input_r),
     );
 
     // Compute per-lane evaluations at each claim point
-    let lane_bits: Vec<Vec<Fr>> = state[0].a.chunks(instances).map(to_poly).collect();
+    let lane_bits: Vec<Vec<Fr>> = a.chunks(instances).map(to_poly).collect();
 
     let lane_evals: Vec<[Fr; 3]> = lane_bits
         .iter()
@@ -137,15 +156,13 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64
     );
 
     let whir_proof = prover_state.proof();
-    let mut proof = prover.finish();
 
-    // Serialize WhirProof to bytes and append as packed Fr elements.
-    // Using CBOR serialization preserves all fields including debug-only pattern.
+    // Serialize WhirProof to bytes and return as packed Fr elements.
     let whir_bytes = serialize_whir_proof(&whir_proof);
-    proof.push(Fr::from(whir_bytes.len() as u64));
-    proof.extend(pack_bytes_to_fr(&whir_bytes));
-
-    (proof, state[0].a.clone(), state[23].iota.clone())
+    let mut result = Vec::with_capacity(1 + whir_bytes.len().div_ceil(31));
+    result.push(Fr::from(whir_bytes.len() as u64));
+    result.extend(pack_bytes_to_fr(&whir_bytes));
+    result
 }
 
 #[instrument(skip_all)]
