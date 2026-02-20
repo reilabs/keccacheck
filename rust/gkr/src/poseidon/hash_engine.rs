@@ -82,7 +82,6 @@ impl HashEngine for Poseidon2 {
 /// Interpret 32 bytes as raw Montgomery-form limbs of an `Fr` element,
 /// avoiding an expensive Montgomery reduction.
 fn bytes_to_fr(bytes: &[u8]) -> Fr {
-    println!("calling");
     let mut limbs = [0u64; 4];
     for (limb, chunk) in limbs.iter_mut().zip(bytes.chunks_exact(8)) {
         *limb = u64::from_le_bytes(chunk.try_into().unwrap());
