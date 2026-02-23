@@ -53,10 +53,10 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 
 	hintInputs := append(r, circuit.Input[:]...)
 	numVars := 6 + Log_N
-	maxProofLen := 2000 * numVars
+	maxProofLen := 6000 * numVars
 	hintOutputs, err := api.Compiler().NewHint(KeccacheckProveHint, 1+maxProofLen, hintInputs...)
 	if err != nil {
-		panic("failed to generate proof hint")
+		return fmt.Errorf("failed to generate proof hint: %w", err)
 	}
 
 	// hintOutputs[0] = actual proof length, hintOutputs[1:] = proof elements (zero-padded)
