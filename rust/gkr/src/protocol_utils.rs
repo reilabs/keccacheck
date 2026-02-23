@@ -65,9 +65,9 @@ pub(crate) fn whir_config(num_vars: usize) -> (Config<Field256>, DomainSeparator
     let mv_parameters = MultivariateParameters::new(num_vars);
     let whir_params = ProtocolParameters {
         initial_statement: true,
-        security_level: 32,
-        pow_bits: 0,
-        folding_factor: FoldingFactor::Constant(1),
+        security_level: 128,
+        pow_bits: 20,
+        folding_factor: FoldingFactor::Constant(4),
         soundness_type: SoundnessType::UniqueDecoding,
         starting_log_inv_rate: 1,
         batch_size: 25,
