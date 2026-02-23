@@ -15,14 +15,13 @@ use crate::sumcheck::util::{
     HALF, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_field_vec, to_poly,
 };
 use crate::transcript::Prover;
+use std::borrow::Cow;
+
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use tracing::instrument;
 use whir::algebra::fields::Field256;
 use whir::algebra::linear_form::{Covector, LinearForm};
-use whir::algebra::ntt::inverse_wavelet_transform;
-use whir::algebra::polynomials::CoefficientList;
-use whir::protocols::whir::{Config, Witness};
 use whir::transcript::ProverState;
 
 #[instrument(skip_all, fields(num_vars=(6 + (data.len() / 25).ilog2())))]
@@ -43,6 +42,7 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64
 
     let mut prover = Prover::new();
 
+    let span = tracing::span!(tracing::Level::INFO, "Reducing output").entered();
     output_alpha
         .iter()
         .for_each(|challenge| prover.absorb(*challenge));
@@ -50,15 +50,22 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64
     let (_output_beta, output_r, _output_c) =
         reduce_output_words(&mut prover, &output_alpha, &state, num_vars);
 
+    span.exit();
+    let span = tracing::span!(tracing::Level::INFO, "Proving binariness").entered();
     let mut input_bits = to_poly(&state[0].a);
+
     // Prove that the input bits are all boolean in value
     let (_binary_beta, binary_r, _binary_c) =
         reduce_binary_claim(&mut prover, num_vars, &input_bits);
+    span.exit();
 
+    let span = tracing::span!(tracing::Level::INFO, "Reducing input").entered();
     // Reduce claim on input words to claim on input bits
     let (_input_beta, input_r, _input_c) =
         reduce_input_words(&mut prover, num_vars, &state, &mut input_bits);
 
+    span.exit();
+    let span = tracing::span!(tracing::Level::INFO, "Proving WHIR").entered();
     let whir_proof = prove_whir(
         &mut prover,
         num_vars,
@@ -70,6 +77,7 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64
 
     let mut proof = prover.finish();
     proof.extend(whir_proof);
+    span.exit();
 
     (proof, state[0].a.clone(), state[23].iota.clone())
 }
@@ -87,16 +95,13 @@ fn prove_whir(
     let (config, ds) = whir_config(num_vars);
     let mut prover_state = ProverState::new_std(&ds);
 
-    let lane_polynomials: Vec<CoefficientList<Field256>> = a
+    let lane_coefficients: Vec<Vec<Field256>> = a
         .chunks(instances)
-        .map(|lane| {
-            let mut coeffs = change_type_vec(&to_poly(lane));
-            inverse_wavelet_transform(&mut coeffs);
-            CoefficientList::new(coeffs)
-        })
+        .map(|lane| change_type_vec(&to_poly(lane)))
         .collect();
 
-    let whir_commitment = whir_commit(&config, &mut prover_state, &lane_polynomials);
+    let lane_slices: Vec<&[Field256]> = lane_coefficients.iter().map(|v| v.as_slice()).collect();
+    let whir_commitment = config.commit(&mut prover_state, &lane_slices);
 
     let ((eq1, eq2), eq3) = rayon::join(
         || {
@@ -145,14 +150,17 @@ fn prove_whir(
         .map(|[e1, e2, e3]| change_type(*e1 + gamma * *e2 + gamma2 * *e3))
         .collect();
 
-    let poly_refs = lane_polynomials.iter().collect::<Vec<_>>();
+    let vectors: Vec<Cow<[Field256]>> = lane_coefficients
+        .iter()
+        .map(|v| Cow::Borrowed(v.as_slice()))
+        .collect();
 
     config.prove(
         &mut prover_state,
-        &poly_refs,
-        &[&whir_commitment],
-        &[&combined_cov as &dyn LinearForm<Field256>],
-        &evaluations,
+        vectors,
+        vec![Cow::Borrowed(&whir_commitment)],
+        &[Box::new(combined_cov) as Box<dyn LinearForm<Field256>>],
+        Cow::Borrowed(&evaluations),
     );
 
     let whir_proof = prover_state.proof();
@@ -296,7 +304,6 @@ fn reduce_output_words(
     state: &[KeccakRoundState],
     num_vars: usize,
 ) -> (Vec<Fr>, Vec<Fr>, Fr) {
-    let span = tracing::span!(tracing::Level::INFO, "prove all rounds").entered();
     let instances = 1 << (num_vars - 6);
     // TODO: feed output to the prover before obtaining alpha
     let mut beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
@@ -364,7 +371,6 @@ fn reduce_output_words(
             });
         }
     }
-    span.exit();
     (beta, r, c)
 }
 
@@ -431,14 +437,4 @@ fn reduce_binary_claim(
     );
 
     (binary_beta, binary_proof.r_x, binary_proof.batched_eval)
-}
-
-fn whir_commit(
-    config: &Config<Field256>,
-    prover_state: &mut ProverState,
-    polynomials: &[CoefficientList<Field256>],
-) -> Witness<Field256> {
-    // Define the Fiat-Shamir IOPattern for committing and proving
-    let poly_refs = polynomials.iter().collect::<Vec<_>>();
-    config.commit(prover_state, &poly_refs)
 }
