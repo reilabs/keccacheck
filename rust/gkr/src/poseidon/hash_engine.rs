@@ -1,7 +1,5 @@
 //! Poseidon2 hash engine - this allows the poseidon2 permutation to be used by WHIR.
-
-use std::borrow::Cow;
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use ark_bn254::Fr;
 use ark_ff::{BigInt, Fp};
