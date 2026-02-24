@@ -95,6 +95,10 @@ func Rot(api frontend.API, n int, a, b, eq_a_prefix, eq_b_prefix []frontend.Vari
 
 func EvalEq(api frontend.API, r []frontend.Variable) []frontend.Variable {
 	n := len(r)
+	if n == 0 {
+		return []frontend.Variable{frontend.Variable(1)}
+	}
+
 	eq := []frontend.Variable{
 		api.Sub(1, r[0]),
 		r[0],
