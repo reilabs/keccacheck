@@ -1,7 +1,9 @@
-use crate::protocol_utils::{
-    BYTES_PER_FR, change_type, change_type_vec, deserialize_whir_proof, unpack_fr_to_bytes,
-    whir_config,
-};
+#[cfg(not(debug_assertions))]
+use crate::protocol_utils::deserialize_whir_proof_flat;
+use crate::protocol_utils::fr_to_usize;
+#[cfg(debug_assertions)]
+use crate::protocol_utils::{BYTES_PER_FR, deserialize_whir_proof, unpack_fr_to_bytes};
+use crate::protocol_utils::{change_type, change_type_vec, whir_config};
 use crate::reference::{ROUND_CONSTANTS, strip_pi};
 use crate::sumcheck::binary::verify_binary;
 use crate::sumcheck::util::{self, eq, to_field_vec};
@@ -9,9 +11,10 @@ use crate::sumcheck::util::{
     HALF, add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
     verify_sumcheck, xor,
 };
+
 use crate::transcript::Verifier;
 use ark_bn254::Fr;
-use ark_ff::{BigInteger, One, PrimeField, Zero};
+use ark_ff::{One, Zero};
 use tracing::{Level, instrument};
 use whir::algebra::fields::Field256;
 use whir::algebra::linear_form::{Covector, LinearForm};
@@ -21,7 +24,8 @@ use whir::transcript::{Proof as WhirProof, VerifierState};
 pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], r: Vec<Fr>) {
     let instances = 1usize << (num_vars - 6);
 
-    let mut verifier = Verifier::new(proof);
+    let main_proof_len = fr_to_usize(proof[0]);
+    let mut verifier = Verifier::new(&proof[1..1 + main_proof_len]);
     let span = tracing::span!(Level::INFO, "calculate output sum").entered();
     r.iter().for_each(|challenge| verifier.absorb(*challenge));
     let mut beta = (0..25).map(|_| verifier.generate()).collect::<Vec<_>>();
@@ -159,8 +163,7 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], r: Vec<Fr>) {
         .collect();
 
     // Extract and verify WHIR proof
-    let remaining = verifier.remaining();
-    let whir_proof = decode_whir_proof(remaining);
+    let whir_proof = decode_whir_proof(&proof[1 + main_proof_len..]);
 
     let (config, ds) = whir_config(num_vars);
     let mut verifier_state = VerifierState::new_std(&ds, &whir_proof);
@@ -177,16 +180,17 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], r: Vec<Fr>) {
     span.exit();
 }
 
-fn fr_to_usize(f: Fr) -> usize {
-    let bytes = f.into_bigint().to_bytes_le();
-    u64::from_le_bytes(bytes[..8].try_into().unwrap()) as usize
-}
-
 fn decode_whir_proof(remaining: &[Fr]) -> WhirProof {
-    let byte_len = fr_to_usize(remaining[0]);
-    let fr_count = byte_len.div_ceil(BYTES_PER_FR);
-    let whir_bytes = unpack_fr_to_bytes(&remaining[1..1 + fr_count], byte_len);
-    deserialize_whir_proof(&whir_bytes)
+    #[cfg(debug_assertions)]
+    {
+        let byte_len = fr_to_usize(remaining[0]);
+        let fr_count = byte_len.div_ceil(BYTES_PER_FR);
+        let whir_bytes = unpack_fr_to_bytes(&remaining[1..1 + fr_count], byte_len);
+        deserialize_whir_proof(&whir_bytes)
+    }
+
+    #[cfg(not(debug_assertions))]
+    deserialize_whir_proof_flat(remaining)
 }
 
 fn verify_round(

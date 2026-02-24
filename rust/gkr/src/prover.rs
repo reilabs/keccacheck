@@ -1,6 +1,8 @@
-use crate::protocol_utils::{
-    change_type, change_type_vec, pack_bytes_to_fr, serialize_whir_proof, whir_config,
-};
+#[cfg(not(debug_assertions))]
+use crate::protocol_utils::serialize_whir_proof_flat;
+use crate::protocol_utils::{change_type, change_type_vec, whir_config};
+#[cfg(debug_assertions)]
+use crate::protocol_utils::{pack_bytes_to_fr, serialize_whir_proof};
 use crate::reference::{KeccakRoundState, ROUND_CONSTANTS, strip_pi};
 use crate::sumcheck::binary::prove_binary;
 use crate::sumcheck::chi::prove_chi;
@@ -75,7 +77,10 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64
         &input_r,
     );
 
-    let mut proof = prover.finish();
+    let main_proof = prover.finish();
+    let mut proof = Vec::with_capacity(1 + main_proof.len() + whir_proof.len());
+    proof.push(Fr::from(main_proof.len() as u64));
+    proof.extend(main_proof);
     proof.extend(whir_proof);
     span.exit();
 
@@ -165,12 +170,18 @@ fn prove_whir(
 
     let whir_proof = prover_state.proof();
 
-    // Serialize WhirProof to bytes and return as packed Fr elements.
-    let whir_bytes = serialize_whir_proof(&whir_proof);
-    let mut result = Vec::with_capacity(1 + whir_bytes.len().div_ceil(31));
-    result.push(Fr::from(whir_bytes.len() as u64));
-    result.extend(pack_bytes_to_fr(&whir_bytes));
-    result
+    #[cfg(debug_assertions)]
+    {
+        // CBOR path: used by the Rust-only verifier in debug/test builds.
+        let whir_bytes = serialize_whir_proof(&whir_proof);
+        let mut result = Vec::with_capacity(1 + whir_bytes.len().div_ceil(31));
+        result.push(Fr::from(whir_bytes.len() as u64));
+        result.extend(pack_bytes_to_fr(&whir_bytes));
+        result
+    }
+
+    #[cfg(not(debug_assertions))]
+    serialize_whir_proof_flat(&whir_proof)
 }
 
 #[instrument(skip_all)]
