@@ -13,12 +13,14 @@ import (
 func TestKeccakVerify(t *testing.T) {
 	assert := test.NewAssert(t)
 
-	solver.RegisterHint(KeccacheckProveHint)
+	solver.RegisterHint(GKRProofHint)
+	solver.RegisterHint(WhirProofHint)
+	solver.RegisterHint(WhirHintsHint)
 
 	inputs, outputs := PrepareTestIO()
 
 	witness := KeccakfCircuit{}
-	witness.Input, witness.InputD, witness.Output = initCircuitFields(inputs, outputs)
+	witness.Input, witness.Output = initCircuitFields(inputs, outputs)
 
 	var circuit = *NewKeccakfCircuit()
 
@@ -33,7 +35,9 @@ func TestKeccakVerify(t *testing.T) {
 func TestKeccakVerifyFailing(t *testing.T) {
 	assert := test.NewAssert(t)
 
-	solver.RegisterHint(KeccacheckProveHint)
+	solver.RegisterHint(GKRProofHint)
+	solver.RegisterHint(WhirProofHint)
+	solver.RegisterHint(WhirHintsHint)
 
 	inputs, outputs := PrepareTestIO()
 
@@ -43,7 +47,7 @@ func TestKeccakVerifyFailing(t *testing.T) {
 	outputs[flip_idx] = rand.Uint64()
 
 	witness := KeccakfCircuit{}
-	witness.Input, witness.InputD, witness.Output = initCircuitFields(inputs, outputs)
+	witness.Input, witness.Output = initCircuitFields(inputs, outputs)
 
 	var circuit = *NewKeccakfCircuit()
 

@@ -2,15 +2,16 @@ package main
 
 import (
 	"fmt"
+	"reilabs/keccacheck/whir"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/profile"
+	"github.com/consensys/gnark/std/math/uints"
 )
 
 type KeccakfCircuit struct {
-	InputD []frontend.Variable `gnark:",secret"`
 	Input  []frontend.Variable `gnark:",secret"`
 	Output []frontend.Variable `gnark:",public"`
 }
@@ -18,10 +19,16 @@ type KeccakfCircuit struct {
 func NewKeccakfCircuit() *KeccakfCircuit {
 	return &KeccakfCircuit{
 		Input:  make([]frontend.Variable, 25*N),
-		InputD: make([]frontend.Variable, 64*25*N),
 		Output: make([]frontend.Variable, 25*N),
 	}
 }
+
+// Maximum output sizes for each proof component hint.
+const (
+	MaxGKRProofLen  = 7000             // max GKR proof field elements - TODO: work out how much this is exactly
+	MaxWhirProofFrs = 10 * (6 + Log_N) // max WHIR proof packed Fr elements
+	MaxWhirHints    = 105000           // max WHIR hint bytes
+)
 
 // Main Verifier circuit definition
 func (circuit *KeccakfCircuit) Define(api frontend.API) error {
@@ -35,35 +42,60 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	r := make([]frontend.Variable, Log_N)
 
 	// First commitment: commit to circuit.Output
+	// If there is only 1 instance, then the output polynomials are constant
+	// and no challenge is needed
 	var err error
-	r[0], err = committer.Commit(circuit.Output[:]...)
-	if err != nil {
-		return err
-	}
-
-	for i := 1; i < Log_N; i++ {
-		r[i], err = committer.Commit(r[i-1])
+	if Log_N > 0 {
+		r[0], err = committer.Commit(circuit.Output[:]...)
 		if err != nil {
 			return err
 		}
-	}
-	if err != nil {
-		panic("was not able to commit to the outputs")
+
+		for i := 1; i < Log_N; i++ {
+			r[i], err = committer.Commit(r[i-1])
+			if err != nil {
+				return err
+			}
+		}
+		if err != nil {
+			panic("was not able to commit to the outputs")
+		}
 	}
 
 	hintInputs := append(r, circuit.Input[:]...)
 	numVars := 6 + Log_N
-	maxProofLen := 6000 * numVars
-	hintOutputs, err := api.Compiler().NewHint(KeccacheckProveHint, 1+maxProofLen, hintInputs...)
+
+	// Three separate hints, each producing exactly one proof component.
+	// They share a cached FFI result internally to avoid redundant computation.
+	gkrProof, err := api.Compiler().NewHint(GKRProofHint, MaxGKRProofLen, hintInputs...)
 	if err != nil {
-		return fmt.Errorf("failed to generate proof hint: %w", err)
+		return fmt.Errorf("failed to generate GKR proof hint: %w", err)
+	}
+	whirProof, err := api.Compiler().NewHint(WhirProofHint, MaxWhirProofFrs, hintInputs...)
+	if err != nil {
+		return fmt.Errorf("failed to generate WHIR proof hint: %w", err)
 	}
 
-	// hintOutputs[0] = actual proof length, hintOutputs[1:] = proof elements (zero-padded)
-	// The verifier reads elements sequentially and stops, so trailing zeros are unused.
-	proof := hintOutputs[1:]
+	whirHints, err := api.Compiler().NewHint(WhirHintsHint, MaxWhirHints, hintInputs...)
 
-	VerifyKeccakF(api, circuit.InputD[:], circuit.Output[:], proof, r)
+	if err != nil {
+		return fmt.Errorf("failed to generate WHIR hints hint: %w", err)
+	}
+
+	uapi, err := uints.New[uints.U64](api)
+	if err != nil {
+		return fmt.Errorf("failed to create uints API: %w", err)
+	}
+
+	whirParams := whir.NewParams(whir.ProtocolConfig{
+		BatchSize:     25,
+		NumVariables:  numVars,
+		FoldingFactor: whir.ConstantFoldingFactor(4),
+		SoundnessType: whir.UniqueDecoding,
+		PowBits:       20,
+	})
+
+	VerifyKeccakF(api, uapi, circuit.Output[:], gkrProof, r, whirProof, whirHints, whirParams)
 	return nil
 }
 

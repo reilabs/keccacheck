@@ -12,7 +12,7 @@ import (
 )
 
 const N = 1 << Log_N
-const Log_N = 3
+const Log_N = 0
 
 func main() {
 
@@ -32,11 +32,13 @@ func main() {
 	}
 
 	assignment := KeccakfCircuit{}
-	solver.RegisterHint(KeccacheckProveHint)
+	solver.RegisterHint(GKRProofHint)
+	solver.RegisterHint(WhirProofHint)
+	solver.RegisterHint(WhirHintsHint)
 
 	inputs, outputs := PrepareTestIO()
 
-	assignment.Input, assignment.InputD, assignment.Output = initCircuitFields(inputs, outputs)
+	assignment.Input, assignment.Output = initCircuitFields(inputs, outputs)
 
 	witness, _ := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
 

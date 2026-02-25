@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"math/big"
 	"unsafe"
 )
@@ -47,36 +48,98 @@ func KeccacheckProve(inputs []*big.Int) unsafe.Pointer {
 	return C.keccacheck_prove(ptr, instances, r_ptr)
 }
 
-func KeccacheckProveHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
-	ptr := KeccacheckProve(inputs)
-	result := (*KeccacheckResult)(ptr)
-	proofLen := int(result.ProofLen)
+// parsedProof holds the three proof components extracted from the FFI result.
+type parsedProof struct {
+	gkrElements []*big.Int
+	whirNargFrs []*big.Int
+	whirHints   []byte
+}
 
-	// First output is the proof length
-	outputs[0].SetInt64(int64(proofLen))
+// proveCache caches the parsed FFI result so that the three extraction hints
+// (GKR, WHIR proof, WHIR hints) share a single FFI call. The gnark solver
+// evaluates hints in a single goroutine, so a simple global is safe.
+var proveCache *parsedProof
 
-	// Remaining outputs are proof elements
-	proof := getBigInt4Slice(result.ProofPtr, proofLen)
-	for i := 0; i < proofLen; i++ {
-		outputs[1+i].Set(proof[i])
+// getOrComputeProof calls the Rust FFI if needed and caches the parsed result.
+func getOrComputeProof(inputs []*big.Int) *parsedProof {
+	if proveCache != nil {
+		return proveCache
 	}
 
+	ptr := KeccacheckProve(inputs)
+	result := (*KeccacheckResult)(ptr)
+
+	// GKR proof elements
+	gkrElements := getBigInt4Slice(result.ProofPtr, int(result.ProofLen))
+
+	// Parse raw WHIR byte stream: [narg_len:8 LE][narg bytes][hints_len:8 LE][hints bytes]
+	whirBytes := unsafe.Slice((*byte)(result.WhirProofPtr), int(result.WhirProofLen))
+
+	nargByteLen := int(binary.LittleEndian.Uint64(whirBytes[0:8]))
+	nargFrs := packBytesToFr(whirBytes[8 : 8+nargByteLen])
+
+	hintsStart := 8 + nargByteLen
+	hintsByteLen := int(binary.LittleEndian.Uint64(whirBytes[hintsStart : hintsStart+8]))
+	hints := make([]byte, hintsByteLen)
+	copy(hints, whirBytes[hintsStart+8:hintsStart+8+hintsByteLen])
+
+	proveCache = &parsedProof{
+		gkrElements: gkrElements[1:result.ProofLen],
+		whirNargFrs: nargFrs,
+		whirHints:   hints,
+	}
+	return proveCache
+}
+
+// ResetProveCache clears the cached FFI result. Call between proof generations
+// when the witness changes.
+func ResetProveCache() {
+	proveCache = nil
+}
+
+// GKRProofHint extracts the GKR proof field elements from the FFI result.
+func GKRProofHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
+	p := getOrComputeProof(inputs)
+	for i, v := range p.gkrElements {
+		outputs[i].Set(v)
+	}
 	return nil
 }
 
-func KeccacheckProofFree(proof, input, output unsafe.Pointer, instances uint, proofLen uint) {
-	C.keccacheck_proof_free(proof, input, output, C.size_t(instances), C.size_t(proofLen))
+// WhirProofHint extracts the WHIR narg_string from the FFI result,
+// packed into Fr elements (31 bytes per Fr).
+func WhirProofHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
+	p := getOrComputeProof(inputs)
+	for i, v := range p.whirNargFrs {
+		outputs[i].Set(v)
+	}
+	return nil
+}
+
+// WhirHintsHint extracts the WHIR hints from the FFI result as individual
+// byte values (Merkle siblings, leaf values, deferred evaluations).
+func WhirHintsHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
+	p := getOrComputeProof(inputs)
+	for i, b := range p.whirHints {
+		outputs[i].SetUint64(uint64(b))
+	}
+	return nil
+}
+
+func KeccacheckProofFree(proof, whirProof, input, output unsafe.Pointer, whirProofLen, instances, proofLen uint) {
+	C.keccacheck_proof_free(proof, whirProof, C.size_t(whirProofLen), input, output, C.size_t(instances), C.size_t(proofLen))
 }
 
 func FreeProofHint(_ *big.Int, inputs []*big.Int, results []*big.Int) error {
-	// inputs[0] = proof_ptr, inputs[1] = input_ptr, inputs[2] = output_ptr, inputs[3] = instances, inputs[4] = proof_len
 	proof := unsafe.Pointer(uintptr(inputs[0].Uint64()))
-	in := unsafe.Pointer(uintptr(inputs[1].Uint64()))
-	out := unsafe.Pointer(uintptr(inputs[2].Uint64()))
-	instances := uint(inputs[3].Uint64())
-	proofLen := uint(inputs[4].Uint64())
+	whirProof := unsafe.Pointer(uintptr(inputs[1].Uint64()))
+	whirProofLen := uint(inputs[2].Uint64())
+	in := unsafe.Pointer(uintptr(inputs[3].Uint64()))
+	out := unsafe.Pointer(uintptr(inputs[4].Uint64()))
+	instances := uint(inputs[5].Uint64())
+	proofLen := uint(inputs[6].Uint64())
 
-	KeccacheckProofFree(proof, in, out, instances, proofLen)
+	KeccacheckProofFree(proof, whirProof, in, out, whirProofLen, instances, proofLen)
 
 	return nil
 }
@@ -93,4 +156,35 @@ func KeccacheckInitHint(_ *big.Int, inputs []*big.Int, results []*big.Int) error
 	}
 
 	return nil
+}
+
+// bytesPerFr is the number of bytes packed into each Fr element (must match
+// the Rust BYTES_PER_FR constant in protocol_utils.rs).
+const bytesPerFr = 31
+
+// frCountForBytes returns the number of Fr elements needed to pack byteLen bytes.
+func frCountForBytes(byteLen int) int {
+	return (byteLen + bytesPerFr - 1) / bytesPerFr
+}
+
+// packBytesToFr packs a byte slice into big.Int field elements, 31 bytes per
+// element using little-endian byte order (matching Rust pack_bytes_to_fr).
+func packBytesToFr(data []byte) []*big.Int {
+	n := frCountForBytes(len(data))
+	result := make([]*big.Int, n)
+	for i := 0; i < n; i++ {
+		start := i * bytesPerFr
+		end := start + bytesPerFr
+		if end > len(data) {
+			end = len(data)
+		}
+		chunk := data[start:end]
+		// big.Int.SetBytes expects big-endian, so reverse the LE chunk
+		reversed := make([]byte, len(chunk))
+		for j := range chunk {
+			reversed[len(chunk)-1-j] = chunk[j]
+		}
+		result[i] = new(big.Int).SetBytes(reversed)
+	}
+	return result
 }
