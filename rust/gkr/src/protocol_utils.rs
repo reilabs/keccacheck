@@ -35,69 +35,32 @@ pub(crate) fn deserialize_whir_proof(bytes: &[u8]) -> WhirProof {
     ciborium::from_reader(bytes).expect("CBOR deserialization failed")
 }
 
-/// Bytes packed per Fr element (248 bits, safely under the 254-bit bn254 modulus).
-pub(crate) const BYTES_PER_FR: usize = 31;
-
-/// Pack a byte slice into Fr elements, 31 bytes per element.
-pub(crate) fn pack_bytes_to_fr(bytes: &[u8]) -> Vec<Fr> {
-    bytes
-        .chunks(BYTES_PER_FR)
-        .map(|chunk| {
-            let mut buf = [0u8; 32];
-            buf[..chunk.len()].copy_from_slice(chunk);
-            Fr::from_le_bytes_mod_order(&buf)
-        })
-        .collect()
-}
-
-/// Unpack Fr elements back to bytes, recovering exactly `byte_len` bytes.
-pub(crate) fn unpack_fr_to_bytes(elements: &[Fr], byte_len: usize) -> Vec<u8> {
-    let mut result = Vec::with_capacity(byte_len);
-    for fr in elements {
-        let bytes_le = fr.into_bigint().to_bytes_le();
-        let take = BYTES_PER_FR.min(byte_len - result.len());
-        result.extend_from_slice(&bytes_le[..take]);
-    }
+/// Serialize a WhirProof as a flat byte buffer:
+/// [narg_string_len: 8 bytes LE][narg_string bytes][hints_len: 8 bytes LE][hints bytes]
+#[cfg(not(debug_assertions))]
+pub(crate) fn serialize_whir_proof_flat(proof: &WhirProof) -> Vec<u8> {
+    let mut result = Vec::with_capacity(8 + proof.narg_string.len() + 8 + proof.hints.len());
+    result.extend_from_slice(&(proof.narg_string.len() as u64).to_le_bytes());
+    result.extend_from_slice(&proof.narg_string);
+    result.extend_from_slice(&(proof.hints.len() as u64).to_le_bytes());
+    result.extend_from_slice(&proof.hints);
     result
 }
 
-/// Serialize a WhirProof as a flat sequence of Fr elements:
-/// [narg_string_len, narg_string_fr_0, ..., hints_len, hints_fr_0, ...]
-///
-/// Each 32-byte LE chunk in the byte vectors becomes one Fr element.
-/// This avoids CBOR overhead and lets the gnark circuit read field elements
-/// directly from the proof buffer.
+/// Deserialize a WhirProof from the flat byte layout produced by
+/// [serialize_whir_proof_flat]:
+/// [narg_string_len: 8 bytes LE][narg_string bytes][hints_len: 8 bytes LE][hints bytes]
 #[cfg(not(debug_assertions))]
-pub(crate) fn serialize_whir_proof_flat(proof: &WhirProof) -> Vec<Fr> {
-    let narg_frs = pack_bytes_to_fr(&proof.narg_string);
-    let hints_frs = pack_bytes_to_fr(&proof.hints);
-    let mut result = Vec::with_capacity(2 + narg_frs.len() + hints_frs.len());
-    result.push(Fr::from(proof.narg_string.len() as u64));
-    result.extend(narg_frs);
-    result.push(Fr::from(proof.hints.len() as u64));
-    result.extend(hints_frs);
-    result
-}
-
-/// Deserialize a WhirProof from the flat Fr element layout produced by
-/// [serialize_whir_proof_flat].
-#[cfg(not(debug_assertions))]
-pub(crate) fn deserialize_whir_proof_flat(data: &[Fr]) -> WhirProof {
-    let narg_byte_len = fr_to_usize(data[0]);
-    let narg_fr_count = narg_byte_len.div_ceil(BYTES_PER_FR);
-    let narg_bytes = unpack_fr_to_bytes(&data[1..1 + narg_fr_count], narg_byte_len);
-    let hints_start = 1 + narg_fr_count;
-    let hints_byte_len = fr_to_usize(data[hints_start]);
-    let hints_fr_count = hints_byte_len.div_ceil(BYTES_PER_FR);
-    let hints_bytes = unpack_fr_to_bytes(
-        &data[hints_start + 1..hints_start + 1 + hints_fr_count],
-        hints_byte_len,
-    );
+pub(crate) fn deserialize_whir_proof_flat(data: &[u8]) -> WhirProof {
+    let narg_byte_len = u64::from_le_bytes(data[..8].try_into().unwrap()) as usize;
+    let narg_bytes = data[8..8 + narg_byte_len].to_vec();
+    let hints_start = 8 + narg_byte_len;
+    let hints_byte_len =
+        u64::from_le_bytes(data[hints_start..hints_start + 8].try_into().unwrap()) as usize;
+    let hints_bytes = data[hints_start + 8..hints_start + 8 + hints_byte_len].to_vec();
     WhirProof {
         narg_string: narg_bytes,
         hints: hints_bytes,
-        #[cfg(debug_assertions)]
-        pattern: vec![],
     }
 }
 
@@ -108,7 +71,7 @@ pub(crate) fn whir_config(num_vars: usize) -> (Config<Field256>, DomainSeparator
         initial_statement: true,
         security_level: 128,
         pow_bits: 20,
-        folding_factor: FoldingFactor::Constant(4),
+        folding_factor: FoldingFactor::ConstantFromSecondRound(1, 4),
         soundness_type: SoundnessType::UniqueDecoding,
         starting_log_inv_rate: 1,
         batch_size: 25,
@@ -154,29 +117,6 @@ mod tests {
         let x = -Fr::one(); // p - 1
         let y = change_type(x);
         assert_eq!(y, -Field256::one());
-    }
-
-    #[test]
-    fn pack_unpack_roundtrip_exact() {
-        let data = vec![42u8; 31];
-        let packed = pack_bytes_to_fr(&data);
-        assert_eq!(packed.len(), 1);
-        assert_eq!(unpack_fr_to_bytes(&packed, 31), data);
-    }
-
-    #[test]
-    fn pack_unpack_roundtrip_multi() {
-        let data: Vec<u8> = (0..100).collect();
-        let packed = pack_bytes_to_fr(&data);
-        assert_eq!(packed.len(), 4); // ceil(100/31)
-        assert_eq!(unpack_fr_to_bytes(&packed, 100), data);
-    }
-
-    #[test]
-    fn pack_unpack_empty() {
-        let packed = pack_bytes_to_fr(&[]);
-        assert_eq!(packed.len(), 0);
-        assert_eq!(unpack_fr_to_bytes(&packed, 0), vec![]);
     }
 
     #[test]

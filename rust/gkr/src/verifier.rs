@@ -1,8 +1,9 @@
+use crate::poseidon::COUNT_16;
+#[cfg(debug_assertions)]
+use crate::protocol_utils::deserialize_whir_proof;
 #[cfg(not(debug_assertions))]
 use crate::protocol_utils::deserialize_whir_proof_flat;
 use crate::protocol_utils::fr_to_usize;
-#[cfg(debug_assertions)]
-use crate::protocol_utils::{BYTES_PER_FR, deserialize_whir_proof, unpack_fr_to_bytes};
 use crate::protocol_utils::{change_type, change_type_vec, whir_config};
 use crate::reference::{ROUND_CONSTANTS, strip_pi};
 use crate::sumcheck::binary::verify_binary;
@@ -18,10 +19,11 @@ use ark_ff::{One, Zero};
 use tracing::{Level, instrument};
 use whir::algebra::fields::Field256;
 use whir::algebra::linear_form::{Covector, LinearForm};
-use whir::transcript::{Proof as WhirProof, VerifierState};
+use whir::transcript::VerifierState;
 
 #[instrument(skip_all)]
-pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], r: Vec<Fr>) {
+pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], whir_proof: Vec<u8>, r: Vec<Fr>) {
+    COUNT_16.store(0, std::sync::atomic::Ordering::SeqCst);
     let instances = 1usize << (num_vars - 6);
 
     let main_proof_len = fr_to_usize(proof[0]);
@@ -163,10 +165,12 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], r: Vec<Fr>) {
         .collect();
 
     // Extract and verify WHIR proof
-    let whir_proof = decode_whir_proof(&proof[1 + main_proof_len..]);
-
+    #[cfg(debug_assertions)]
+    let deser_whir_proof = deserialize_whir_proof(&whir_proof);
+    #[cfg(not(debug_assertions))]
+    let deser_whir_proof = deserialize_whir_proof_flat(&whir_proof);
     let (config, ds) = whir_config(num_vars);
-    let mut verifier_state = VerifierState::new_std(&ds, &whir_proof);
+    let mut verifier_state = VerifierState::new_std(&ds, &deser_whir_proof);
     let whir_commitment = config.receive_commitment(&mut verifier_state).unwrap();
     let span = tracing::span!(Level::INFO, "verify whir").entered();
     config
@@ -177,20 +181,8 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], r: Vec<Fr>) {
             &evaluations,
         )
         .unwrap();
+    println!("verifier permutations {:?}", COUNT_16);
     span.exit();
-}
-
-fn decode_whir_proof(remaining: &[Fr]) -> WhirProof {
-    #[cfg(debug_assertions)]
-    {
-        let byte_len = fr_to_usize(remaining[0]);
-        let fr_count = byte_len.div_ceil(BYTES_PER_FR);
-        let whir_bytes = unpack_fr_to_bytes(&remaining[1..1 + fr_count], byte_len);
-        deserialize_whir_proof(&whir_bytes)
-    }
-
-    #[cfg(not(debug_assertions))]
-    deserialize_whir_proof_flat(remaining)
 }
 
 fn verify_round(

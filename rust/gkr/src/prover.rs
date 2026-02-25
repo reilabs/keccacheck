@@ -1,8 +1,8 @@
+#[cfg(debug_assertions)]
+use crate::protocol_utils::serialize_whir_proof;
 #[cfg(not(debug_assertions))]
 use crate::protocol_utils::serialize_whir_proof_flat;
 use crate::protocol_utils::{change_type, change_type_vec, whir_config};
-#[cfg(debug_assertions)]
-use crate::protocol_utils::{pack_bytes_to_fr, serialize_whir_proof};
 use crate::reference::{KeccakRoundState, ROUND_CONSTANTS, strip_pi};
 use crate::sumcheck::binary::prove_binary;
 use crate::sumcheck::chi::prove_chi;
@@ -27,7 +27,7 @@ use whir::algebra::linear_form::{Covector, LinearForm};
 use whir::transcript::ProverState;
 
 #[instrument(skip_all, fields(num_vars=(6 + (data.len() / 25).ilog2())))]
-pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
+pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u8>, Vec<u64>, Vec<u64>) {
     let instances = data.len() / 25;
 
     let num_vars = 6 + instances.ilog2() as usize;
@@ -81,10 +81,14 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64
     let mut proof = Vec::with_capacity(1 + main_proof.len() + whir_proof.len());
     proof.push(Fr::from(main_proof.len() as u64));
     proof.extend(main_proof);
-    proof.extend(whir_proof);
     span.exit();
 
-    (proof, state[0].a.clone(), state[23].iota.clone())
+    (
+        proof,
+        whir_proof,
+        state[0].a.clone(),
+        state[23].iota.clone(),
+    )
 }
 
 fn prove_whir(
@@ -94,7 +98,7 @@ fn prove_whir(
     output_r: &[Fr],
     binary_r: &[Fr],
     input_r: &[Fr],
-) -> Vec<Fr> {
+) -> Vec<u8> {
     let instances = 1 << (num_vars - 6);
 
     let (config, ds) = whir_config(num_vars);
@@ -173,11 +177,7 @@ fn prove_whir(
     #[cfg(debug_assertions)]
     {
         // CBOR path: used by the Rust-only verifier in debug/test builds.
-        let whir_bytes = serialize_whir_proof(&whir_proof);
-        let mut result = Vec::with_capacity(1 + whir_bytes.len().div_ceil(31));
-        result.push(Fr::from(whir_bytes.len() as u64));
-        result.extend(pack_bytes_to_fr(&whir_bytes));
-        result
+        serialize_whir_proof(&whir_proof)
     }
 
     #[cfg(not(debug_assertions))]

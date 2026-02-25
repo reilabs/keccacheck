@@ -81,6 +81,8 @@ pub unsafe extern "C" fn keccacheck_free(ptr: *mut c_void, len: usize) {
 pub struct KeccacheckResult {
     pub proof_ptr: *mut c_void,
     pub proof_len: usize,
+    pub whir_proof_ptr: *mut c_void,
+    pub whir_proof_len: usize,
     pub input_ptr: *mut c_void,
     pub output_ptr: *mut c_void,
 }
@@ -130,7 +132,7 @@ pub unsafe extern "C" fn keccacheck_prove(
             let chunk = &r_bytes[i * 32..(i + 1) * 32];
             r.push(Fr::from_be_bytes_mod_order(chunk));
         }
-        let (proof, mut input, mut output) = prove(&data, r);
+        let (proof, mut whir_proof, mut input, mut output) = prove(&data, r);
         let mut proof: Vec<u8> = proof
             .iter()
             .flat_map(|el| el.into_bigint().to_bytes_le())
@@ -138,21 +140,25 @@ pub unsafe extern "C" fn keccacheck_prove(
 
         let proof_len = proof.len() / 32; // number of Fr elements
         let proof_ptr = proof.as_mut_ptr() as *mut c_void;
+        let whir_proof_len = whir_proof.len();
+        let whir_proof_ptr = whir_proof.as_mut_ptr() as *mut c_void;
         let input_ptr = input.as_mut_ptr() as *mut c_void;
         let output_ptr = output.as_mut_ptr() as *mut c_void;
 
         // Prevent Rust from freeing the memory so it can be used by caller
         std::mem::forget(proof);
+        std::mem::forget(whir_proof);
         std::mem::forget(input);
         std::mem::forget(output);
 
         let result = Box::new(KeccacheckResult {
             proof_ptr,
             proof_len,
+            whir_proof_ptr,
+            whir_proof_len,
             input_ptr,
             output_ptr,
         });
-        // TODO Consider limiting the output of this function to just the Proof
         Box::into_raw(result) as *mut c_void
     }
 }
@@ -179,6 +185,8 @@ pub unsafe extern "C" fn keccacheck_prove(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn keccacheck_proof_free(
     proof_ptr: *mut c_void,
+    whir_proof_ptr: *mut c_void,
+    whir_proof_len: usize,
     input_ptr: *mut c_void,
     output_ptr: *mut c_void,
     instances: usize,
@@ -197,6 +205,13 @@ pub unsafe extern "C" fn keccacheck_proof_free(
         if !proof_ptr.is_null() {
             let byte_len = proof_len * 32;
             let _ = Vec::<u8>::from_raw_parts(proof_ptr as *mut u8, byte_len, byte_len);
+        }
+        if !whir_proof_ptr.is_null() {
+            let _ = Vec::<u8>::from_raw_parts(
+                whir_proof_ptr as *mut u8,
+                whir_proof_len,
+                whir_proof_len,
+            );
         }
     }
 }
