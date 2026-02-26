@@ -16,7 +16,7 @@ use crate::sumcheck::theta_d::prove_theta_d;
 use crate::sumcheck::util::{
     HALF, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_field_vec, to_poly,
 };
-use crate::transcript::Prover;
+use crate::transcript::{Prover, Sponge};
 use std::borrow::Cow;
 
 use ark_bn254::Fr;
@@ -102,7 +102,7 @@ fn prove_whir(
     let instances = 1 << (num_vars - 6);
 
     let (config, ds) = whir_config(num_vars);
-    let mut prover_state = ProverState::new_std(&ds);
+    let mut prover_state = ProverState::new(&ds, Sponge::new());
 
     let lane_coefficients: Vec<Vec<Field256>> = a
         .chunks(instances)

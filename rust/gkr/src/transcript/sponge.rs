@@ -1,4 +1,10 @@
-use {crate::poseidon, ark_bn254::Fr, ark_ff::MontFp};
+use {
+    crate::poseidon,
+    ark_bn254::Fr,
+    ark_ec::AdditiveGroup,
+    ark_ff::{BigInteger, MontFp, PrimeField},
+    whir::transcript::DuplexSpongeInterface,
+};
 
 // Random initial state (nothing up my sleeve: digits of 2 * pi in groups of 77
 // digits)
@@ -25,7 +31,7 @@ const RATE: usize = 10;
 const CAPACITY: usize = 6;
 const T: usize = RATE + CAPACITY;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Sponge {
     state: [Fr; T],
     idx: usize,
@@ -65,5 +71,31 @@ impl Sponge {
 impl Default for Sponge {
     fn default() -> Self {
         Sponge::new()
+    }
+}
+
+impl DuplexSpongeInterface for Sponge {
+    type U = u8;
+
+    fn absorb(&mut self, input: &[u8]) -> &mut Self {
+        for chunk in input.chunks(32) {
+            Sponge::absorb(self, Fr::from_le_bytes_mod_order(chunk));
+        }
+        self
+    }
+
+    fn squeeze(&mut self, output: &mut [u8]) -> &mut Self {
+        for chunk in output.chunks_mut(32) {
+            let bytes = Sponge::squeeze(self).into_bigint().to_bytes_le();
+            chunk.copy_from_slice(&bytes[..chunk.len()]);
+        }
+        self
+    }
+
+    fn ratchet(&mut self) -> &mut Self {
+        self.state[..RATE].fill(Fr::ZERO);
+        poseidon::permute_16(&mut self.state);
+        self.idx = 0;
+        self
     }
 }

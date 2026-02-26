@@ -13,7 +13,7 @@ use crate::sumcheck::util::{
     verify_sumcheck, xor,
 };
 
-use crate::transcript::Verifier;
+use crate::transcript::{Sponge, Verifier};
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use tracing::{Level, instrument};
@@ -170,7 +170,7 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], whir_proof: Vec<u8>
     #[cfg(not(debug_assertions))]
     let deser_whir_proof = deserialize_whir_proof_flat(&whir_proof);
     let (config, ds) = whir_config(num_vars);
-    let mut verifier_state = VerifierState::new_std(&ds, &deser_whir_proof);
+    let mut verifier_state = VerifierState::new(&ds, &deser_whir_proof, Sponge::new());
     let whir_commitment = config.receive_commitment(&mut verifier_state).unwrap();
     let span = tracing::span!(Level::INFO, "verify whir").entered();
     config
