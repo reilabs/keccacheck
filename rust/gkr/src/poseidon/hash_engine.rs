@@ -2,7 +2,7 @@
 use std::{borrow::Cow, sync::Arc};
 
 use ark_bn254::Fr;
-use ark_ff::{BigInt, Fp};
+use ark_ff::{BigInt, PrimeField};
 use const_oid::ObjectIdentifier;
 use hex_literal::hex;
 use whir::{engines::EngineId, hash, hash::Hash, hash::HashEngine};
@@ -77,22 +77,54 @@ impl HashEngine for Poseidon2 {
     }
 }
 
-/// Interpret 32 bytes as raw Montgomery-form limbs of an `Fr` element,
-/// avoiding an expensive Montgomery reduction.
-fn bytes_to_fr(bytes: &[u8]) -> Fr {
+/// Interpret 32 little-endian bytes as a standard-form field element.
+pub fn bytes_to_fr(bytes: &[u8]) -> Fr {
     let mut limbs = [0u64; 4];
     for (limb, chunk) in limbs.iter_mut().zip(bytes.chunks_exact(8)) {
         *limb = u64::from_le_bytes(chunk.try_into().unwrap());
     }
-    Fp(BigInt(limbs), core::marker::PhantomData)
+    Fr::from(BigInt(limbs))
 }
 
-/// Write the raw Montgomery-form limbs of an `Fr` element to a `Hash`,
-/// avoiding an expensive Montgomery reduction.
+/// Write a field element to a `Hash` in standard (non-Montgomery) form.
 fn fr_to_hash(fr: Fr) -> Hash {
     let mut bytes = [0u8; 32];
-    for (chunk, limb) in bytes.chunks_exact_mut(8).zip(fr.0.0.iter()) {
+    for (chunk, limb) in bytes.chunks_exact_mut(8).zip(fr.into_bigint().0.iter()) {
         chunk.copy_from_slice(&limb.to_le_bytes());
     }
     Hash(bytes)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use ark_ff::PrimeField;
+    use whir::protocols::matrix_commit::Encodable;
+
+    /// Serialize an Fr element to 32 little-endian bytes (standard form).
+    fn fr_to_bytes(fr: Fr) -> [u8; 32] {
+        let mut bytes = [0u8; 32];
+        for (chunk, limb) in bytes.chunks_exact_mut(8).zip(fr.into_bigint().0.iter()) {
+            chunk.copy_from_slice(&limb.to_le_bytes());
+        }
+        bytes
+    }
+
+    #[test]
+    fn compress_matches_hash_many() {
+        let engine = Poseidon2;
+        let elements: Vec<Fr> = (0..5).map(|i| Fr::from(i as u64)).collect();
+
+        // Direct compression from field elements.
+        let expected = compress(&elements);
+        let expected_hash = fr_to_hash(expected);
+
+        // Same elements serialised as bytes, fed through hash_many.
+        let mut encoder = Fr::encoder();
+        let input_bytes = encoder.encode(&elements);
+        let mut output = [Hash([0u8; 32])];
+        engine.hash_many(input_bytes.len(), input_bytes, &mut output);
+
+        assert_eq!(output[0], expected_hash);
+    }
 }
