@@ -76,8 +76,8 @@ func getOrComputeProof(inputs []*big.Int) *parsedProof {
 	whirBytes := unsafe.Slice((*byte)(result.WhirProofPtr), int(result.WhirProofLen))
 
 	nargByteLen := int(binary.LittleEndian.Uint64(whirBytes[0:8]))
-	nargFrs := packBytesToFr(whirBytes[8 : 8+nargByteLen])
 
+	nargFrs := getBigInt4FromBytes(whirBytes[8 : 8+nargByteLen])
 	hintsStart := 8 + nargByteLen
 	hintsByteLen := int(binary.LittleEndian.Uint64(whirBytes[hintsStart : hintsStart+8]))
 	hints := make([]byte, hintsByteLen)
@@ -158,33 +158,19 @@ func KeccacheckInitHint(_ *big.Int, inputs []*big.Int, results []*big.Int) error
 	return nil
 }
 
-// bytesPerFr is the number of bytes packed into each Fr element (must match
-// the Rust BYTES_PER_FR constant in protocol_utils.rs).
-const bytesPerFr = 31
-
-// frCountForBytes returns the number of Fr elements needed to pack byteLen bytes.
-func frCountForBytes(byteLen int) int {
-	return (byteLen + bytesPerFr - 1) / bytesPerFr
-}
-
-// packBytesToFr packs a byte slice into big.Int field elements, 31 bytes per
-// element using little-endian byte order (matching Rust pack_bytes_to_fr).
-func packBytesToFr(data []byte) []*big.Int {
-	n := frCountForBytes(len(data))
-	result := make([]*big.Int, n)
-	for i := 0; i < n; i++ {
-		start := i * bytesPerFr
-		end := start + bytesPerFr
-		if end > len(data) {
-			end = len(data)
+// getBigInt4FromBytes interprets a byte slice as a sequence of field elements,
+// each stored as 4 little-endian uint64 limbs (32 bytes), matching getBigInt4Slice.
+func getBigInt4FromBytes(data []byte) []*big.Int {
+	length := len(data) / 32
+	bigInts := make([]*big.Int, length)
+	for i := 0; i < length; i++ {
+		fe := new(big.Int)
+		for j := 3; j >= 0; j-- {
+			limb := binary.LittleEndian.Uint64(data[i*32+j*8 : i*32+j*8+8])
+			fe.Lsh(fe, 64)
+			fe.Add(fe, new(big.Int).SetUint64(limb))
 		}
-		chunk := data[start:end]
-		// big.Int.SetBytes expects big-endian, so reverse the LE chunk
-		reversed := make([]byte, len(chunk))
-		for j := range chunk {
-			reversed[len(chunk)-1-j] = chunk[j]
-		}
-		result[i] = new(big.Int).SetBytes(reversed)
+		bigInts[i] = fe
 	}
-	return result
+	return bigInts
 }
