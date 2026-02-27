@@ -1,6 +1,7 @@
 package whir
 
 import (
+	"fmt"
 	"math/big"
 	"math/bits"
 	"reilabs/keccacheck/transcript"
@@ -9,125 +10,87 @@ import (
 	"github.com/consensys/gnark/std/math/uints"
 )
 
-// It combines multiple polynomial evaluation claims into a single claim using
-// Random Linear Combination (RLC) and runs the initial rounds of the Whir sumcheck.
-//
-// Parameters:
-//   - batchingRandomness: The challenge scalar (alpha) used to fold batched polynomials.
-//   - linearStatementEvaluations: Evaluations of the multilinear polynomials.
+// initialSumcheck mirrors the Rust WHIR verifier's initial sumcheck phase.
+// The sum has already been computed by the caller (theSum). This function
+// runs the sumcheck rounds to reduce the claim, and stores the OOD queries
+// and RLC coefficients for the final W polynomial verification.
 func initialSumcheck(
 	api frontend.API,
 	v *transcript.Verifier,
-	batchingRandomness frontend.Variable,
-	initialOODQueries []frontend.Variable,
-	initialOODAnswers []frontend.Variable,
+	theSum frontend.Variable,
+	oodPoints []frontend.Variable,
+	oodsRlcCoeffs []frontend.Variable,
+	initialFormRlcCoeffs []frontend.Variable,
 	whirParams WHIRParams,
-	linearStatementEvaluations [][]frontend.Variable,
 ) (InitialSumcheckData, frontend.Variable, []frontend.Variable, error) {
 
-	// 1. Generate random coefficients (beta) from the transcript for combining OOD answers
-	// and linear statement evaluations into a single value.
-	initialCombinationRandomness, err := GenerateCombinationRandomness(api, v, len(initialOODAnswers)+len(linearStatementEvaluations[0]))
+	// Run the core Whir sumcheck rounds to reduce the claim.
+	// Mirrors Rust: self.initial_sumcheck.verify(verifier_state, &mut the_sum)
+	initialSumcheckFoldingRandomness, lastEval, err := runWhirSumcheckRounds(api, theSum, v, whirParams.FoldingFactorArray[0])
 	if err != nil {
 		return InitialSumcheckData{}, nil, nil, err
 	}
 
-	// 2. Collapse the batch of linear statement evaluations into a single set of evaluations.
-	// We compute: Combined[k] = Sum( Eval[j][k] * alpha^j )
-	// This reduces the verification of 'batch_size' polynomials to a single virtual polynomial.
-	combinedLinearStatementEvaluations := make([]frontend.Variable, len(linearStatementEvaluations[0])) //[0, 1, 2]
-	for evaluationIndex := range len(linearStatementEvaluations[0]) {
-		sum := frontend.Variable(0)
-		multiplier := frontend.Variable(1)
-		for j := range len(linearStatementEvaluations) {
-			sum = api.Add(sum, api.Mul(linearStatementEvaluations[j][evaluationIndex], multiplier))
-			multiplier = api.Mul(multiplier, batchingRandomness) // Power of alpha increases with batch index
-		}
-		combinedLinearStatementEvaluations[evaluationIndex] = sum
-	}
-
-	// 3. Combine the initial OOD answers and the newly combined statement evaluations
-	// into a single target value using the combination randomness generated in step 1.
-	OODAnswersAndStatmentEvaluations := append(initialOODAnswers, combinedLinearStatementEvaluations...)
-	lastEval := DotProduct(api, initialCombinationRandomness, OODAnswersAndStatmentEvaluations)
-
-	// 4. Run the core Whir sumcheck rounds to reduce the claim further.
-	// This updates the 'lastEval' to the value claimed at the end of these rounds.
-	initialSumcheckFoldingRandomness, lastEval, err := runWhirSumcheckRounds(api, lastEval, v, whirParams.FoldingFactorArray[0], 3)
-	if err != nil {
-		return InitialSumcheckData{}, nil, nil, err
-	}
+	// Store OOD queries and the full constraint RLC coefficients for computeWPoly.
+	combinedRlcCoeffs := make([]frontend.Variable, len(oodsRlcCoeffs)+len(initialFormRlcCoeffs))
+	copy(combinedRlcCoeffs, oodsRlcCoeffs)
+	copy(combinedRlcCoeffs[len(oodsRlcCoeffs):], initialFormRlcCoeffs)
 
 	return InitialSumcheckData{
-		InitialOODQueries:            initialOODQueries,
-		InitialCombinationRandomness: initialCombinationRandomness,
+		InitialOODQueries:            oodPoints,
+		InitialCombinationRandomness: combinedRlcCoeffs,
 	}, lastEval, initialSumcheckFoldingRandomness, nil
 }
 
-// parseBatchedCommitment reads the Prover's commitments and generates Verifier challenges
-// via the Fiat-Shamir heuristic
-func parseBatchedCommitment(v *transcript.Verifier, api frontend.API, whir_params WHIRParams) (ParsedCommitment, error) {
+// Reads a single commitment covering numVectors vectors from the transcript:
+//  1. Read Merkle root hash (prover message)
+//  2. Generate outDomainSamples OOD challenge points (verifier messages)
+//  3. Read outDomainSamples * numVectors OOD answers flat (prover messages)
+func receiveCommitment(v *transcript.Verifier, api frontend.API, outDomainSamples int, numVectors int) ParsedCommitment {
 	// 1. Read the Merkle Root hash committed by the prover.
 	rootHash := v.Read(api)
-
+	fmt.Println("number ood samples", outDomainSamples)
 	// 2. Generate Out-Of-Domain (OOD) query points (challenges) from the transcript.
-	oodPoints := v.GenerateVector(api, 1)
-	oodAnswers := make([][]frontend.Variable, whir_params.BatchSize)
+	oodPoints := v.GenerateVector(api, uint(outDomainSamples))
 
-	// 3. Read the Prover's answers to the OOD queries for the entire batch.
-	for i := range whir_params.BatchSize {
-		oodAnswer := v.ReadVector(api, 1)
+	// 3. Read the Prover's OOD answers: outDomainSamples * numVectors values, flat.
+	oodAnswers := v.ReadVector(api, uint(outDomainSamples*numVectors))
 
-		oodAnswers[i] = oodAnswer
+	return ParsedCommitment{
+		Root:       rootHash,
+		OodPoints:  oodPoints,
+		OodAnswers: oodAnswers,
 	}
-
-	commitment := ParsedCommitment{
-		Root:               rootHash,
-		OodPoints:          oodPoints,
-		OodAnswers:         oodAnswers,
-		BatchingRandomness: v.GenerateVector(api, 1),
-	}
-	return commitment, nil
 }
 
-func parseCommitment(v *transcript.Verifier, api frontend.API, whir_params WHIRParams) ParsedCommitment {
-	// 1. Read the Merkle Root hash committed by the prover.
-	rootHash := v.Read(api)
-
-	// 2. Generate Out-Of-Domain (OOD) query points (challenges) from the transcript.
-	oodPoints := v.GenerateVector(api, 1)
-	oodAnswers := make([][]frontend.Variable, whir_params.BatchSize)
-
-	// 3. Read the Prover's answers to the OOD queries for the entire batch.
-	for i := range whir_params.BatchSize {
-		oodAnswer := v.ReadVector(api, 1)
-
-		oodAnswers[i] = oodAnswer
-	}
-
-	commitment := ParsedCommitment{
-		Root:               rootHash,
-		OodPoints:          oodPoints,
-		OodAnswers:         oodAnswers,
-		BatchingRandomness: frontend.Variable(0),
-	}
-	return commitment
-}
-
-// generateFinalCoefficientsAndRandomnessPoints handles the final phase of the protocol,
-// usually associated with the STIR (or FRI-like) folding finalization.
-func generateFinalCoefficientsAndRandomnessPoints(api frontend.API, v *transcript.Verifier, whir_params WHIRParams, circuit Merkle, uapi *uints.BinaryField[uints.U64], domainSize int, expDomainGenerator frontend.Variable) ([]frontend.Variable, []frontend.Variable, error) {
+// generateFinalCoefficientsAndRandomnessPoints handles the final phase of the protocol.
+// Generates STIR challenge indices and computes the corresponding domain points.
+func generateFinalCoefficientsAndRandomnessPoints(
+	api frontend.API,
+	v *transcript.Verifier,
+	params WHIRParams,
+	domainSize int,
+	expDomainGenerator frontend.Variable,
+) ([]frontend.Variable, []frontend.Variable, []frontend.Variable, error) {
 	// 1. Read the final coefficients sent by the prover.
-	finalCoefficients := v.GenerateVector(api, 1<<whir_params.FinalSumcheckRounds)
+	// Mirrors Rust: let final_vector = verifier_state.prover_messages_vec(self.final_sumcheck.initial_size)?;
+	finalCoefficients := v.ReadVector(api, uint(1<<params.FinalSumcheckRounds))
 
-	// 3. Generate the final query points (indices) for the STIR protocol.
-	// These determine which leaves of the Merkle tree will be opened.
-	finalRandomnessPoints, err := GenerateStirChallengePoints(api, v, whir_params.FinalQueries, circuit.LeafIndexes[len(circuit.LeafIndexes)-1], domainSize, uapi, expDomainGenerator, whir_params.FoldingFactorArray[len(whir_params.FoldingFactorArray)-1])
+	// 2. Generate the final STIR challenge indices.
+	foldingFactor := params.FoldingFactorArray[len(params.FoldingFactorArray)-1]
+	finalIndexes, err := getStirChallenges(api, v, params.FinalQueries, domainSize, 1<<foldingFactor)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return finalCoefficients, finalRandomnessPoints, nil
+	// 3. Compute domain evaluation points from indices.
+	numBits := bits.Len(uint(domainSize - 1))
+	finalRandomnessPoints := make([]frontend.Variable, len(finalIndexes))
+	for i, idx := range finalIndexes {
+		finalRandomnessPoints[i] = ExponentVar(api, expDomainGenerator, idx, numBits)
+	}
+
+	return finalCoefficients, finalRandomnessPoints, finalIndexes, nil
 }
 
 // rlcBatchedLeaves collapses a wide leaf structure (representing multiple batched polynomials)
@@ -174,55 +137,38 @@ func GenerateCombinationRandomness(api frontend.API, v *transcript.Verifier, ran
 
 }
 
+// runWhirSumcheckRounds mirrors the Rust WHIR quadratic sumcheck verifier
+// (whir/src/protocols/sumcheck.rs Config::verify).
+//
+// Each round the prover sends two coefficients (c0, c2) of a quadratic
+// polynomial P(x) = c0 + c1·x + c2·x². The third coefficient c1 is derived
+// from the sum constraint P(0) + P(1) = sum, giving c1 = sum − 2·c0 − c2.
+// After squeezing a folding challenge r, the sum is updated to P(r).
 func runWhirSumcheckRounds(
 	api frontend.API,
-	lastEval frontend.Variable,
+	sum frontend.Variable,
 	verifier *transcript.Verifier,
-	foldingFactor int,
-	polynomialDegree int,
+	numRounds int,
 ) ([]frontend.Variable, frontend.Variable, error) {
-	foldingRandomness := make([]frontend.Variable, foldingFactor)
+	foldingRandomness := make([]frontend.Variable, numRounds)
 
-	for i := range foldingFactor {
-		sumcheckPolynomial := verifier.ReadVector(api, uint(polynomialDegree))
-		foldingRandomnessTemp := verifier.Generate(api)
-		foldingRandomness[i] = foldingRandomnessTemp
-		CheckSumOverBool(api, lastEval, sumcheckPolynomial)
-		lastEval = EvaluateQuadraticPolynomialFromEvaluationList(api, sumcheckPolynomial, foldingRandomness[i])
+	for i := range numRounds {
+		// Receive sumcheck polynomial coefficients c0 and c2
+		c0 := verifier.Read(api)
+		c2 := verifier.Read(api)
+
+		// Derive c1 from the sum constraint: P(0)+P(1) = sum
+		// P(0) = c0, P(1) = c0+c1+c2, so c0 + (c0+c1+c2) = sum → c1 = sum - 2·c0 - c2
+		c1 := api.Sub(sum, api.Add(api.Add(c0, c0), c2))
+
+		// Receive the random evaluation point
+		foldingRandomness[i] = verifier.Generate(api)
+
+		// Update the sum: sum = P(r) = (c2·r + c1)·r + c0
+		r := foldingRandomness[i]
+		sum = api.Add(api.Mul(api.Add(api.Mul(c2, r), c1), r), c0)
 	}
-	return foldingRandomness, lastEval, nil
-}
-
-// GenerateStirChallengePoints generates the stir challenge points for the given parameters.
-// It calculates the folding factor power and generates the stir challenges for the given leaf indexes.
-func GenerateStirChallengePoints(
-	api frontend.API,
-	v *transcript.Verifier,
-	NQueries int,
-	leafIndexes []uints.U64,
-	domainSize int,
-	uapi *uints.BinaryField[uints.U64],
-	expDomainGenerator frontend.Variable,
-	foldingFactor int,
-) ([]frontend.Variable, error) {
-	foldingFactorPower := 1 << foldingFactor
-	finalIndexes, err := getStirChallenges(api, v, NQueries, domainSize, foldingFactorPower)
-	if err != nil {
-		return nil, err
-	}
-
-	err = IsEqual(api, uapi, finalIndexes, leafIndexes)
-	if err != nil {
-		return nil, err
-	}
-
-	finalRandomnessPoints := make([]frontend.Variable, len(leafIndexes))
-
-	for index := range leafIndexes {
-		finalRandomnessPoints[index] = Exponent(api, uapi, expDomainGenerator, leafIndexes[index])
-	}
-
-	return finalRandomnessPoints, nil
+	return foldingRandomness, sum, nil
 }
 
 func getStirChallenges(
@@ -261,6 +207,73 @@ func computeFold(leaves [][]frontend.Variable, foldingRandomness []frontend.Vari
 		computedFold[j] = MultivarPoly(leaves[j], foldingRandomness, api)
 	}
 	return computedFold
+}
+
+// readLeavesFromHints reads numLeaves rows of numCols elements each from the verifier hints.
+// Mirrors Rust's prover_hint_ark() which returns the leaf values (polynomial evaluations
+// at queried cosets) as out-of-band hint data.
+func readLeavesFromHints(v *transcript.Verifier, numLeaves, numCols int) [][]frontend.Variable {
+	leaves := make([][]frontend.Variable, numLeaves)
+	for i := range leaves {
+		leaves[i] = v.ReadHintVector(uint(numCols))
+	}
+	return leaves
+}
+
+// verifyMerklePaths verifies Merkle membership proofs for a batch of opened leaves.
+// Reads treeHeight sibling hashes per leaf from the verifier's hints stream.
+// This mirrors the Rust merkle_tree::verify with expanded (non-neighbor-optimized) paths.
+//
+// For each leaf:
+//  1. Hashes the leaf elements to compute the leaf hash
+//  2. Navigates bottom-up using leaf index bits
+//  3. Reads sibling hashes from hints at each level
+//  4. Asserts the computed root equals rootHash
+func verifyMerklePaths(
+	api frontend.API,
+	v *transcript.Verifier,
+	leaves [][]frontend.Variable,
+	leafIndexes []frontend.Variable,
+	rootHash frontend.Variable,
+	treeHeight int,
+) {
+	for i := range leaves {
+		leafIndexBits := api.ToBinary(leafIndexes[i], treeHeight)
+
+		// Hash the leaf elements to get the leaf hash
+		claimedLeafHash := transcript.HashNode(api, []frontend.Variable{leaves[i][0], leaves[i][1]})
+		for x := range len(leaves[i]) - 2 {
+			claimedLeafHash = transcript.HashNode(api, []frontend.Variable{claimedLeafHash, leaves[i][x+2]})
+		}
+
+		// Walk up the tree, reading one sibling hash from hints per level
+		currentHash := claimedLeafHash
+		for level := 0; level < treeHeight; level++ {
+			siblingHash := v.ReadHint()
+			indexBit := leafIndexBits[level]
+
+			left := api.Select(indexBit, siblingHash, currentHash)
+			right := api.Select(indexBit, currentHash, siblingHash)
+
+			currentHash = transcript.HashNode(api, []frontend.Variable{left, right})
+		}
+
+		api.Println("equating hashes", currentHash, rootHash)
+		api.AssertIsEqual(currentHash, rootHash)
+	}
+}
+
+// ExponentVar computes base^exp using square-and-multiply with a field element exponent.
+// numBits determines how many bits of exp to consider.
+func ExponentVar(api frontend.API, base frontend.Variable, exp frontend.Variable, numBits int) frontend.Variable {
+	expBits := api.ToBinary(exp, numBits)
+	output := frontend.Variable(1)
+	multiply := base
+	for i := range expBits {
+		output = api.Select(expBits[i], api.Mul(output, multiply), output)
+		multiply = api.Mul(multiply, multiply)
+	}
+	return output
 }
 
 func PoW(api frontend.API, v *transcript.Verifier, uapi *uints.BinaryField[uints.U64], difficulty int) (frontend.Variable, []uints.U8, error) {
