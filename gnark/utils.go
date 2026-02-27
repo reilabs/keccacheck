@@ -8,10 +8,12 @@ import (
 )
 
 type KeccacheckResult struct {
-	ProofPtr  unsafe.Pointer
-	ProofLen  uintptr
-	InputPtr  unsafe.Pointer
-	OutputPtr unsafe.Pointer
+	ProofPtr     unsafe.Pointer
+	ProofLen     uintptr
+	WhirProofPtr unsafe.Pointer
+	WhirProofLen uintptr
+	InputPtr     unsafe.Pointer
+	OutputPtr    unsafe.Pointer
 }
 
 func getBigIntSlice(ptr unsafe.Pointer, length int) []*big.Int {
@@ -76,25 +78,17 @@ func PrepareTestIO() ([]*big.Int, []uint64) {
 }
 
 func initCircuitFields(input []*big.Int, output []uint64) (
-	[]frontend.Variable, []frontend.Variable, []frontend.Variable) {
+	[]frontend.Variable, []frontend.Variable) {
 
 	inSize := 25 * N
-	bitSize := 64 * 25 * N
 
 	inputSized := make([]frontend.Variable, inSize)
-	inputDSized := make([]frontend.Variable, bitSize)
 	outputSized := make([]frontend.Variable, inSize)
 
 	for i := 0; i < 25; i++ {
 		for instance := 0; instance < N; instance++ {
 			idx := instance*25 + i
-			w := input[idx]
-			inputSized[idx] = w
-
-			base := 64 * (i*N + instance)
-			for j := 0; j < 64; j++ {
-				inputDSized[base+j] = w.Bit(j)
-			}
+			inputSized[idx] = input[idx]
 		}
 	}
 
@@ -106,5 +100,5 @@ func initCircuitFields(input []*big.Int, output []uint64) (
 		}
 	}
 
-	return inputSized, inputDSized, outputSized
+	return inputSized, outputSized
 }
