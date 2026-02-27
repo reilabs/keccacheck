@@ -6,11 +6,20 @@ import (
 	"math/big"
 	"reilabs/keccacheck/sumcheck"
 	"reilabs/keccacheck/transcript"
+	"reilabs/keccacheck/whir"
 
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/math/uints"
 )
 
-func VerifyKeccakF(api frontend.API, input, output, proof, alpha []frontend.Variable) {
+func VerifyKeccakF(
+	api frontend.API,
+	uapi *uints.BinaryField[uints.U64],
+	output, proof, alpha []frontend.Variable,
+	whirProof []frontend.Variable,
+	whirHints []frontend.Variable,
+	whirParams whir.WHIRParams,
+) {
 	verifier := transcript.NewVerifier(proof)
 	for _, challenge := range alpha {
 		verifier.Absorb(api, challenge)
@@ -64,13 +73,10 @@ func VerifyKeccakF(api frontend.API, input, output, proof, alpha []frontend.Vari
 	}
 	// --- Verify claims using input bits ---
 	numVars := 6 + Log_N
-	laneSize := 1 << numVars
 
-	// Save output beta and r from round verification
+	// Save output beta from round verification
 	outputBeta := make([]frontend.Variable, 25)
 	copy(outputBeta, beta)
-	outputR := make([]frontend.Variable, len(alpha))
-	copy(outputR, alpha)
 
 	// --- Binary claim verification ---
 	binaryBeta := make([]frontend.Variable, 25)
@@ -130,9 +136,6 @@ func VerifyKeccakF(api frontend.API, input, output, proof, alpha []frontend.Vari
 	inputPowersEval := sumcheck.EvalMle(api, powers, inputRy)
 	api.AssertIsEqual(ic2, api.Mul(inputPowersEval, inputBRxRy))
 
-	// Build input_r
-	inputR := append(inputRx, inputRy...)
-
 	// --- Read 75 lane evaluations (25 lanes × 3 claim points) ---
 	laneEvals := make([][3]frontend.Variable, 25)
 	for k := 0; k < 25; k++ {
@@ -167,40 +170,28 @@ func VerifyKeccakF(api frontend.API, input, output, proof, alpha []frontend.Vari
 	}
 	api.AssertIsEqual(inputClaim, inputBRxRy)
 
-	// --- Verify lane evaluations using input bits (replacing WHIR) ---
+	// --- Verify lane evaluations using WHIR ---
 	gamma := verifier.Generate(api)
 	gamma2 := api.Mul(gamma, gamma)
 
-	// Compute eq evaluations over boolean hypercube for each claim point
-	eqOutput := sumcheck.EvalEq(api, outputR)
-	eqBinary := sumcheck.EvalEq(api, binaryRx)
-	eqInput := sumcheck.EvalEq(api, inputR)
-
-	// Build combined eq: eq(·, outputR) + γ·eq(·, binaryR) + γ²·eq(·, inputR)
-	combinedEq := make([]frontend.Variable, laneSize)
-	for i := 0; i < laneSize; i++ {
-		combinedEq[i] = api.Add(
-			eqOutput[i],
-			api.Add(
-				api.Mul(gamma, eqBinary[i]),
-				api.Mul(gamma2, eqInput[i]),
-			),
-		)
-	}
-
-	// For each lane, verify the combined evaluation matches the input bits
+	// Build combined evaluations: lane_k(outputR) + γ·lane_k(binaryRx) + γ²·lane_k(inputR)
+	// One statement with BatchSize (25) constraints, matching the Rust combined covector.
+	statements := []whir.Statement{{
+		Constraints: make([]whir.MLConstraint, 25),
+		NVars:       numVars,
+	}}
 	for k := 0; k < 25; k++ {
-		laneBits := input[k*laneSize : (k+1)*laneSize]
-		actualEval := sumcheck.EvalMleWithEq(api, laneBits, combinedEq)
-		expectedEval := api.Add(
-			laneEvals[k][0],
-			api.Add(
-				api.Mul(gamma, laneEvals[k][1]),
-				api.Mul(gamma2, laneEvals[k][2]),
+		statements[0].Constraints[k] = whir.MLConstraint{
+			Evaluation: api.Add(
+				laneEvals[k][0],
+				api.Add(
+					api.Mul(gamma, laneEvals[k][1]),
+					api.Mul(gamma2, laneEvals[k][2]),
+				),
 			),
-		)
-		api.AssertIsEqual(actualEval, expectedEval)
+		}
 	}
+	whir.VerifyWhir(api, uapi, whirProof, whirHints, statements, whirParams)
 }
 
 func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, alpha *[]frontend.Variable, beta *[]frontend.Variable, sum frontend.Variable, rc uint64) ([]frontend.Variable, []frontend.Variable) {
