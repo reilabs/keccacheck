@@ -92,7 +92,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 		NumVariables:  numVars,
 		FoldingFactor: whir.ConstantFoldingFactor(4),
 		SoundnessType: whir.UniqueDecoding,
-		PowBits:       20,
+		PowBits:       0,
 	})
 
 	VerifyKeccakF(api, uapi, circuit.Output[:], gkrProof, r, whirProof, whirHints, whirParams)
