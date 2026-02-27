@@ -2,43 +2,72 @@ package whir
 
 import (
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std/math/uints"
 )
 
+// SoundnessType defines the soundness guarantee for the proof system.
+type SoundnessType int
+
+const (
+	UniqueDecoding SoundnessType = iota
+	ProvableList
+	ConjectureList
+)
+
+// FoldingFactor defines the folding strategy per round.
+type FoldingFactor struct {
+	// Constant: same factor every round. ConstantFromSecondRound: first round
+	// uses FirstRound, subsequent rounds use Factor.
+	Factor     int
+	FirstRound int  // only used when VariableFirst is true
+	VariableFirst bool
+}
+
+// ConstantFoldingFactor creates a FoldingFactor with the same value every round.
+func ConstantFoldingFactor(factor int) FoldingFactor {
+	return FoldingFactor{Factor: factor}
+}
+
+// ConstantFromSecondRoundFoldingFactor creates a FoldingFactor where the first
+// round uses firstRound and subsequent rounds use factor.
+func ConstantFromSecondRoundFoldingFactor(firstRound, factor int) FoldingFactor {
+	return FoldingFactor{Factor: factor, FirstRound: firstRound, VariableFirst: true}
+}
+
+// AtRound returns the folding factor for the given round index.
+func (ff FoldingFactor) AtRound(round int) int {
+	if ff.VariableFirst && round == 0 {
+		return ff.FirstRound
+	}
+	return ff.Factor
+}
+
+// ComputeNumberOfRounds returns (numRounds, finalSumcheckRounds).
+func (ff FoldingFactor) ComputeNumberOfRounds(numVariables int) (int, int) {
+	if ff.VariableFirst {
+		nvExceptFirst := numVariables - ff.FirstRound
+		if nvExceptFirst < ff.Factor {
+			return 0, nvExceptFirst
+		}
+		finalSumcheckRounds := nvExceptFirst % ff.Factor
+		return (nvExceptFirst - finalSumcheckRounds) / ff.Factor, finalSumcheckRounds
+	}
+	finalSumcheckRounds := numVariables % ff.Factor
+	return (numVariables-finalSumcheckRounds)/ff.Factor - 1, finalSumcheckRounds
+}
+
 type ParsedCommitment struct {
-	Root               frontend.Variable
-	OodPoints          []frontend.Variable
-	OodAnswers         [][]frontend.Variable
-	BatchingRandomness frontend.Variable
+	Root       frontend.Variable
+	OodPoints  []frontend.Variable
+	OodAnswers []frontend.Variable // flat: out_domain_samples * num_vectors
 }
 
 type Statement struct {
 	Constraints []MLConstraint
-	nVars       int
-}
-type Merkle struct {
-	Leaves            [][][]frontend.Variable
-	LeafIndexes       [][]uints.U64
-	LeafSiblingHashes [][]frontend.Variable
-	AuthPaths         [][][]frontend.Variable
-}
-
-type WHIRConfig struct {
-	NRounds             int    `json:"n_rounds"`
-	Rate                int    `json:"rate"`
-	NVars               int    `json:"n_vars"`
-	FoldingFactor       []int  `json:"folding_factor"`
-	OODSamples          []int  `json:"ood_samples"`
-	NumQueries          []int  `json:"num_queries"`
-	PowBits             []int  `json:"pow_bits"`
-	FinalQueries        int    `json:"final_queries"`
-	FinalPowBits        int    `json:"final_pow_bits"`
-	FinalFoldingPowBits int    `json:"final_folding_pow_bits"`
-	DomainGenerator     string `json:"domain_generator"`
-	BatchSize           int    `json:"batch_size"`
+	NVars       int
 }
 
 type WHIRParams struct {
+	Config                               ProtocolConfig
 	ParamNRounds                         int
 	FoldingFactorArray                   []int
 	RoundParametersOODSamples            []int
@@ -64,13 +93,6 @@ type MLConstraint struct {
 	Point      []frontend.Variable
 	Evaluation frontend.Variable
 }
-
-type RoundData struct {
-	CombinationRandomness []frontend.Variable
-	Constraints           []MLConstraint
-}
-
-type MLPoint = []frontend.Variable
 
 type MainRoundData struct {
 	OODPoints             [][]frontend.Variable
