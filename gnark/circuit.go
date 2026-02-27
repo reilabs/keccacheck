@@ -27,7 +27,6 @@ func NewKeccakfCircuit() *KeccakfCircuit {
 const (
 	MaxGKRProofLen  = 7000             // max GKR proof field elements - TODO: work out how much this is exactly
 	MaxWhirProofFrs = 10 * (6 + Log_N) // max WHIR proof packed Fr elements
-	MaxWhirHints    = 105000           // max WHIR hint bytes
 )
 
 // Main Verifier circuit definition
@@ -76,12 +75,6 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 		return fmt.Errorf("failed to generate WHIR proof hint: %w", err)
 	}
 
-	whirHints, err := api.Compiler().NewHint(WhirHintsHint, MaxWhirHints, hintInputs...)
-
-	if err != nil {
-		return fmt.Errorf("failed to generate WHIR hints hint: %w", err)
-	}
-
 	uapi, err := uints.New[uints.U64](api)
 	if err != nil {
 		return fmt.Errorf("failed to create uints API: %w", err)
@@ -93,7 +86,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 		whir.UniqueDecoding, 0,
 	))
 
-	VerifyKeccakF(api, uapi, circuit.Output[:], gkrProof, r, whirProof, whirHints, whirParams)
+	VerifyKeccakF(api, uapi, circuit.Output[:], gkrProof, r, whirProof, hintInputs, whirParams)
 	return nil
 }
 

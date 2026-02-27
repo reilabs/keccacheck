@@ -13,11 +13,11 @@ func VerifyWhir(
 	api frontend.API,
 	uapi *uints.BinaryField[uints.U64],
 	proof []frontend.Variable,
-	hints []frontend.Variable,
+	hr *HintReader,
 	statements []Statement,
 	params WHIRParams,
 ) (totalFoldingRandomness []frontend.Variable, err error) {
-	v := transcript.NewVerifierWithHints(proof, hints)
+	v := transcript.NewVerifier(proof)
 	// api.Println(transcript.NewSponge().State[:]...)
 	// Absorb domain separator: protocol_id (2 Fr) + session_id (1 Fr).
 	// Mirrors spongefish's DomainSeparator::to_verifier which absorbs
@@ -105,7 +105,7 @@ func VerifyWhir(
 
 	// Read initial leaf values from hints (numQueries leaves, each batchSize*foldSize elements)
 	// Mirrors Rust: prover_hint_ark() in irs_commit.verify()
-	initialLeaves := readLeavesFromHints(v, numQueries, params.BatchSize*foldSize)
+	initialLeaves := readLeavesFromHints(hr, numQueries, params.BatchSize*foldSize)
 	// api.Println(initialLeaves[0]...)
 	// Collapse via vector RLC, then fold
 	collapsed := rlcBatchedLeaves(api, initialLeaves, foldSize, params.BatchSize, vectorRlcCoeffs[1])
@@ -144,15 +144,15 @@ func VerifyWhir(
 		// for round 0, or the previous round's root for subsequent rounds.
 		if r == 0 {
 			treeHeight := bits.Len(uint(domainSize/(1<<params.FoldingFactorArray[0]))) - 1
-			verifyMerklePaths(api, v, initialLeaves, stirIndexes, commitment.Root, treeHeight)
+			verifyMerklePaths(api, hr, initialLeaves, stirIndexes, commitment.Root, treeHeight)
 		} else {
 			prevFoldSize := 1 << params.FoldingFactorArray[r-1]
 			prevNumQueries := params.RoundParametersNumOfQueries[r]
 			prevTreeHeight := bits.Len(uint(domainSize/(1<<params.FoldingFactorArray[r]))) - 1
 
 			// Read leaf values for this round's opening from hints
-			roundLeaves := readLeavesFromHints(v, prevNumQueries, prevFoldSize)
-			verifyMerklePaths(api, v, roundLeaves, stirIndexes, rootHash, prevTreeHeight)
+			roundLeaves := readLeavesFromHints(hr, prevNumQueries, prevFoldSize)
+			verifyMerklePaths(api, hr, roundLeaves, stirIndexes, rootHash, prevTreeHeight)
 
 			// Update computedFold for this round's leaves
 			computedFold = computeFold(roundLeaves, totalFoldingRandomness[len(totalFoldingRandomness)-params.FoldingFactorArray[r-1]:], api)
@@ -211,7 +211,7 @@ func VerifyWhir(
 
 	// Read final Merkle opening from hints and verify
 	lastFoldingFactor := params.FoldingFactorArray[len(params.FoldingFactorArray)-1]
-	finalLeaves := readLeavesFromHints(v, params.FinalQueries, 1<<lastFoldingFactor)
+	finalLeaves := readLeavesFromHints(hr, params.FinalQueries, 1<<lastFoldingFactor)
 	finalTreeHeight := bits.Len(uint(domainSize/(1<<lastFoldingFactor))) - 1
 	// The final opening is against the last round's root (or initial commitment if 0 rounds)
 	// For now, verify against the last commitment root stored in the transcript
@@ -220,13 +220,13 @@ func VerifyWhir(
 		// Actually, the final opening verification is handled by generateFinalCoefficientsAndRandomnessPoints
 		// which already verified the final STIR challenges
 	}
-	verifyMerklePaths(api, v, finalLeaves, finalIndexes, commitment.Root, finalTreeHeight)
+	verifyMerklePaths(api, hr, finalLeaves, finalIndexes, commitment.Root, finalTreeHeight)
 
 	totalFoldingRandomness = Reverse(totalFoldingRandomness)
 
 	// Read deferred evaluations from hints: one per linear form (statement).
 	// Mirrors Rust: prover_hint_ark() for deferred constraint weights.
-	deferredEvals := v.ReadHintVector(uint(len(statements)))
+	deferredEvals := hr.ReadVec(len(statements))
 
 	evaluationOfWPoly := computeWPoly(
 		api,

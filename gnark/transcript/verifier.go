@@ -8,11 +8,9 @@ import (
 )
 
 type Verifier struct {
-	sponge    Sponge
-	Proof     []frontend.Variable
-	index     int
-	Hints     []frontend.Variable // Out-of-band hint data (e.g. Merkle siblings), not absorbed into sponge
-	hintIndex int
+	sponge Sponge
+	Proof  []frontend.Variable
+	index  int
 }
 
 // NewVerifier initializes a new verifier with a sponge and proof elements.
@@ -22,38 +20,6 @@ func NewVerifier(proof []frontend.Variable) *Verifier {
 		Proof:  proof,
 		index:  0,
 	}
-}
-
-// NewVerifierWithHints initializes a verifier with both transcript proof elements
-// and out-of-band hint data. Hints are read separately and never absorbed into the sponge.
-// This mirrors Rust's VerifierState which has both narg_string (transcript) and hints.
-func NewVerifierWithHints(proof []frontend.Variable, hints []frontend.Variable) *Verifier {
-	return &Verifier{
-		sponge: *NewSponge(),
-		Proof:  proof,
-		index:  0,
-		Hints:  hints,
-	}
-}
-
-// ReadHint reads the next hint value without absorbing into the sponge.
-// Mirrors Rust's verifier_state.prover_hint().
-func (v *Verifier) ReadHint() frontend.Variable {
-	if v.hintIndex >= len(v.Hints) {
-		panic("Ran out of hint elements.")
-	}
-	value := v.Hints[v.hintIndex]
-	v.hintIndex++
-	return value
-}
-
-// ReadHintVector reads n hint values without absorbing into the sponge.
-func (v *Verifier) ReadHintVector(n uint) []frontend.Variable {
-	values := make([]frontend.Variable, n)
-	for i := range values {
-		values[i] = v.ReadHint()
-	}
-	return values
 }
 
 // Generate squeezes a value from the sponge.

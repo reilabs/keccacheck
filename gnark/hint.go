@@ -107,7 +107,7 @@ func GKRProofHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 }
 
 // WhirProofHint extracts the WHIR narg_string from the FFI result,
-// packed into Fr elements (31 bytes per Fr).
+// packed into Fr elements (32 bytes per Fr).
 func WhirProofHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 	p := getOrComputeProof(inputs)
 	for i, v := range p.whirNargFrs {
@@ -116,13 +116,35 @@ func WhirProofHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 	return nil
 }
 
-// WhirHintsHint extracts the WHIR hints from the FFI result as individual
-// byte values (Merkle siblings, leaf values, deferred evaluations).
-func WhirHintsHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
+// ReadVecHint reads a prover_hint_ark(Vec<F>) block from the hint byte stream.
+// Format: 8-byte LE u64 byte-length prefix, then byteLen bytes of 32-byte field elements.
+// Returns the parsed field elements via getBigInt4FromBytes.
+func ReadVecHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 	p := getOrComputeProof(inputs)
-	for i, b := range p.whirHints {
-		outputs[i].SetUint64(uint64(b))
+
+	// Read 8-byte LE length prefix (byte count)
+	byteLen := int(binary.LittleEndian.Uint64(p.whirHints[:8]))
+	p.whirHints = p.whirHints[8:]
+
+	frs := getBigInt4FromBytes(p.whirHints[:byteLen*32])
+	p.whirHints = p.whirHints[byteLen*32:]
+	for i, v := range frs {
+		outputs[i].Set(v)
 	}
+
+	return nil
+}
+
+// ReadHashHint reads a single prover_hint(Hash) block from the hint byte stream.
+// Format: 32 raw bytes (field element in LE standard form, no length prefix).
+// Returns 1 field element.
+func ReadHashHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
+	p := getOrComputeProof(inputs)
+
+	frs := getBigInt4FromBytes(p.whirHints[:32])
+	p.whirHints = p.whirHints[32:]
+
+	outputs[0].Set(frs[0])
 	return nil
 }
 

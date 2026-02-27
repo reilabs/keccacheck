@@ -17,7 +17,7 @@ func VerifyKeccakF(
 	uapi *uints.BinaryField[uints.U64],
 	output, proof, alpha []frontend.Variable,
 	whirProof []frontend.Variable,
-	whirHints []frontend.Variable,
+	hintInputs []frontend.Variable,
 	whirParams whir.WHIRParams,
 ) {
 	verifier := transcript.NewVerifier(proof)
@@ -191,7 +191,8 @@ func VerifyKeccakF(
 			),
 		}
 	}
-	whir.VerifyWhir(api, uapi, whirProof, whirHints, statements, whirParams)
+	hr := whir.NewHintReader(api, hintInputs, ReadVecHint, ReadHashHint)
+	whir.VerifyWhir(api, uapi, whirProof, hr, statements, whirParams)
 }
 
 func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, alpha *[]frontend.Variable, beta *[]frontend.Variable, sum frontend.Variable, rc uint64) ([]frontend.Variable, []frontend.Variable) {

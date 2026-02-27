@@ -15,7 +15,8 @@ func TestKeccakVerify(t *testing.T) {
 
 	solver.RegisterHint(GKRProofHint)
 	solver.RegisterHint(WhirProofHint)
-	solver.RegisterHint(WhirHintsHint)
+	solver.RegisterHint(ReadVecHint)
+	solver.RegisterHint(ReadHashHint)
 
 	inputs, outputs := PrepareTestIO()
 
@@ -37,7 +38,8 @@ func TestKeccakVerifyFailing(t *testing.T) {
 
 	solver.RegisterHint(GKRProofHint)
 	solver.RegisterHint(WhirProofHint)
-	solver.RegisterHint(WhirHintsHint)
+	solver.RegisterHint(ReadVecHint)
+	solver.RegisterHint(ReadHashHint)
 
 	inputs, outputs := PrepareTestIO()
 

@@ -209,20 +209,21 @@ func computeFold(leaves [][]frontend.Variable, foldingRandomness []frontend.Vari
 	return computedFold
 }
 
-// readLeavesFromHints reads numLeaves rows of numCols elements each from the verifier hints.
-// Mirrors Rust's prover_hint_ark() which returns the leaf values (polynomial evaluations
-// at queried cosets) as out-of-band hint data.
-func readLeavesFromHints(v *transcript.Verifier, numLeaves, numCols int) [][]frontend.Variable {
+// readLeavesFromHints reads leaf values from the hint stream.
+// Corresponds to a single Rust prover_hint_ark(Vec<F>) call that writes
+// all leaves (numLeaves × numCols elements) as one length-prefixed block.
+func readLeavesFromHints(hr *HintReader, numLeaves, numCols int) [][]frontend.Variable {
+	flat := hr.ReadVec(numLeaves * numCols)
 	leaves := make([][]frontend.Variable, numLeaves)
 	for i := range leaves {
-		leaves[i] = v.ReadHintVector(uint(numCols))
+		leaves[i] = flat[i*numCols : (i+1)*numCols]
 	}
 	return leaves
 }
 
 // verifyMerklePaths verifies Merkle membership proofs for a batch of opened leaves.
-// Reads treeHeight sibling hashes per leaf from the verifier's hints stream.
-// This mirrors the Rust merkle_tree::verify with expanded (non-neighbor-optimized) paths.
+// Reads treeHeight sibling hashes per leaf from the hint stream via HintReader.
+// Each sibling corresponds to a Rust prover_hint(Hash) call (32 raw bytes).
 //
 // For each leaf:
 //  1. Hashes the leaf elements to compute the leaf hash
@@ -231,7 +232,7 @@ func readLeavesFromHints(v *transcript.Verifier, numLeaves, numCols int) [][]fro
 //  4. Asserts the computed root equals rootHash
 func verifyMerklePaths(
 	api frontend.API,
-	v *transcript.Verifier,
+	hr *HintReader,
 	leaves [][]frontend.Variable,
 	leafIndexes []frontend.Variable,
 	rootHash frontend.Variable,
@@ -249,7 +250,7 @@ func verifyMerklePaths(
 		// Walk up the tree, reading one sibling hash from hints per level
 		currentHash := claimedLeafHash
 		for level := 0; level < treeHeight; level++ {
-			siblingHash := v.ReadHint()
+			siblingHash := hr.ReadHash()
 			indexBit := leafIndexBits[level]
 
 			left := api.Select(indexBit, siblingHash, currentHash)

@@ -34,7 +34,8 @@ func main() {
 	assignment := KeccakfCircuit{}
 	solver.RegisterHint(GKRProofHint)
 	solver.RegisterHint(WhirProofHint)
-	solver.RegisterHint(WhirHintsHint)
+	solver.RegisterHint(ReadVecHint)
+	solver.RegisterHint(ReadHashHint)
 
 	inputs, outputs := PrepareTestIO()
 
