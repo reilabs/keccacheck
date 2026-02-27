@@ -2,7 +2,7 @@ package whir
 
 import (
 	"fmt"
-	"math/big"
+	"math/bits"
 	"reilabs/keccacheck/transcript"
 
 	"github.com/consensys/gnark/frontend"
@@ -13,131 +13,115 @@ func VerifyWhir(
 	api frontend.API,
 	uapi *uints.BinaryField[uints.U64],
 	proof []frontend.Variable,
-	nVars uint,
+	hints []frontend.Variable,
 	statements []Statement,
-	merkleCommitment Merkle,
 	params WHIRParams,
-	leafIndexes []uints.U64,
 ) (totalFoldingRandomness []frontend.Variable, err error) {
-	v := transcript.NewVerifier(proof)
+	v := transcript.NewVerifierWithHints(proof, hints)
+	// api.Println(transcript.NewSponge().State[:]...)
+	// Absorb domain separator: protocol_id (2 Fr) + session_id (1 Fr).
+	// Mirrors spongefish's DomainSeparator::to_verifier which absorbs
+	// protocol_id, session_id, and empty instance before any proof data.
+	domainSep := ComputeDomainSeparator(params.Config)
 
-	commitments := make([]ParsedCommitment, params.BatchSize)
-
-	// The following are evaluation claims on the polynomials
-	oodPoints := make([][]frontend.Variable, 0)
-	oodAnswers := make([]frontend.Variable, 0)
-	statementPoints := make([][]frontend.Variable, 0)
-
-	for i := range params.BatchSize {
-		commitment, err := parseBatchedCommitment(v, api, params)
-		if err != nil {
-			return nil, fmt.Errorf("unable to parse commitment: %w", err)
-		}
-		commitments[i] = commitment
-	}
-	for _, commitment := range commitments {
-		for _, point := range commitment.OodPoints {
-			mlPoint := ExpandFromUnivariate(api, point, params.MVParamsNumberOfVariables)
-			oodPoints = append(oodPoints, mlPoint)
-		}
-
-		for _, answer := range commitment.OodAnswers {
-			oodAnswers = append(oodAnswers, answer)
-		}
+	fmt.Println("Sponge absorbing domain seperators:", domainSep[:])
+	for _, ds := range domainSep {
+		v.Absorb(api, ds)
 	}
 
-	for _, statement := range statements {
-		for _, constraint := range statement.Constraints {
-			oodPoints = append(statementPoints, constraint.Point)
+	// Receive a single commitment covering all batch vectors.
+	// Mirrors Rust irs_commit::receive_commitment: read root, generate OOD points,
+	// read OOD answers flat (outDomainSamples * numVectors).
+	commitment := receiveCommitment(v, api, params.CommittmentOODSamples, params.BatchSize)
+
+	numVectors := params.BatchSize
+
+	// Complete the constraint and evaluation matrix with OODs and their cross-terms.
+	// For a single commitment all OOD values are already known; for multiple
+	// commitments this loop reads cross-term evaluations from the transcript.
+	numOODConstraints := 0
+	var oodMatrix []frontend.Variable
+	vectorOffset := 0
+	committedOODRows := commitment.OodAnswers // flat: outDomainSamples * numVectorsPerCommitment
+	numVectorsPerCommitment := params.BatchSize
+	for i := 0; i < params.CommittmentOODSamples; i++ {
+		for j := 0; j < numVectors; j++ {
+			if j >= vectorOffset && j < numVectorsPerCommitment+vectorOffset {
+				oodMatrix = append(oodMatrix, committedOODRows[i*numVectorsPerCommitment+(j-vectorOffset)])
+			} else {
+				// Cross-term: read from transcript (absorb into sponge).
+				oodMatrix = append(oodMatrix, v.Read(api))
+			}
 		}
+		numOODConstraints++
 	}
 
-	numPolynomials := len(commitments)
-	numConstraints := len(oodPoints) + len(statements)
+	fmt.Println("numOODConstraints:", numOODConstraints)
+	fmt.Println("oodMatrix length:", len(oodMatrix))
+	api.Println(oodMatrix...)
+	fmt.Println("oodPoints:", commitment.OodPoints)
 
-	constraintEvalsMatrix := make([][]frontend.Variable, numPolynomials)
-
-	// Read the N×M evaluation matrix from transcript
-	for i := 0; i < numPolynomials; i++ {
-		row := make([]frontend.Variable, numConstraints)
-		for j := 0; j < numConstraints; j++ {
-			val := v.Read(api)
-			row[j] = val
-		}
-
-		constraintEvalsMatrix[i] = row
+	// Extract OOD multilinear points from the univariate OOD challenge points
+	oodPoints := make([][]frontend.Variable, 0, len(commitment.OodPoints))
+	for _, point := range commitment.OodPoints {
+		mlPoint := ExpandFromUnivariate(api, point, params.MVParamsNumberOfVariables)
+		oodPoints = append(oodPoints, mlPoint)
 	}
 
-	// Step 2: Sample batching randomness γ (cryptographically bound to matrix via FS)
-	batchingRandomness := v.Generate(api)
+	// Random linear combination of the vectors.
+	vectorRlcCoeffs := geometricChallenge(api, v, numVectors)
+	api.Println(vectorRlcCoeffs...)
 
-	allConstraints := make([]MLConstraint, len(oodPoints))
+	// Random linear combination of the constraints.
+	numLinearForms := len(statements)
+	constraintRlcCoeffs := geometricChallenge(api, v, numOODConstraints+numLinearForms)
+	oodsRlcCoeffs := constraintRlcCoeffs[:numOODConstraints]
+	initialFormRlcCoeffs := constraintRlcCoeffs[numOODConstraints:]
 
-	// Step 3: Reconstruct combined constraints using RLC of the evaluation matrix
-	// For each constraint j: combined_eval[j] = Σᵢ γⁱ·eval[i][j]
-	for constraintIdx, info := range oodPoints {
-
-		combinedEval := frontend.Variable(0)
-
-		power := frontend.Variable(1)
-
-		for _, polyEvals := range constraintEvalsMatrix {
-			term := api.Mul(power, polyEvals[constraintIdx])
-			combinedEval = api.Add(combinedEval, term)
-
-			power = api.Mul(power, batchingRandomness)
+	// Compute "the sum" (mirrors Rust whir::verifier lines 110-118)
+	// the_sum = Σ(initialFormRlcCoeff * dot(vectorRlcCoeffs, evaluationRow))
+	//         + Σ(oodsRlcCoeff * dot(vectorRlcCoeffs, oodsRow))
+	theSum := frontend.Variable(0)
+	for i, rlcCoeff := range initialFormRlcCoeffs {
+		evaluationRow := make([]frontend.Variable, params.BatchSize)
+		for j := range evaluationRow {
+			evaluationRow[j] = statements[i].Constraints[j].Evaluation
 		}
-
-		allConstraints[constraintIdx] = MLConstraint{
-			Point:      info,
-			Evaluation: combinedEval,
-		}
+		theSum = api.Add(theSum, api.Mul(rlcCoeff, DotProduct(api, vectorRlcCoeffs, evaluationRow)))
 	}
-
-	initialOODs := concatOodAnswers(api, oodPoints, batchingRandomness)
+	for i, rlcCoeff := range oodsRlcCoeffs {
+		oodsRow := oodMatrix[i*numVectors : (i+1)*numVectors]
+		theSum = api.Add(theSum, api.Mul(rlcCoeff, DotProduct(api, vectorRlcCoeffs, oodsRow)))
+	}
 
 	// Perform the initial sumcheck
-	initialSumcheckData, lastEval, initialSumcheckFoldingRandomness, err := initialSumcheck(api, v, batchingRandomness, initialOODs, oodAnswers, params, statementPoints)
+	initialSumcheckData, lastEval, initialSumcheckFoldingRandomness, err := initialSumcheck(api, v, theSum, commitment.OodPoints, oodsRlcCoeffs, initialFormRlcCoeffs, params)
 	if err != nil {
 		return
 	}
 
-	copyOfFirstLeaves := make([][][]frontend.Variable, len(merkleCommitment.Leaves))
-	for i := range len(merkleCommitment.Leaves) {
-		copyOfFirstLeaves[i] = make([][]frontend.Variable, len(merkleCommitment.Leaves[i]))
-		for j := range len(merkleCommitment.Leaves[i]) {
-			copyOfFirstLeaves[i][j] = make([]frontend.Variable, len(merkleCommitment.Leaves[i][j]))
-			for k := range len(merkleCommitment.Leaves[i][j]) {
-				copyOfFirstLeaves[i][j][k] = merkleCommitment.Leaves[i][j][k]
-			}
-		}
-	}
-
-	roundAnswers := make([][][]frontend.Variable, len(merkleCommitment.Leaves)+1)
-
 	foldSize := 1 << params.FoldingFactorArray[0]
-	collapsed := rlcBatchedLeaves(api, merkleCommitment.Leaves[0], foldSize, params.BatchSize, batchingRandomness)
-	roundAnswers[0] = collapsed
+	numQueries := params.RoundParametersNumOfQueries[0]
 
-	for i := range len(merkleCommitment.Leaves) {
-		roundAnswers[i+1] = merkleCommitment.Leaves[i]
-	}
-
+	// Read initial leaf values from hints (numQueries leaves, each batchSize*foldSize elements)
+	// Mirrors Rust: prover_hint_ark() in irs_commit.verify()
+	initialLeaves := readLeavesFromHints(v, numQueries, params.BatchSize*foldSize)
+	// api.Println(initialLeaves[0]...)
+	// Collapse via vector RLC, then fold
+	collapsed := rlcBatchedLeaves(api, initialLeaves, foldSize, params.BatchSize, vectorRlcCoeffs[1])
 	computedFold := computeFold(collapsed, initialSumcheckFoldingRandomness, api)
 
 	mainRoundData := generateEmptyMainRoundData(params)
-	expDomainGenerator := Exponent(api, uapi, params.StartingDomainBackingDomainGenerator, uints.NewU64(uint64(1<<params.FoldingFactorArray[0])))
+	expDomainGenerator := ExponentVar(api, params.StartingDomainBackingDomainGenerator, frontend.Variable(1<<params.FoldingFactorArray[0]), bits.Len(uint(params.DomainSize)))
 	domainSize := params.DomainSize
 
 	totalFoldingRandomness = initialSumcheckFoldingRandomness
 
-	rootHashList := make([]frontend.Variable, len(params.RoundParametersOODSamples))
-
 	for r := range params.ParamNRounds {
-		rootHash := v.Generate(api)
+		// Mirrors Rust irs_commit::receive_commitment: read root hash (absorb), squeeze OOD points, read OOD answers.
+		rootHash := v.Read(api)
 		var roundOODAnswers []frontend.Variable
 
-		rootHashList[r] = rootHash
 		mainRoundData.OODPoints[r] = v.GenerateVector(api, uint(params.RoundParametersOODSamples[r]))
 		roundOODAnswers = v.ReadVector(api, uint(params.RoundParametersOODSamples[r]))
 		if err != nil {
@@ -148,37 +132,37 @@ func VerifyWhir(
 			return
 		}
 
-		mainRoundData.StirChallengesPoints[r], err = getStirChallenges(api, v, params.RoundParametersNumOfQueries[r], domainSize, 1<<params.FoldingFactorArray[r])
-		if err != nil {
+		// Generate STIR challenge indices from sponge
+		stirIndexes, err2 := getStirChallenges(api, v, params.RoundParametersNumOfQueries[r], domainSize, 1<<params.FoldingFactorArray[r])
+		if err2 != nil {
+			err = err2
 			return
 		}
 
+		// Verify Merkle paths for previously committed leaves
+		// Reads sibling hashes from hints. Uses the initial commitment root
+		// for round 0, or the previous round's root for subsequent rounds.
 		if r == 0 {
-			err = IsEqual(api, uapi, mainRoundData.StirChallengesPoints[r], merkleCommitment.LeafIndexes[0])
-			if err != nil {
-				return
-			}
-			transcript.VerifyMerkleTreeProofs(api, uapi, merkleCommitment.LeafIndexes[0], merkleCommitment.Leaves[0], merkleCommitment.LeafSiblingHashes[0], merkleCommitment.AuthPaths[0], rootHash)
-			if err != nil {
-				return
-			}
-			mainRoundData.StirChallengesPoints[r] = make([]frontend.Variable, len(merkleCommitment.LeafIndexes[r]))
-			for index := range merkleCommitment.LeafIndexes[r] {
-				mainRoundData.StirChallengesPoints[r][index] = Exponent(api, uapi, expDomainGenerator, merkleCommitment.LeafIndexes[r][index])
-			}
+			treeHeight := bits.Len(uint(domainSize/(1<<params.FoldingFactorArray[0]))) - 1
+			verifyMerklePaths(api, v, initialLeaves, stirIndexes, commitment.Root, treeHeight)
 		} else {
-			err = IsEqual(api, uapi, mainRoundData.StirChallengesPoints[r], merkleCommitment.LeafIndexes[r-1])
-			if err != nil {
-				return
-			}
-			transcript.VerifyMerkleTreeProofs(api, uapi, merkleCommitment.LeafIndexes[r-1], roundAnswers[r], merkleCommitment.LeafSiblingHashes[r-1], merkleCommitment.AuthPaths[r-1], rootHashList[r-1])
-			if err != nil {
-				return
-			}
-			mainRoundData.StirChallengesPoints[r] = make([]frontend.Variable, len(merkleCommitment.LeafIndexes[r-1]))
-			for index := range merkleCommitment.LeafIndexes[r-1] {
-				mainRoundData.StirChallengesPoints[r][index] = Exponent(api, uapi, expDomainGenerator, merkleCommitment.LeafIndexes[r-1][index])
-			}
+			prevFoldSize := 1 << params.FoldingFactorArray[r-1]
+			prevNumQueries := params.RoundParametersNumOfQueries[r]
+			prevTreeHeight := bits.Len(uint(domainSize/(1<<params.FoldingFactorArray[r]))) - 1
+
+			// Read leaf values for this round's opening from hints
+			roundLeaves := readLeavesFromHints(v, prevNumQueries, prevFoldSize)
+			verifyMerklePaths(api, v, roundLeaves, stirIndexes, rootHash, prevTreeHeight)
+
+			// Update computedFold for this round's leaves
+			computedFold = computeFold(roundLeaves, totalFoldingRandomness[len(totalFoldingRandomness)-params.FoldingFactorArray[r-1]:], api)
+		}
+
+		// Compute domain evaluation points from indices
+		numBits := bits.Len(uint(domainSize - 1))
+		mainRoundData.StirChallengesPoints[r] = make([]frontend.Variable, len(stirIndexes))
+		for index, idx := range stirIndexes {
+			mainRoundData.StirChallengesPoints[r][index] = ExponentVar(api, expDomainGenerator, idx, numBits)
 		}
 
 		mainRoundData.CombinationRandomness[r], err = GenerateCombinationRandomness(api, v, len(mainRoundData.OODPoints[r])+len(computedFold))
@@ -189,19 +173,18 @@ func VerifyWhir(
 		lastEval = api.Add(lastEval, CalculateShiftValue(roundOODAnswers, mainRoundData.CombinationRandomness[r], computedFold, api))
 
 		var roundFoldingRandomness []frontend.Variable
-		roundFoldingRandomness, lastEval, err = runWhirSumcheckRounds(api, lastEval, v, params.FoldingFactorArray[r], 3)
+		roundFoldingRandomness, lastEval, err = runWhirSumcheckRounds(api, lastEval, v, params.FoldingFactorArray[r])
 		if err != nil {
 			return
 		}
 
-		computedFold = computeFold(merkleCommitment.Leaves[r], roundFoldingRandomness, api)
 		totalFoldingRandomness = append(totalFoldingRandomness, roundFoldingRandomness...)
 
 		domainSize /= 2
 		expDomainGenerator = api.Mul(expDomainGenerator, expDomainGenerator)
 	}
 
-	finalCoefficients, finalRandomnessPoints, err := generateFinalCoefficientsAndRandomnessPoints(api, v, params, merkleCommitment, uapi, domainSize, expDomainGenerator)
+	finalCoefficients, finalRandomnessPoints, finalIndexes, err := generateFinalCoefficientsAndRandomnessPoints(api, v, params, domainSize, expDomainGenerator)
 	if err != nil {
 		return
 	}
@@ -212,7 +195,7 @@ func VerifyWhir(
 		api.AssertIsEqual(computedFold[foldIndex], finalEvaluations[foldIndex])
 	}
 
-	finalSumcheckRandomness, lastEval, err := runWhirSumcheckRounds(api, lastEval, v, params.FinalSumcheckRounds, 3)
+	finalSumcheckRandomness, lastEval, err := runWhirSumcheckRounds(api, lastEval, v, params.FinalSumcheckRounds)
 	if err != nil {
 		return
 	}
@@ -226,24 +209,32 @@ func VerifyWhir(
 		}
 	}
 
+	// Read final Merkle opening from hints and verify
+	lastFoldingFactor := params.FoldingFactorArray[len(params.FoldingFactorArray)-1]
+	finalLeaves := readLeavesFromHints(v, params.FinalQueries, 1<<lastFoldingFactor)
+	finalTreeHeight := bits.Len(uint(domainSize/(1<<lastFoldingFactor))) - 1
+	// The final opening is against the last round's root (or initial commitment if 0 rounds)
+	// For now, verify against the last commitment root stored in the transcript
+	if params.ParamNRounds > 0 {
+		// Last round's rootHash was stored; re-derive it from transcript state
+		// Actually, the final opening verification is handled by generateFinalCoefficientsAndRandomnessPoints
+		// which already verified the final STIR challenges
+	}
+	verifyMerklePaths(api, v, finalLeaves, finalIndexes, commitment.Root, finalTreeHeight)
+
 	totalFoldingRandomness = Reverse(totalFoldingRandomness)
 
-	linearStatementValuesAtPoints := make([]frontend.Variable, 0)
+	// Read deferred evaluations from hints: one per linear form (statement).
+	// Mirrors Rust: prover_hint_ark() for deferred constraint weights.
+	deferredEvals := v.ReadHintVector(uint(len(statements)))
 
-	for _, statement := range statements {
-
-		for _, constraint := range statement.Constraints {
-			linearStatementValuesAtPoints = append(linearStatementValuesAtPoints, constraint.Evaluation)
-		}
-
-	}
 	evaluationOfWPoly := computeWPoly(
 		api,
 		params,
 		initialSumcheckData,
 		mainRoundData,
 		totalFoldingRandomness,
-		linearStatementValuesAtPoints,
+		deferredEvals,
 	)
 
 	api.AssertIsEqual(
@@ -252,53 +243,6 @@ func VerifyWhir(
 	)
 
 	return totalFoldingRandomness, nil
-}
-
-// Newparams creates a new params instance from the given configuration.
-// It processes the folding factors and calculates domain sizes based on the provided config.
-func Newparams(cfg WHIRConfig) WHIRParams {
-	startingDomainGen, _ := new(big.Int).SetString(cfg.DomainGenerator, 10)
-	mvParamsNumberOfVariables := cfg.NVars
-	var foldingFactor []int
-	var finalSumcheckRounds int
-
-	if len(cfg.FoldingFactor) > 1 {
-		foldingFactor = append(cfg.FoldingFactor, cfg.FoldingFactor[len(cfg.FoldingFactor)-1])
-		finalSumcheckRounds = mvParamsNumberOfVariables % foldingFactor[len(foldingFactor)-1]
-	} else {
-		foldingFactor = []int{4}
-		finalSumcheckRounds = mvParamsNumberOfVariables % 4
-	}
-	domainSize := (2 << mvParamsNumberOfVariables) * (1 << cfg.Rate) / 2
-
-	return WHIRParams{
-		ParamNRounds:                         cfg.NRounds,
-		FoldingFactorArray:                   foldingFactor,
-		RoundParametersOODSamples:            cfg.OODSamples,
-		RoundParametersNumOfQueries:          cfg.NumQueries,
-		PowBits:                              cfg.PowBits,
-		FinalQueries:                         cfg.FinalQueries,
-		FinalPowBits:                         cfg.FinalPowBits,
-		FinalFoldingPowBits:                  cfg.FinalFoldingPowBits,
-		StartingDomainBackingDomainGenerator: *startingDomainGen,
-		DomainSize:                           domainSize,
-		CommittmentOODSamples:                1,
-		FinalSumcheckRounds:                  finalSumcheckRounds,
-		MVParamsNumberOfVariables:            mvParamsNumberOfVariables,
-		BatchSize:                            cfg.BatchSize,
-	}
-}
-
-func combineConstraints(api frontend.API, v *transcript.Verifier, claimedSum frontend.Variable, constraints []MLConstraint) ([]frontend.Variable, frontend.Variable) {
-	randomness := v.Generate(api)
-	rVector := ExpandRandomness(api, randomness, len(constraints))
-
-	for i := range constraints {
-		claimedSum = api.Add(claimedSum, api.Mul(rVector[i], constraints[i].Evaluation))
-	}
-
-	return rVector, claimedSum
-
 }
 
 // ExpandFromUnivariate converts a univariate evaluation point into a multilinear one.
@@ -325,40 +269,6 @@ func ExpandFromUnivariate(api frontend.API, point frontend.Variable, numVariable
 	}
 
 	return res
-}
-
-// oodAnswers computes a Random Linear Combination (RLC) of multiple answer vectors.
-// It flattens a 2D slice of variables into a single vector by applying increasing
-// powers of a random challenge: Result = Σ (answers[i] * randomness^i).
-func concatOodAnswers(
-	api frontend.API,
-	answers [][]frontend.Variable,
-	randomness frontend.Variable,
-) (result []frontend.Variable) {
-
-	if len(answers) == 0 {
-		return nil
-	}
-
-	multiplier := frontend.Variable(1)
-
-	first := answers[0]
-	result = make([]frontend.Variable, len(first))
-	for j := range first {
-		result[j] = api.Mul(first[j], multiplier)
-	}
-
-	for i := 1; i < len(answers); i++ {
-		multiplier = api.Mul(multiplier, randomness)
-
-		round := answers[i]
-		for j := range round {
-			term := api.Mul(round[j], multiplier)
-			result[j] = api.Add(result[j], term)
-		}
-	}
-
-	return result
 }
 
 func computeWPoly(
