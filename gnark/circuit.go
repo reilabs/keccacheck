@@ -87,13 +87,11 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 		return fmt.Errorf("failed to create uints API: %w", err)
 	}
 
-	whirParams := whir.NewParams(whir.ProtocolConfig{
-		BatchSize:     25,
-		NumVariables:  numVars,
-		FoldingFactor: whir.ConstantFoldingFactor(4),
-		SoundnessType: whir.UniqueDecoding,
-		PowBits:       0,
-	})
+	whirParams := whir.NewParams(whir.NewProtocolConfig(
+		25, numVars,
+		whir.ConstantFromSecondRoundFoldingFactor(1, 4),
+		whir.UniqueDecoding, 0,
+	))
 
 	VerifyKeccakF(api, uapi, circuit.Output[:], gkrProof, r, whirProof, whirHints, whirParams)
 	return nil
