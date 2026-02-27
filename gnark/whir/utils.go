@@ -1,34 +1,24 @@
 package whir
 
 import (
+	"reilabs/keccacheck/transcript"
+
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std/math/uints"
 )
 
-func IsEqual(api frontend.API, uapi *uints.BinaryField[uints.U64], indexes []frontend.Variable, merkleIndexes []uints.U64) error {
-	api.AssertIsEqual(len(indexes), len(merkleIndexes))
-
-	merkleVars := make([]frontend.Variable, len(merkleIndexes))
-	for i, index := range merkleIndexes {
-		merkleVars[i] = uapi.ToValue(index)
+// geometricChallenge mirrors Rust's geometric_challenge.
+// Returns [1] for count <= 1 (no entropy sourced), or [1, x, x^2, ..., x^{count-1}]
+// for count > 1 where x is squeezed from the transcript.
+func geometricChallenge(api frontend.API, v *transcript.Verifier, count int) []frontend.Variable {
+	switch {
+	case count == 0:
+		return nil
+	case count == 1:
+		return []frontend.Variable{frontend.Variable(1)}
+	default:
+		x := v.Generate(api)
+		return ExpandRandomness(api, x, count)
 	}
-
-	for i := range indexes {
-		api.AssertIsEqual(indexes[i], merkleVars[i])
-	}
-
-	return nil
-}
-
-func Exponent(api frontend.API, uapi *uints.BinaryField[uints.U64], X frontend.Variable, Y uints.U64) frontend.Variable {
-	output := frontend.Variable(1)
-	bits := api.ToBinary(uapi.ToValue(Y))
-	multiply := frontend.Variable(X)
-	for i := range bits {
-		output = api.Select(bits[i], api.Mul(output, multiply), output)
-		multiply = api.Mul(multiply, multiply)
-	}
-	return output
 }
 
 // Given some randomeness r, return a vector r^0, r^1,...r^{len-1}
