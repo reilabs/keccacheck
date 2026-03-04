@@ -241,12 +241,10 @@ func verifyMerklePaths(
 	for i := range leaves {
 		leafIndexBits := api.ToBinary(leafIndexes[i], treeHeight)
 
-		// Hash the leaf elements to get the leaf hash
-		claimedLeafHash := transcript.HashNode(api, []frontend.Variable{leaves[i][0], leaves[i][1]})
-		for x := range len(leaves[i]) - 2 {
-			claimedLeafHash = transcript.HashNode(api, []frontend.Variable{claimedLeafHash, leaves[i][x+2]})
-		}
-
+		// Hash all leaf elements at once to get the leaf hash.
+		// Matches Rust matrix_commit::verify which calls hash_rows on the
+		// full row, then passes the result to merkle_tree::verify_naive.
+		claimedLeafHash := transcript.HashNode(api, leaves[i])
 		// Walk up the tree, reading one sibling hash from hints per level
 		currentHash := claimedLeafHash
 		for level := 0; level < treeHeight; level++ {
@@ -259,7 +257,7 @@ func verifyMerklePaths(
 			currentHash = transcript.HashNode(api, []frontend.Variable{left, right})
 		}
 
-		api.Println("equating hashes", currentHash, rootHash)
+		// api.Println("equating hashes", currentHash, rootHash)
 		api.AssertIsEqual(currentHash, rootHash)
 	}
 }
