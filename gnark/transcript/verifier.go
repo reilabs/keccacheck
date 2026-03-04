@@ -98,20 +98,7 @@ func (v *Verifier) RevealByte(api frontend.API, uapi *uints.BinaryField[uints.U6
 // It creates a fresh sponge instance to ensure the operation is stateless
 // and isolated, which is required for Merkle tree logic.
 func HashNode(api frontend.API, children []frontend.Variable) frontend.Variable {
-	hasher := NewSponge()
-	for _, child := range children {
-		hasher.absorb(api, child)
-	}
-
-	// Critical: We must force a permutation to mix the absorbed inputs into the state.
-	// The standard absorb() only permutes if the rate is filled, but for a
-	// hash function, we need a permutation at the end regardless of fill level
-	// to protect the input structure.
-	poseidon2.Permute16(api, &hasher.State)
-
-	// Rest and Output
-	hasher.idx = 0
-	return hasher.Squeeze(api)
+	return poseidon2.Compress(api, children)
 }
 
 // verifyMerkleTreeProofs verifies a batch of Merkle membership proofs within a circuit.
