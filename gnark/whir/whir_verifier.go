@@ -95,27 +95,30 @@ func VerifyWhir(
 	}
 
 	// Perform the initial sumcheck
-	initialSumcheckData, lastEval, initialSumcheckFoldingRandomness, err := initialSumcheck(api, v, theSum, commitment.OodPoints, oodsRlcCoeffs, initialFormRlcCoeffs, params)
+	initialSumcheckData, theSum, initialSumcheckFoldingRandomness, err := initialSumcheck(api, v, theSum, commitment.OodPoints, oodsRlcCoeffs, initialFormRlcCoeffs, params)
 	if err != nil {
 		return
 	}
 
 	foldSize := 1 << params.FoldingFactorArray[0]
 	numQueries := params.RoundParametersNumOfQueries[0]
-
+	fmt.Println("number of queries", numQueries)
 	// Read initial leaf values from hints (numQueries leaves, each batchSize*foldSize elements)
 	// Mirrors Rust: prover_hint_ark() in irs_commit.verify()
 	initialLeaves := readLeavesFromHints(hr, numQueries, params.BatchSize*foldSize)
-	// api.Println(initialLeaves[0]...)
-	// Collapse via vector RLC, then fold
-	collapsed := rlcBatchedLeaves(api, initialLeaves, foldSize, params.BatchSize, vectorRlcCoeffs[1])
-	computedFold := computeFold(collapsed, initialSumcheckFoldingRandomness, api)
-
+	api.Println(len(initialLeaves))
+	// api.Println(initialLeaves)
+	api.Println(initialLeaves[308]...)
 	mainRoundData := generateEmptyMainRoundData(params)
 	expDomainGenerator := ExponentVar(api, params.StartingDomainBackingDomainGenerator, frontend.Variable(1<<params.FoldingFactorArray[0]), bits.Len(uint(params.DomainSize)))
 	domainSize := params.DomainSize
 
 	totalFoldingRandomness = initialSumcheckFoldingRandomness
+
+	// Track the previous round's root for Merkle verification.
+	// Each round receives a new commitment
+	// first, then opens/verifies the previous round's commitment against its root.
+	var prevRootHash frontend.Variable
 
 	for r := range params.ParamNRounds {
 		// Mirrors Rust irs_commit::receive_commitment: read root hash (absorb), squeeze OOD points, read OOD answers.
@@ -132,31 +135,39 @@ func VerifyWhir(
 			return
 		}
 
-		// Generate STIR challenge indices from sponge
+		// Generate STIR challenge indices from sponge.
+		// The coset size uses FoldingFactorArray[r] which matches the interleaving
+		// depth of the commitment being opened (initial at r=0, round_configs[r-1] at r>0).
 		stirIndexes, err2 := getStirChallenges(api, v, params.RoundParametersNumOfQueries[r], domainSize, 1<<params.FoldingFactorArray[r])
 		if err2 != nil {
 			err = err2
 			return
 		}
+		api.Println("number of stir indices")
+		api.Println(len(stirIndexes))
+		api.Println(append([]frontend.Variable{"stir challenge indices:"}, stirIndexes...)...)
 
-		// Verify Merkle paths for previously committed leaves
-		// Reads sibling hashes from hints. Uses the initial commitment root
-		// for round 0, or the previous round's root for subsequent rounds.
+		// Verify Merkle paths for previously committed leaves.
+		// After receiving the current round's commitment, open the
+		// PREVIOUS commitment. Round 0 opens the initial commitment; round r>0
+		// opens round (r-1)'s commitment against its root hash.
+		var inDomainLeaves [][]frontend.Variable
 		if r == 0 {
+			inDomainLeaves = initialLeaves
+			api.Println(append([]frontend.Variable{"verifying agaionst root:"}, commitment.Root)...)
 			treeHeight := bits.Len(uint(domainSize/(1<<params.FoldingFactorArray[0]))) - 1
 			verifyMerklePaths(api, hr, initialLeaves, stirIndexes, commitment.Root, treeHeight)
 		} else {
-			prevFoldSize := 1 << params.FoldingFactorArray[r-1]
+			prevFoldSize := 1 << params.FoldingFactorArray[r]
 			prevNumQueries := params.RoundParametersNumOfQueries[r]
 			prevTreeHeight := bits.Len(uint(domainSize/(1<<params.FoldingFactorArray[r]))) - 1
 
-			// Read leaf values for this round's opening from hints
 			roundLeaves := readLeavesFromHints(hr, prevNumQueries, prevFoldSize)
-			verifyMerklePaths(api, hr, roundLeaves, stirIndexes, rootHash, prevTreeHeight)
-
-			// Update computedFold for this round's leaves
-			computedFold = computeFold(roundLeaves, totalFoldingRandomness[len(totalFoldingRandomness)-params.FoldingFactorArray[r-1]:], api)
+			verifyMerklePaths(api, hr, roundLeaves, stirIndexes, prevRootHash, prevTreeHeight)
+			inDomainLeaves = roundLeaves
 		}
+
+		prevRootHash = rootHash
 
 		// Compute domain evaluation points from indices
 		numBits := bits.Len(uint(domainSize - 1))
@@ -165,41 +176,146 @@ func VerifyWhir(
 			mainRoundData.StirChallengesPoints[r][index] = ExponentVar(api, expDomainGenerator, idx, numBits)
 		}
 
-		mainRoundData.CombinationRandomness[r], err = GenerateCombinationRandomness(api, v, len(mainRoundData.OODPoints[r])+len(computedFold))
-		if err != nil {
-			return
+		// Constraint weights: OOD evaluators chained with in-domain (STIR) evaluators.
+		// Mirrors Rust: commitment.out_of_domain().evaluators(..).chain(in_domain.evaluators(..))
+		constraintWeights := make([]frontend.Variable, 0, len(mainRoundData.OODPoints[r])+len(mainRoundData.StirChallengesPoints[r]))
+		constraintWeights = append(constraintWeights, mainRoundData.OODPoints[r]...)
+		constraintWeights = append(constraintWeights, mainRoundData.StirChallengesPoints[r]...)
+
+		// Compute eq_weights from last folding randomness.
+		// Mirrors Rust: round_folding_randomness.last().unwrap().eq_weights()
+		lastFoldLen := params.FoldingFactorArray[r]
+		lastFoldRandomness := totalFoldingRandomness[len(totalFoldingRandomness)-lastFoldLen:]
+		eqWeights := computeEqWeights(api, lastFoldRandomness)
+
+		// Tensor product: polyRlc ⊗ eqWeights.
+		// Round 0: polyRlc = vectorRlcCoeffs (batching weights); round > 0: polyRlc = [1].
+		// Mirrors Rust: tensor_product(&poly_rlc, &eq_weights)
+		var polyRlc []frontend.Variable
+		if r == 0 {
+			polyRlc = vectorRlcCoeffs
+		} else {
+			polyRlc = []frontend.Variable{frontend.Variable(1)}
 		}
+		tp := tensorProductVec(api, polyRlc, eqWeights)
 
-		lastEval = api.Add(lastEval, CalculateShiftValue(roundOODAnswers, mainRoundData.CombinationRandomness[r], computedFold, api))
+		// Constraint values: OOD values chained with in-domain values.
+		// OOD: commitment.out_of_domain().values(&[F::ONE]) = roundOODAnswers (single vector).
+		// In-domain: in_domain.values(&tp) = dot(tp, leafRow) per query.
+		inDomainValues := make([]frontend.Variable, len(inDomainLeaves))
+		for q := range inDomainLeaves {
+			inDomainValues[q] = DotProduct(api, tp, inDomainLeaves[q])
+		}
+		constraintValues := make([]frontend.Variable, 0, len(roundOODAnswers)+len(inDomainValues))
+		constraintValues = append(constraintValues, roundOODAnswers...)
+		constraintValues = append(constraintValues, inDomainValues...)
 
+		// api.Println("constraint values: ", constraintValues)
+		// Random linear combination coefficients for constraints.
+		// Mirrors Rust: geometric_challenge(verifier_state, constraint_values.len())
+		constraintRlcCoeffs := geometricChallenge(api, v, len(constraintValues))
+		// api.Println("constraint rlc coeffs", constraintRlcCoeffs)
+		mainRoundData.CombinationRandomness[r] = constraintRlcCoeffs
+
+		// constraint_dot = dot(constraintRlcCoeffs, constraintValues)
+		constraintDot := DotProduct(api, constraintRlcCoeffs, constraintValues)
+		api.Println("constraint dot product:", constraintDot)
+		theSum = api.Add(theSum, constraintDot)
+
+		api.Println("the sum at end of round", theSum)
+		_ = constraintWeights // stored in mainRoundData for final weight evaluation
+
+		// Sumcheck round: round_configs[r].sumcheck has num_rounds = ff[r+1]
 		var roundFoldingRandomness []frontend.Variable
-		roundFoldingRandomness, lastEval, err = runWhirSumcheckRounds(api, lastEval, v, params.FoldingFactorArray[r])
+		roundFoldingRandomness, theSum, err = runWhirSumcheckRounds(api, theSum, v, params.FoldingFactorArray[r+1])
 		if err != nil {
 			return
 		}
+		api.Println("sum after sum checking:", theSum)
+		api.Println("round sumcheck randomness ", roundFoldingRandomness)
 
 		totalFoldingRandomness = append(totalFoldingRandomness, roundFoldingRandomness...)
 
+		// Mirrors Rust: domain_size /= 2 per round.
+		// Generator ratio between rounds is 2^{1 + ff[r+1] - ff[r]}.
 		domainSize /= 2
-		expDomainGenerator = api.Mul(expDomainGenerator, expDomainGenerator)
+		numSquarings := 1 + params.FoldingFactorArray[r+1] - params.FoldingFactorArray[r]
+		for k := 0; k < numSquarings; k++ {
+			expDomainGenerator = api.Mul(expDomainGenerator, expDomainGenerator)
+		}
 	}
 
-	finalCoefficients, finalRandomnessPoints, finalIndexes, err := generateFinalCoefficientsAndRandomnessPoints(api, v, params, domainSize, expDomainGenerator)
+	// Read the final polynomial coefficients from the transcript.
+	// Mirrors Rust: let final_vector = verifier_state.prover_messages_vec(self.final_sumcheck.initial_size)?;
+	finalVector := v.ReadVector(api, uint(1<<params.FinalSumcheckRounds))
+	api.Println("final Vector", finalVector)
+
+	// Final proof-of-work BEFORE opening the previous commitment.
+	// Mirrors Rust: self.final_pow.verify(verifier_state)?;
+	if err = RunPoW(api, v, uapi, params.FinalPowBits); err != nil {
+		return
+	}
+
+	// Generate final STIR challenge indices and compute domain evaluation points.
+	lastFoldingFactor := params.FoldingFactorArray[len(params.FoldingFactorArray)-1]
+	api.Println("Last Folding Factor:", lastFoldingFactor)
+	finalIndexes, err := getStirChallenges(api, v, params.FinalQueries, domainSize, 1<<lastFoldingFactor)
+	api.Println("final indices: ", finalIndexes)
 	if err != nil {
 		return
 	}
 
-	finalEvaluations := UnivarPoly(api, finalCoefficients, finalRandomnessPoints)
-
-	for foldIndex := range computedFold {
-		api.AssertIsEqual(computedFold[foldIndex], finalEvaluations[foldIndex])
+	numBits := bits.Len(uint(domainSize - 1))
+	finalRandomnessPoints := make([]frontend.Variable, len(finalIndexes))
+	for i, idx := range finalIndexes {
+		finalRandomnessPoints[i] = ExponentVar(api, expDomainGenerator, idx, numBits)
 	}
 
-	finalSumcheckRandomness, lastEval, err := runWhirSumcheckRounds(api, lastEval, v, params.FinalSumcheckRounds)
+	// Open previous commitment at final STIR challenge points.
+	// Mirrors Rust lines 228-244: open prev_commitment via irs_commit.verify().
+	finalRoot := prevRootHash
+	var inDomainValues []frontend.Variable
+	if params.ParamNRounds > 0 {
+		finalLeaves := readLeavesFromHints(hr, params.FinalQueries, 1<<lastFoldingFactor)
+		finalTreeHeight := bits.Len(uint(domainSize/(1<<lastFoldingFactor))) - 1
+		verifyMerklePaths(api, hr, finalLeaves, finalIndexes, finalRoot, finalTreeHeight)
+
+		// Mirrors Rust: in_domain.values(&tensor_product(&[1], &eq_weights))
+		lastFoldRandomness := totalFoldingRandomness[len(totalFoldingRandomness)-lastFoldingFactor:]
+		eqWeights := computeEqWeights(api, lastFoldRandomness)
+		inDomainValues = make([]frontend.Variable, len(finalLeaves))
+		for q := range finalLeaves {
+			inDomainValues[q] = DotProduct(api, eqWeights, finalLeaves[q])
+		}
+	} else {
+		finalLeaves := readLeavesFromHints(hr, params.FinalQueries, params.BatchSize*(1<<lastFoldingFactor))
+		finalTreeHeight := bits.Len(uint(domainSize/(1<<lastFoldingFactor))) - 1
+		verifyMerklePaths(api, hr, finalLeaves, finalIndexes, finalRoot, finalTreeHeight)
+
+		// Mirrors Rust: in_domain.values(&tensor_product(&batching_weights, &eq_weights))
+		eqWeights := computeEqWeights(api, initialSumcheckFoldingRandomness)
+		tp := tensorProductVec(api, vectorRlcCoeffs, eqWeights)
+		inDomainValues = make([]frontend.Variable, len(finalLeaves))
+		for q := range finalLeaves {
+			inDomainValues[q] = DotProduct(api, tp, finalLeaves[q])
+		}
+	}
+
+	// Verify in-domain constraints directly.
+	// Mirrors Rust lines 247-255: verify!(weights.evaluate(&Identity, &final_vector) == evals)
+	finalEvaluations := UnivarPoly(api, finalVector, finalRandomnessPoints)
+	for q := range inDomainValues {
+		api.AssertIsEqual(finalEvaluations[q], inDomainValues[q])
+	}
+
+	// Final sumcheck.
+	// Mirrors Rust line 258: self.final_sumcheck.verify(verifier_state, &mut the_sum)
+	finalSumcheckRandomness, theSum, err := runWhirSumcheckRounds(api, theSum, v, params.FinalSumcheckRounds)
+	api.Println("Final sumcheck randomness:", finalSumcheckRandomness)
+	api.Println("Final sum:", theSum)
 	if err != nil {
 		return
 	}
-
 	totalFoldingRandomness = append(totalFoldingRandomness, finalSumcheckRandomness...)
 
 	if params.FinalFoldingPowBits > 0 {
@@ -209,38 +325,56 @@ func VerifyWhir(
 		}
 	}
 
-	// Read final Merkle opening from hints and verify
-	lastFoldingFactor := params.FoldingFactorArray[len(params.FoldingFactorArray)-1]
-	finalLeaves := readLeavesFromHints(hr, params.FinalQueries, 1<<lastFoldingFactor)
-	finalTreeHeight := bits.Len(uint(domainSize/(1<<lastFoldingFactor))) - 1
-	// The final opening is against the last round's root (or initial commitment if 0 rounds)
-	// For now, verify against the last commitment root stored in the transcript
-	if params.ParamNRounds > 0 {
-		// Last round's rootHash was stored; re-derive it from transcript state
-		// Actually, the final opening verification is handled by generateFinalCoefficientsAndRandomnessPoints
-		// which already verified the final STIR challenges
+	// Compute folding randomness across all rounds.
+	// Mirrors Rust lines 262-267: flat concatenation of all round folding randomness.
+	// totalFoldingRandomness = [initial | round_0 | ... | round_{N-1} | final]
+	foldLen := len(totalFoldingRandomness)
+
+	// Evaluate all round constraints weights.
+	// Mirrors Rust lines 270-280.
+	weightEval := frontend.Variable(0)
+
+	// Round 0 (initial OOD constraints): num_variables = initial_num_variables.
+	numVars := params.MVParamsNumberOfVariables
+	start := foldLen - numVars
+	for j := range initialSumcheckData.InitialOODQueries {
+		weightEval = api.Add(weightEval, api.Mul(
+			initialSumcheckData.InitialCombinationRandomness[j],
+			UnivarMleEvaluate(api, initialSumcheckData.InitialOODQueries[j], totalFoldingRandomness[start:]),
+		))
 	}
-	verifyMerklePaths(api, hr, finalLeaves, finalIndexes, commitment.Root, finalTreeHeight)
+	api.Println("Weight eval:", weightEval)
 
-	totalFoldingRandomness = Reverse(totalFoldingRandomness)
+	// Rounds 1..N (main round constraints).
+	// Rust: num_variables = round_configs[round-1].initial_num_variables().
+	for r := range mainRoundData.OODPoints {
+		numVars -= params.FoldingFactorArray[r]
+		start = foldLen - numVars
+		constraintWeights := append(mainRoundData.OODPoints[r], mainRoundData.StirChallengesPoints[r]...)
+		for i := range constraintWeights {
+			weightEval = api.Add(weightEval, api.Mul(
+				mainRoundData.CombinationRandomness[r][i],
+				UnivarMleEvaluate(api, constraintWeights[i], totalFoldingRandomness[start:]),
+			))
+		}
+	}
+	api.Println("Weight eval:", weightEval)
 
-	// Read deferred evaluations from hints: one per linear form (statement).
-	// Mirrors Rust: prover_hint_ark() for deferred constraint weights.
+	// Compute evaluation of non-deferred initial weights in folding randomness point.
+	// Mirrors Rust lines 283-296: read deferred hints for linear forms.
 	deferredEvals := hr.ReadVec(len(statements))
+	for j, eval := range deferredEvals {
+		weightEval = api.Add(weightEval, api.Mul(initialFormRlcCoeffs[j], eval))
+	}
 
-	evaluationOfWPoly := computeWPoly(
-		api,
-		params,
-		initialSumcheckData,
-		mainRoundData,
-		totalFoldingRandomness,
-		deferredEvals,
-	)
+	api.Println("Weight eval after adding deferred evals:", weightEval)
 
-	api.AssertIsEqual(
-		lastEval,
-		api.Mul(evaluationOfWPoly, MultivarPoly(finalCoefficients, finalSumcheckRandomness, api)),
-	)
+	// Check the final sumcheck equation.
+	// Mirrors Rust lines 299-301: poly_eval * weight_eval == the_sum.
+	polyEval := DotProduct(api, computeEqWeights(api, finalSumcheckRandomness), finalVector)
+	api.Println("Polynomial evaluation", polyEval)
+	api.Println("Sum at end of WHIR", theSum)
+	api.AssertIsEqual(theSum, api.Mul(polyEval, weightEval))
 
 	return totalFoldingRandomness, nil
 }
@@ -271,43 +405,12 @@ func ExpandFromUnivariate(api frontend.API, point frontend.Variable, numVariable
 	return res
 }
 
-func computeWPoly(
-	api frontend.API,
-	circuit WHIRParams,
-	initialData InitialSumcheckData,
-	mainRoundData MainRoundData,
-	totalFoldingRandomness []frontend.Variable,
-	linearStatementValuesAtPoints []frontend.Variable,
-) frontend.Variable {
-	numberVars := circuit.MVParamsNumberOfVariables
-
-	value := frontend.Variable(0)
-	for j := range initialData.InitialOODQueries {
-		value = api.Add(value, api.Mul(initialData.InitialCombinationRandomness[j], EqPolyOutside(api, ExpandFromUnivariate(api, initialData.InitialOODQueries[j], numberVars), totalFoldingRandomness)))
-	}
-
-	for j, linearStatementValueAtPoint := range linearStatementValuesAtPoints {
-		value = api.Add(value, api.Mul(initialData.InitialCombinationRandomness[len(initialData.InitialOODQueries)+j], linearStatementValueAtPoint))
-	}
-	for r := range mainRoundData.OODPoints {
-		numberVars -= circuit.FoldingFactorArray[r]
-		newTmpArr := append(mainRoundData.OODPoints[r], mainRoundData.StirChallengesPoints[r]...)
-
-		sumOfClaims := frontend.Variable(0)
-		for i := range newTmpArr {
-			point := ExpandFromUnivariate(api, newTmpArr[i], numberVars)
-			sumOfClaims = api.Add(sumOfClaims, api.Mul(EqPolyOutside(api, point, totalFoldingRandomness[0:numberVars]), mainRoundData.CombinationRandomness[r][i]))
-		}
-		value = api.Add(value, sumOfClaims)
-	}
-
-	return value
-}
-
 // RunPoW executes a proof-of-work challenge if the difficulty is greater than zero.
 // This is used as part of the Fiat-Shamir transformation to prevent malicious prover behavior.
 func RunPoW(api frontend.API, v *transcript.Verifier, uapi *uints.BinaryField[uints.U64], difficulty int) error {
+
 	if difficulty > 0 {
+		api.Println("executing POW verification!")
 		_, _, err := PoW(api, v, uapi, difficulty)
 		if err != nil {
 			return err

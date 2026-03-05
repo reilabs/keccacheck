@@ -117,3 +117,56 @@ func Reverse[T any](s []T) []T {
 func CalculateShiftValue(oodAnswers []frontend.Variable, combinationRandomness []frontend.Variable, computedFold []frontend.Variable, api frontend.API) frontend.Variable {
 	return DotProduct(api, append(oodAnswers, computedFold...), combinationRandomness)
 }
+
+// computeEqWeights computes eq(point, p) for all binary points p on the hypercube.
+// Mirrors Rust MultilinearPoint::eq_weights / eq_poly.
+// For point = [r_0, ..., r_{n-1}], returns 2^n values where
+// result[p] = ∏_i (bit_i(p) ? r_{n-1-i} : (1 - r_{n-1-i}))
+// matching Rust's reverse-iteration convention in eq_poly.
+func computeEqWeights(api frontend.API, point []frontend.Variable) []frontend.Variable {
+	n := len(point)
+	size := 1 << n
+	result := make([]frontend.Variable, size)
+	result[0] = frontend.Variable(1)
+	cur := 1
+	for i := 0; i < n; i++ {
+		for j := cur - 1; j >= 0; j-- {
+			result[2*j+1] = api.Mul(result[j], point[i])
+			result[2*j] = api.Mul(result[j], api.Sub(frontend.Variable(1), point[i]))
+		}
+		cur *= 2
+	}
+	return result
+}
+
+// tensorProductVec computes the Kronecker product of two vectors.
+// Mirrors Rust algebra::tensor_product: result[i*len(b)+j] = a[i] * b[j].
+func tensorProductVec(api frontend.API, a, b []frontend.Variable) []frontend.Variable {
+	result := make([]frontend.Variable, len(a)*len(b))
+	for i, x := range a {
+		for j, y := range b {
+			result[i*len(b)+j] = api.Mul(x, y)
+		}
+	}
+	return result
+}
+
+// UnivarMleEvaluate computes the multilinear extension of the univariate
+// evaluation linear form (1, x, x^2, ..., x^{2^n - 1}) at a given point.
+// Mirrors Rust UnivariateEvaluation::mle_evaluate:
+//
+//	Π_i ((1 - r_i) + r_i · x^{2^{n-1-i}})
+//
+// This is NOT the same as EqPolyOutside(ExpandFromUnivariate(x, n), r)
+// which computes the eq polynomial between expanded coordinates and r.
+func UnivarMleEvaluate(api frontend.API, univarPoint frontend.Variable, point []frontend.Variable) frontend.Variable {
+	n := len(point)
+	result := frontend.Variable(1)
+	x2i := univarPoint
+	for i := n - 1; i >= 0; i-- {
+		factor := api.Add(api.Sub(frontend.Variable(1), point[i]), api.Mul(point[i], x2i))
+		result = api.Mul(result, factor)
+		x2i = api.Mul(x2i, x2i)
+	}
+	return result
+}
