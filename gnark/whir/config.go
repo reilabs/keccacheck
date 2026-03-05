@@ -1,6 +1,7 @@
 package whir
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
@@ -132,7 +133,8 @@ func NewParams(cfg ProtocolConfig) WHIRParams {
 	finalFoldingPowBitsF := math.Max(0, float64(secLevel)-float64(fieldSizeBits-1))
 
 	// Compute the domain generator for the starting domain of size 2^(numVariables + startingLogInvRate).
-	startingDomainSize := 1 << (numVariables + logInvRate)
+	startingDomainSize := 1 << (numVariables + int(cfg.StartingLogInvRate))
+	fmt.Println(startingDomainSize)
 	domainGen := computeDomainGenerator(uint64(startingDomainSize))
 
 	return WHIRParams{
@@ -146,7 +148,7 @@ func NewParams(cfg ProtocolConfig) WHIRParams {
 		FinalPowBits:                         int(math.Ceil(finalPowBitsF)),
 		FinalFoldingPowBits:                  int(math.Ceil(finalFoldingPowBitsF)),
 		StartingDomainBackingDomainGenerator: domainGen,
-		DomainSize:                           1 << (numVariables + logInvRate),
+		DomainSize:                           1 << (numVariables + int(cfg.StartingLogInvRate)),
 		CommittmentOODSamples:                commitmentOODSamples,
 		FinalSumcheckRounds:                  finalSumcheckRounds,
 		MVParamsNumberOfVariables:            numVariables,
