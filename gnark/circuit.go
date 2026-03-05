@@ -8,7 +8,6 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/profile"
-	"github.com/consensys/gnark/std/math/uints"
 )
 
 type KeccakfCircuit struct {
@@ -75,18 +74,13 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 		return fmt.Errorf("failed to generate WHIR proof hint: %w", err)
 	}
 
-	uapi, err := uints.New[uints.U64](api)
-	if err != nil {
-		return fmt.Errorf("failed to create uints API: %w", err)
-	}
-
 	whirParams := whir.NewParams(whir.NewProtocolConfig(
 		25, numVars,
-		whir.ConstantFromSecondRoundFoldingFactor(1, 4),
-		whir.UniqueDecoding, 0,
+		whir.ConstantFromSecondRoundFoldingFactor(2, 4),
+		whir.UniqueDecoding, 20,
 	))
 
-	VerifyKeccakF(api, uapi, circuit.Output[:], gkrProof, r, whirProof, hintInputs, whirParams)
+	VerifyKeccakF(api, circuit.Output[:], gkrProof, r, whirProof, hintInputs, whirParams)
 	return nil
 }
 

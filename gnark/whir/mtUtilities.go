@@ -7,7 +7,6 @@ import (
 	"reilabs/keccacheck/transcript"
 
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std/math/uints"
 )
 
 // initialSumcheck mirrors the Rust WHIR verifier's initial sumcheck phase.
@@ -275,12 +274,12 @@ func ExponentVar(api frontend.API, base frontend.Variable, exp frontend.Variable
 	return output
 }
 
-func PoW(api frontend.API, v *transcript.Verifier, uapi *uints.BinaryField[uints.U64], difficulty int) (frontend.Variable, []uints.U8, error) {
+func PoW(api frontend.API, v *transcript.Verifier, difficulty int) (frontend.Variable, frontend.Variable, error) {
 	challenge := v.Generate(api)
-	nonce := v.ReadBytes(api, uapi, 8)
-
-	nonceFieldElement := BigEndianFromUints(api, nonce)
-	err := CheckPoW(api, challenge, nonceFieldElement, difficulty)
+	api.Println("PoW challenge: ", challenge)
+	nonce := v.Read(api)
+	api.Println("nonce from transcript", nonce)
+	err := CheckPoW(api, challenge, nonce, difficulty)
 	if err != nil {
 		return nil, nil, err
 	}

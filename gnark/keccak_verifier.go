@@ -9,12 +9,10 @@ import (
 	"reilabs/keccacheck/whir"
 
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std/math/uints"
 )
 
 func VerifyKeccakF(
 	api frontend.API,
-	uapi *uints.BinaryField[uints.U64],
 	output, proof, alpha []frontend.Variable,
 	whirProof []frontend.Variable,
 	hintInputs []frontend.Variable,
@@ -192,7 +190,7 @@ func VerifyKeccakF(
 		}
 	}
 	hr := whir.NewHintReader(api, hintInputs, ReadVecHint, ReadHashHint)
-	whir.VerifyWhir(api, uapi, whirProof, hr, statements, whirParams)
+	whir.VerifyWhir(api, whirProof, hr, statements, whirParams)
 }
 
 func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, alpha *[]frontend.Variable, beta *[]frontend.Variable, sum frontend.Variable, rc uint64) ([]frontend.Variable, []frontend.Variable) {

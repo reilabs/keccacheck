@@ -6,12 +6,10 @@ import (
 	"reilabs/keccacheck/transcript"
 
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std/math/uints"
 )
 
 func VerifyWhir(
 	api frontend.API,
-	uapi *uints.BinaryField[uints.U64],
 	proof []frontend.Variable,
 	hr *HintReader,
 	statements []Statement,
@@ -24,7 +22,6 @@ func VerifyWhir(
 	// protocol_id, session_id, and empty instance before any proof data.
 	domainSep := ComputeDomainSeparator(params.Config)
 
-	fmt.Println("Sponge absorbing domain seperators:", domainSep[:])
 	for _, ds := range domainSep {
 		v.Absorb(api, ds)
 	}
@@ -108,7 +105,6 @@ func VerifyWhir(
 	initialLeaves := readLeavesFromHints(hr, numQueries, params.BatchSize*foldSize)
 	api.Println(len(initialLeaves))
 	// api.Println(initialLeaves)
-	api.Println(initialLeaves[308]...)
 	mainRoundData := generateEmptyMainRoundData(params)
 	expDomainGenerator := ExponentVar(api, params.StartingDomainBackingDomainGenerator, frontend.Variable(1<<params.FoldingFactorArray[0]), bits.Len(uint(params.DomainSize)))
 	domainSize := params.DomainSize
@@ -131,7 +127,7 @@ func VerifyWhir(
 			return
 		}
 
-		if err = RunPoW(api, v, uapi, params.PowBits[r]); err != nil {
+		if err = RunPoW(api, v, params.PowBits[r]); err != nil {
 			return
 		}
 
@@ -252,7 +248,7 @@ func VerifyWhir(
 
 	// Final proof-of-work BEFORE opening the previous commitment.
 	// Mirrors Rust: self.final_pow.verify(verifier_state)?;
-	if err = RunPoW(api, v, uapi, params.FinalPowBits); err != nil {
+	if err = RunPoW(api, v, params.FinalPowBits); err != nil {
 		return
 	}
 
@@ -319,7 +315,7 @@ func VerifyWhir(
 	totalFoldingRandomness = append(totalFoldingRandomness, finalSumcheckRandomness...)
 
 	if params.FinalFoldingPowBits > 0 {
-		_, _, err = PoW(api, v, uapi, params.FinalFoldingPowBits)
+		_, _, err = PoW(api, v, params.FinalFoldingPowBits)
 		if err != nil {
 			return
 		}
@@ -407,11 +403,11 @@ func ExpandFromUnivariate(api frontend.API, point frontend.Variable, numVariable
 
 // RunPoW executes a proof-of-work challenge if the difficulty is greater than zero.
 // This is used as part of the Fiat-Shamir transformation to prevent malicious prover behavior.
-func RunPoW(api frontend.API, v *transcript.Verifier, uapi *uints.BinaryField[uints.U64], difficulty int) error {
+func RunPoW(api frontend.API, v *transcript.Verifier, difficulty int) error {
 
 	if difficulty > 0 {
 		api.Println("executing POW verification!")
-		_, _, err := PoW(api, v, uapi, difficulty)
+		_, _, err := PoW(api, v, difficulty)
 		if err != nil {
 			return err
 		}
