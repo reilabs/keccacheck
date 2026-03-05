@@ -25,8 +25,8 @@ func NewKeccakfCircuit() *KeccakfCircuit {
 
 // Maximum output sizes for each proof component hint.
 const (
-	MaxGKRProofLen  = 7000             // max GKR proof field elements - TODO: work out how much this is exactly
-	MaxWhirProofFrs = 10 * (6 + Log_N) // max WHIR proof packed Fr elements
+	MaxGKRProofLen  = 3035 + 559*NUM_VARS
+	MaxWhirProofFrs = 10 * (6 + Log_N) // max WHIR proof packed Field elements
 )
 
 // Main Verifier circuit definition
