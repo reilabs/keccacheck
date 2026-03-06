@@ -11,6 +11,7 @@ import (
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 )
 
+const NUM_VARS = Log_N + 6
 const N = 1 << Log_N
 const Log_N = 0
 
