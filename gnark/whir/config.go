@@ -1,7 +1,6 @@
 package whir
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
@@ -134,7 +133,6 @@ func NewParams(cfg ProtocolConfig) WHIRParams {
 
 	// Compute the domain generator for the starting domain of size 2^(numVariables + startingLogInvRate).
 	startingDomainSize := 1 << (numVariables + int(cfg.StartingLogInvRate))
-	fmt.Println(startingDomainSize)
 	domainGen := computeDomainGenerator(uint64(startingDomainSize))
 
 	return WHIRParams{

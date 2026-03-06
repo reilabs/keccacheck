@@ -1,7 +1,6 @@
 package whir
 
 import (
-	"fmt"
 	"math/big"
 	"math/bits"
 	"reilabs/keccacheck/transcript"
@@ -48,7 +47,6 @@ func initialSumcheck(
 func receiveCommitment(v *transcript.Verifier, api frontend.API, outDomainSamples int, numVectors int) ParsedCommitment {
 	// 1. Read the Merkle Root hash committed by the prover.
 	rootHash := v.Read(api)
-	fmt.Println("number ood samples", outDomainSamples)
 	// 2. Generate Out-Of-Domain (OOD) query points (challenges) from the transcript.
 	oodPoints := v.GenerateVector(api, uint(outDomainSamples))
 
@@ -256,7 +254,6 @@ func verifyMerklePaths(
 			currentHash = transcript.HashNode(api, []frontend.Variable{left, right})
 		}
 
-		// api.Println("equating hashes", currentHash, rootHash)
 		api.AssertIsEqual(currentHash, rootHash)
 	}
 }
@@ -276,9 +273,7 @@ func ExponentVar(api frontend.API, base frontend.Variable, exp frontend.Variable
 
 func PoW(api frontend.API, v *transcript.Verifier, difficulty int) (frontend.Variable, frontend.Variable, error) {
 	challenge := v.Generate(api)
-	api.Println("PoW challenge: ", challenge)
 	nonce := v.Read(api)
-	api.Println("nonce from transcript", nonce)
 	err := CheckPoW(api, challenge, nonce, difficulty)
 	if err != nil {
 		return nil, nil, err
