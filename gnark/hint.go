@@ -52,12 +52,12 @@ func KeccacheckProve(inputs []*big.Int) unsafe.Pointer {
 type parsedProof struct {
 	gkrElements []*big.Int
 	whirNargFrs []*big.Int
-	whirHints   []byte
+	// hintBlocks[i] holds the pre-parsed field elements for hint call i.
+	hintBlocks [][]*big.Int
 }
 
 // proveCache caches the parsed FFI result so that the three extraction hints
-// (GKR, WHIR proof, WHIR hints) share a single FFI call. The gnark solver
-// evaluates hints in a single goroutine, so a simple global is safe.
+// (GKR, WHIR proof, WHIR hints) share a single FFI call.
 var proveCache *parsedProof
 
 // getOrComputeProof calls the Rust FFI if needed and caches the parsed result.
@@ -83,10 +83,25 @@ func getOrComputeProof(inputs []*big.Int) *parsedProof {
 	hints := make([]byte, hintsByteLen)
 	copy(hints, whirBytes[hintsStart+8:hintsStart+8+hintsByteLen])
 
+	// Pre-parse hint stream into indexed blocks using hintBlockTypes.
+	blocks := make([][]*big.Int, len(hintBlockTypes))
+	off := 0
+	for i, bt := range hintBlockTypes {
+		if bt == 0 {
+			count := int(binary.LittleEndian.Uint64(hints[off : off+8]))
+			off += 8
+			blocks[i] = getBigInt4FromBytes(hints[off : off+count*32])
+			off += count * 32
+		} else {
+			blocks[i] = getBigInt4FromBytes(hints[off : off+32])
+			off += 32
+		}
+	}
+
 	proveCache = &parsedProof{
 		gkrElements: gkrElements[1:result.ProofLen],
 		whirNargFrs: nargFrs,
-		whirHints:   hints,
+		hintBlocks:  blocks,
 	}
 	return proveCache
 }
@@ -116,35 +131,31 @@ func WhirProofHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 	return nil
 }
 
-// ReadVecHint reads a prover_hint_ark(Vec<F>) block from the hint byte stream.
-// Format: 8-byte LE u64 byte-length prefix, then byteLen bytes of 32-byte field elements.
-// Returns the parsed field elements via getBigInt4FromBytes.
+// hintBlockTypes holds the pre-computed block type sequence (0=Vec, 1=Hash)
+// derived from WHIRParams. Must be set before solving via SetHintBlockTypes.
+var hintBlockTypes []int
+
+// SetHintBlockTypes computes and stores the block type sequence from WHIRParams.
+// Called before proof solving so the offset table can be built.
+func SetHintBlockTypes(blockTypes []int) {
+	hintBlockTypes = blockTypes
+}
+
+// ReadVecHint returns the pre-parsed Vec block at callIndex.
 func ReadVecHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
-	p := getOrComputeProof(inputs)
-
-	// Read 8-byte LE length prefix (byte count)
-	byteLen := int(binary.LittleEndian.Uint64(p.whirHints[:8]))
-	p.whirHints = p.whirHints[8:]
-
-	frs := getBigInt4FromBytes(p.whirHints[:byteLen*32])
-	p.whirHints = p.whirHints[byteLen*32:]
-	for i, v := range frs {
+	callIndex := int(inputs[len(inputs)-2].Int64())
+	p := getOrComputeProof(inputs[:len(inputs)-2])
+	for i, v := range p.hintBlocks[callIndex] {
 		outputs[i].Set(v)
 	}
-
 	return nil
 }
 
-// ReadHashHint reads a single prover_hint(Hash) block from the hint byte stream.
-// Format: 32 raw bytes (field element in LE standard form, no length prefix).
-// Returns 1 field element.
+// ReadHashHint returns the pre-parsed Hash block at callIndex.
 func ReadHashHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
-	p := getOrComputeProof(inputs)
-
-	frs := getBigInt4FromBytes(p.whirHints[:32])
-	p.whirHints = p.whirHints[32:]
-
-	outputs[0].Set(frs[0])
+	callIndex := int(inputs[len(inputs)-2].Int64())
+	p := getOrComputeProof(inputs[:len(inputs)-2])
+	outputs[0].Set(p.hintBlocks[callIndex][0])
 	return nil
 }
 

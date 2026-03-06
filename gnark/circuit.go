@@ -61,7 +61,16 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	}
 
 	hintInputs := append(r, circuit.Input[:]...)
-	numVars := 6 + Log_N
+
+	whirParams := whir.NewParams(whir.NewProtocolConfig(
+		25, NUM_VARS,
+		whir.ConstantFromSecondRoundFoldingFactor(2, 4),
+		whir.UniqueDecoding, 20,
+	))
+
+	// Must be set before any hint calls, since the test engine executes hints
+	// inline during Define() and getOrComputeProof needs the block types.
+	SetHintBlockTypes(whir.ComputeHintBlockTypes(whirParams))
 
 	// Three separate hints, each producing exactly one proof component.
 	// They share a cached FFI result internally to avoid redundant computation.
@@ -73,12 +82,6 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	if err != nil {
 		return fmt.Errorf("failed to generate WHIR proof hint: %w", err)
 	}
-
-	whirParams := whir.NewParams(whir.NewProtocolConfig(
-		25, numVars,
-		whir.ConstantFromSecondRoundFoldingFactor(2, 4),
-		whir.UniqueDecoding, 20,
-	))
 
 	VerifyKeccakF(api, circuit.Output[:], gkrProof, r, whirProof, hintInputs, whirParams)
 	return nil

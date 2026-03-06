@@ -20,6 +20,7 @@ type HintReader struct {
 	hintInputs []frontend.Variable
 	vecHint    solver.Hint
 	hashHint   solver.Hint
+	callIndex  int // shared global counter across Vec and Hash calls
 }
 
 // NewHintReader creates a HintReader that will issue gnark hint calls using the
@@ -34,20 +35,24 @@ func NewHintReader(api frontend.API, hintInputs []frontend.Variable, vecHint, ha
 	}
 }
 
-// ReadArkVec reads n field elements from an ark-serialized Vec<F> block in the
-// hint stream. Corresponds to Rust's prover_hint_ark(Vec<F>).
+// ReadVec reads n field elements from a Vec block in the hint stream.
+// Appends [callIndex, blockType=0] to inputs for unique identification.
 func (h *HintReader) ReadVec(n int) []frontend.Variable {
-	results, err := h.api.Compiler().NewHint(h.vecHint, n, h.hintInputs...)
+	inputs := append(h.hintInputs, frontend.Variable(h.callIndex), frontend.Variable(0))
+	h.callIndex++
+	results, err := h.api.Compiler().NewHint(h.vecHint, n, inputs...)
 	if err != nil {
 		panic(fmt.Sprintf("ReadVec hint failed: %v", err))
 	}
 	return results
 }
 
-// ReadHash reads a single 32-byte hash from the hint stream as a field element.
-// Corresponds to Rust's prover_hint(Hash).
+// ReadHash reads a single hash from the hint stream.
+// Appends [callIndex, blockType=1] to inputs for unique identification.
 func (h *HintReader) ReadHash() frontend.Variable {
-	results, err := h.api.Compiler().NewHint(h.hashHint, 1, h.hintInputs...)
+	inputs := append(h.hintInputs, frontend.Variable(h.callIndex), frontend.Variable(1))
+	h.callIndex++
+	results, err := h.api.Compiler().NewHint(h.hashHint, 1, inputs...)
 	if err != nil {
 		panic(fmt.Sprintf("ReadHash hint failed: %v", err))
 	}

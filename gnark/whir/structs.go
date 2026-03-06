@@ -1,6 +1,8 @@
 package whir
 
 import (
+	"math/bits"
+
 	"github.com/consensys/gnark/frontend"
 )
 
@@ -98,4 +100,49 @@ type MainRoundData struct {
 	OODPoints             [][]frontend.Variable
 	StirChallengesPoints  [][]frontend.Variable
 	CombinationRandomness [][]frontend.Variable
+}
+
+// ComputeHintBlockTypes returns the block type sequence (0=Vec, 1=Hash)
+// for all HintReader calls in VerifyWhir, derived deterministically from params.
+// This allows pre-computing byte offsets into the hint stream.
+func ComputeHintBlockTypes(params WHIRParams) []int {
+	var types []int
+	domainSize := params.DomainSize
+
+	// 1. Initial leaves: readLeavesFromHints → 1 Vec
+	types = append(types, 0)
+
+	for r := range params.ParamNRounds {
+		if r == 0 {
+			// Round 0: verifyMerklePaths on initialLeaves (no new ReadVec)
+			numQueries := params.RoundParametersNumOfQueries[0]
+			treeHeight := bits.Len(uint(domainSize/(1<<params.FoldingFactorArray[0]))) - 1
+			for range numQueries * treeHeight {
+				types = append(types, 1)
+			}
+		} else {
+			// Round r>0: readLeavesFromHints → 1 Vec
+			types = append(types, 0)
+			// verifyMerklePaths on roundLeaves
+			numQueries := params.RoundParametersNumOfQueries[r]
+			treeHeight := bits.Len(uint(domainSize/(1<<params.FoldingFactorArray[r]))) - 1
+			for range numQueries * treeHeight {
+				types = append(types, 1)
+			}
+		}
+		domainSize /= 2
+	}
+
+	// Final leaves + Merkle paths
+	lastFoldingFactor := params.FoldingFactorArray[len(params.FoldingFactorArray)-1]
+	types = append(types, 0) // readLeavesFromHints → 1 Vec
+	finalTreeHeight := bits.Len(uint(domainSize/(1<<lastFoldingFactor))) - 1
+	for range params.FinalQueries * finalTreeHeight {
+		types = append(types, 1)
+	}
+
+	// Deferred evals: hr.ReadVec → 1 Vec
+	types = append(types, 0)
+
+	return types
 }
