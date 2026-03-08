@@ -19,8 +19,8 @@ const (
 type FoldingFactor struct {
 	// Constant: same factor every round. ConstantFromSecondRound: first round
 	// uses FirstRound, subsequent rounds use Factor.
-	Factor     int
-	FirstRound int  // only used when VariableFirst is true
+	Factor        int
+	FirstRound    int // only used when VariableFirst is true
 	VariableFirst bool
 }
 
