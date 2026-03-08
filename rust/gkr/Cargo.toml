@@ -15,4 +15,7 @@ keccak.workspace = true
 rayon.workspace = true
 tracing.workspace = true
 tracing-forest.workspace = true
-whir = { git = "https://github.com/WizardOfMenlo/whir.git"}
+whir = { git = "https://github.com/reilabs/circuit_whir.git"}
+
+[dev-dependencies]
+sha3 = "0.10"
