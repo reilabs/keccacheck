@@ -8,7 +8,7 @@ import (
 )
 
 /*
-#cgo LDFLAGS: ./libkeccak.a -ldl
+#cgo LDFLAGS: ./libkeccak.a -ldl -lm
 #include "./bindings.h"
 */
 import "C"
