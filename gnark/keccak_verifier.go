@@ -18,7 +18,18 @@ func VerifyKeccakF(
 	hintInputs []frontend.Variable,
 	whirParams whir.WHIRParams,
 ) {
+	// Initialize WHIR transcript and receive commitment (mirrors Rust: config.receive_commitment)
+	whirVerifier := transcript.NewVerifier(whirProof)
+	domainSep := whir.ComputeDomainSeparator(whirParams.Config)
+	for _, ds := range domainSep {
+		whirVerifier.Absorb(api, ds)
+	}
+	whirCommitment := whir.ReceiveCommitment(whirVerifier, api, whirParams.CommittmentOODSamples, whirParams.BatchSize)
+
+	// Absorb the WHIR commitment root hash into the keccak verifier transcript
+	// (mirrors Rust: verifier.absorb(Fr::from_le_bytes_mod_order(&root.0)))
 	verifier := transcript.NewVerifier(proof)
+	verifier.Absorb(api, whirCommitment.Root)
 	for _, challenge := range alpha {
 		verifier.Absorb(api, challenge)
 	}
@@ -190,7 +201,7 @@ func VerifyKeccakF(
 		}
 	}
 	hr := whir.NewHintReader(api, hintInputs, ReadVecHint, ReadHashHint)
-	whir.VerifyWhir(api, whirProof, hr, statements, whirParams)
+	whir.VerifyWhir(api, whirVerifier, whirCommitment, hr, statements, whirParams)
 }
 
 func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, alpha *[]frontend.Variable, beta *[]frontend.Variable, sum frontend.Variable, rc uint64) ([]frontend.Variable, []frontend.Variable) {

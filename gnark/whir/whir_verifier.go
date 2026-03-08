@@ -9,25 +9,12 @@ import (
 
 func VerifyWhir(
 	api frontend.API,
-	proof []frontend.Variable,
+	v *transcript.Verifier,
+	commitment ParsedCommitment,
 	hr *HintReader,
 	statements []Statement,
 	params WHIRParams,
 ) (totalFoldingRandomness []frontend.Variable, err error) {
-	v := transcript.NewVerifier(proof)
-	// Absorb domain separator: protocol_id (2 Fr) + session_id (1 Fr).
-	// Mirrors spongefish's DomainSeparator::to_verifier which absorbs
-	// protocol_id, session_id, and empty instance before any proof data.
-	domainSep := ComputeDomainSeparator(params.Config)
-
-	for _, ds := range domainSep {
-		v.Absorb(api, ds)
-	}
-
-	// Receive a single commitment covering all batch vectors.
-	// Mirrors Rust irs_commit::receive_commitment: read root, generate OOD points,
-	// read OOD answers flat (outDomainSamples * numVectors).
-	commitment := receiveCommitment(v, api, params.CommittmentOODSamples, params.BatchSize)
 
 	numVectors := params.BatchSize
 

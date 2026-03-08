@@ -20,14 +20,17 @@ use crate::transcript::{Prover, Sponge};
 use std::borrow::Cow;
 
 use ark_bn254::Fr;
-use ark_ff::{One, Zero};
+use ark_ff::{One, PrimeField, Zero};
 use tracing::instrument;
+use whir::algebra::embedding::Basefield;
 use whir::algebra::fields::Field256;
 use whir::algebra::linear_form::{Covector, LinearForm};
+use whir::protocols::whir::{Config, Witness};
 use whir::transcript::ProverState;
 
 #[instrument(skip_all, fields(num_vars=(6 + (data.len() / 25).ilog2())))]
 pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u8>, Vec<u64>, Vec<u64>) {
+    let proving_start = std::time::Instant::now();
     let instances = data.len() / 25;
 
     let num_vars = 6 + instances.ilog2() as usize;
@@ -42,8 +45,12 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u8>, Vec<u64>
     }
     span.exit();
 
+    let whir_commitment = commit_whir(num_vars, &state[0].a);
+
     let mut prover = Prover::new();
 
+    let root = whir_commitment.whir_witness.root();
+    prover.absorb(Fr::from_le_bytes_mod_order(&root.0));
     let span = tracing::span!(tracing::Level::INFO, "Reducing output").entered();
     output_alpha
         .iter()
@@ -72,6 +79,7 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u8>, Vec<u64>
         &mut prover,
         num_vars,
         &state[0].a,
+        whir_commitment,
         &output_r,
         &binary_r,
         &input_r,
@@ -82,7 +90,10 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u8>, Vec<u64>
     proof.push(Fr::from(main_proof.len() as u64));
     proof.extend(main_proof);
     span.exit();
-
+    println!(
+        "finished proving on rust side in {:?}",
+        proving_start.elapsed()
+    );
     (
         proof,
         whir_proof,
@@ -91,14 +102,14 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u8>, Vec<u64>
     )
 }
 
-fn prove_whir(
-    prover: &mut Prover,
-    num_vars: usize,
-    a: &[u64],
-    output_r: &[Fr],
-    binary_r: &[Fr],
-    input_r: &[Fr],
-) -> Vec<u8> {
+struct WhirCommitment {
+    config: Config<Field256>,
+    prover_state: ProverState<Sponge>,
+    whir_witness: Witness<Field256, Basefield<Field256>>,
+    lane_coefficients: Vec<Vec<Field256>>,
+}
+
+fn commit_whir(num_vars: usize, a: &[u64]) -> WhirCommitment {
     let instances = 1 << (num_vars - 6);
 
     let (config, ds) = whir_config(num_vars);
@@ -110,7 +121,33 @@ fn prove_whir(
         .collect();
 
     let lane_slices: Vec<&[Field256]> = lane_coefficients.iter().map(|v| v.as_slice()).collect();
-    let whir_commitment = config.commit(&mut prover_state, &lane_slices);
+    let whir_witness = config.commit(&mut prover_state, &lane_slices);
+
+    WhirCommitment {
+        config,
+        prover_state,
+        whir_witness,
+        lane_coefficients,
+    }
+}
+
+fn prove_whir(
+    prover: &mut Prover,
+    num_vars: usize,
+    a: &[u64],
+    commitment: WhirCommitment,
+    output_r: &[Fr],
+    binary_r: &[Fr],
+    input_r: &[Fr],
+) -> Vec<u8> {
+    let instances = 1 << (num_vars - 6);
+
+    let WhirCommitment {
+        config,
+        mut prover_state,
+        whir_witness,
+        lane_coefficients,
+    } = commitment;
 
     let ((eq1, eq2), eq3) = rayon::join(
         || {
@@ -167,7 +204,7 @@ fn prove_whir(
     config.prove(
         &mut prover_state,
         vectors,
-        vec![Cow::Borrowed(&whir_commitment)],
+        vec![Cow::Borrowed(&whir_witness)],
         &[Box::new(combined_cov) as Box<dyn LinearForm<Field256>>],
         Cow::Borrowed(&evaluations),
     );

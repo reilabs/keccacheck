@@ -15,7 +15,7 @@ use crate::sumcheck::util::{
 
 use crate::transcript::{Sponge, Verifier};
 use ark_bn254::Fr;
-use ark_ff::{One, Zero};
+use ark_ff::{One, PrimeField, Zero};
 use tracing::{Level, instrument};
 use whir::algebra::fields::Field256;
 use whir::algebra::linear_form::{Covector, LinearForm};
@@ -26,8 +26,19 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], whir_proof: Vec<u8>
     COUNT_16.store(0, std::sync::atomic::Ordering::SeqCst);
     let instances = 1usize << (num_vars - 6);
 
+    // Extract and verify WHIR proof
+    #[cfg(debug_assertions)]
+    let deser_whir_proof = deserialize_whir_proof(&whir_proof);
+    #[cfg(not(debug_assertions))]
+    let deser_whir_proof = deserialize_whir_proof_flat(&whir_proof);
+    let (config, ds) = whir_config(num_vars);
+    let mut verifier_state = VerifierState::new(&ds, &deser_whir_proof, Sponge::new());
+    let whir_commitment = config.receive_commitment(&mut verifier_state).unwrap();
+
     let main_proof_len = fr_to_usize(proof[0]);
     let mut verifier = Verifier::new(&proof[1..1 + main_proof_len]);
+    let root = whir_commitment.root();
+    verifier.absorb(Fr::from_le_bytes_mod_order(&root.0));
     let span = tracing::span!(Level::INFO, "calculate output sum").entered();
     r.iter().for_each(|challenge| verifier.absorb(*challenge));
     let mut beta = (0..25).map(|_| verifier.generate()).collect::<Vec<_>>();
@@ -164,14 +175,6 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], whir_proof: Vec<u8>
         .map(|[e1, e2, e3]| change_type(*e1 + gamma * *e2 + gamma2 * *e3))
         .collect();
 
-    // Extract and verify WHIR proof
-    #[cfg(debug_assertions)]
-    let deser_whir_proof = deserialize_whir_proof(&whir_proof);
-    #[cfg(not(debug_assertions))]
-    let deser_whir_proof = deserialize_whir_proof_flat(&whir_proof);
-    let (config, ds) = whir_config(num_vars);
-    let mut verifier_state = VerifierState::new(&ds, &deser_whir_proof, Sponge::new());
-    let whir_commitment = config.receive_commitment(&mut verifier_state).unwrap();
     let span = tracing::span!(Level::INFO, "verify whir").entered();
     config
         .verify(

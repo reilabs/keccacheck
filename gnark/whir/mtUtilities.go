@@ -44,7 +44,7 @@ func initialSumcheck(
 //  1. Read Merkle root hash (prover message)
 //  2. Generate outDomainSamples OOD challenge points (verifier messages)
 //  3. Read outDomainSamples * numVectors OOD answers flat (prover messages)
-func receiveCommitment(v *transcript.Verifier, api frontend.API, outDomainSamples int, numVectors int) ParsedCommitment {
+func ReceiveCommitment(v *transcript.Verifier, api frontend.API, outDomainSamples int, numVectors int) ParsedCommitment {
 	// 1. Read the Merkle Root hash committed by the prover.
 	rootHash := v.Read(api)
 	// 2. Generate Out-Of-Domain (OOD) query points (challenges) from the transcript.
