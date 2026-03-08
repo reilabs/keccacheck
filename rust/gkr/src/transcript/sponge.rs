@@ -35,6 +35,7 @@ const T: usize = RATE + CAPACITY;
 pub struct Sponge {
     state: [Fr; T],
     idx: usize,
+    dirty: bool, // requires permutation before next squeeze
 }
 
 impl Sponge {
@@ -42,6 +43,7 @@ impl Sponge {
         Self {
             state: INITIAL_STATE,
             idx: 0,
+            dirty: true,
         }
     }
 
@@ -50,17 +52,18 @@ impl Sponge {
             self.state[self.idx] += value;
             self.idx += 1;
         } else {
-            // Permute and reset absorb index
             poseidon::permute_16(&mut self.state);
             self.state[0] += value;
             self.idx = 1;
         }
+        self.dirty = true;
     }
 
     pub fn squeeze(&mut self) -> Fr {
-        if self.idx >= RATE {
+        if self.dirty || self.idx >= RATE {
             poseidon::permute_16(&mut self.state);
-            self.idx = 0
+            self.idx = 0;
+            self.dirty = false;
         }
         let out = self.state[self.idx];
         self.idx += 1;
@@ -102,6 +105,7 @@ impl DuplexSpongeInterface for Sponge {
         self.state[..RATE].fill(Fr::ZERO);
         poseidon::permute_16(&mut self.state);
         self.idx = 0;
+        self.dirty = false;
         self
     }
 }
