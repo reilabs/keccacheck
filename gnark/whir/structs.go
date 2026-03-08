@@ -102,6 +102,48 @@ type MainRoundData struct {
 	CombinationRandomness [][]frontend.Variable
 }
 
+// ComputeWhirProofFrs returns the exact number of field elements consumed from
+// the WHIR transcript verifier (narg string) during ReceiveCommitment + VerifyWhir.
+// This traces every Read/ReadVector call on the transcript deterministically.
+func ComputeWhirProofFrs(params WHIRParams) int {
+	count := 0
+
+	// ReceiveCommitment: root hash + OOD answers
+	count += 1 + params.CommittmentOODSamples*params.BatchSize
+
+	// Initial sumcheck: runWhirSumcheckRounds(FoldingFactorArray[0])
+	// Each round reads c0, c2 = 2 elements
+	count += 2 * params.FoldingFactorArray[0]
+
+	// Main rounds
+	for r := range params.ParamNRounds {
+		count += 1                                   // root hash
+		count += params.RoundParametersOODSamples[r] // OOD answers
+		if params.PowBits[r] > 0 {
+			count += 1 // PoW nonce
+		}
+		count += 2 * params.FoldingFactorArray[r+1] // round sumcheck
+	}
+
+	// Final vector
+	count += 1 << params.FinalSumcheckRounds
+
+	// Final PoW
+	if params.FinalPowBits > 0 {
+		count += 1
+	}
+
+	// Final sumcheck
+	count += 2 * params.FinalSumcheckRounds
+
+	// Final folding PoW
+	if params.FinalFoldingPowBits > 0 {
+		count += 1
+	}
+
+	return count
+}
+
 // ComputeHintBlockTypes returns the block type sequence (0=Vec, 1=Hash)
 // for all HintReader calls in VerifyWhir, derived deterministically from params.
 // This allows pre-computing byte offsets into the hint stream.
