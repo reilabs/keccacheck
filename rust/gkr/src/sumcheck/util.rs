@@ -21,7 +21,9 @@ pub const fn workload_size<T: Sized>() -> usize {
 }
 
 /// List of evaluations for eq(r, x) over the boolean hypercube
-pub fn calculate_evaluations_over_boolean_hypercube_for_eq<F: Field + Send + Sync>(r: &[F]) -> Vec<F> {
+pub fn calculate_evaluations_over_boolean_hypercube_for_eq<F: Field + Send + Sync>(
+    r: &[F],
+) -> Vec<F> {
     let mut result = vec![F::zero(); 1 << r.len()];
     eval_eq(r, &mut result, F::one());
     result
