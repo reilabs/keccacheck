@@ -282,6 +282,10 @@ func PoW(api frontend.API, v *transcript.Verifier, difficulty int) (frontend.Var
 }
 
 func CheckPoW(api frontend.API, challenge frontend.Variable, nonce frontend.Variable, difficulty int) error {
+	// Assert nonce is a valid 64-bit number
+	maxUint64, _ := new(big.Int).SetString("18446744073709551615", 10) // 2^64 - 1
+	api.AssertIsLessOrEqual(nonce, maxUint64)
+
 	hash := transcript.HashNode(api, []frontend.Variable{challenge, nonce})
 
 	d0, _ := new(big.Int).SetString("21888242871839275222246405745257275088548364400416034343698204186575808495617", 10)
