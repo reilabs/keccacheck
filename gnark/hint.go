@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"math/big"
+	"sync"
 	"unsafe"
 )
 
@@ -59,9 +60,12 @@ type parsedProof struct {
 // proveCache caches the parsed FFI result so that the three extraction hints
 // (GKR, WHIR proof, WHIR hints) share a single FFI call.
 var proveCache *parsedProof
+var proveMu sync.Mutex
 
 // getOrComputeProof calls the Rust FFI if needed and caches the parsed result.
 func getOrComputeProof(inputs []*big.Int) *parsedProof {
+	proveMu.Lock()
+	defer proveMu.Unlock()
 	if proveCache != nil {
 		return proveCache
 	}
@@ -109,6 +113,8 @@ func getOrComputeProof(inputs []*big.Int) *parsedProof {
 // ResetProveCache clears the cached FFI result. Call between proof generations
 // when the witness changes.
 func ResetProveCache() {
+	proveMu.Lock()
+	defer proveMu.Unlock()
 	proveCache = nil
 }
 
