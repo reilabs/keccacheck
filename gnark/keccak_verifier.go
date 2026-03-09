@@ -117,10 +117,11 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 
 	eRot := make([]frontend.Variable, 25)
 	prefix := len(vrsChi) - 6
-	eq_vrsChi_prefix := sumcheck.EvalEq(api, vrsChi[prefix:])
-	eq_vrsRhoPrefix := sumcheck.EvalEq(api, vrsRho[prefix:])
+	eq_vrsChi_suffix := sumcheck.EvalEq(api, vrsChi[prefix:])
+	eq_vrsRhoSuffix := sumcheck.EvalEq(api, vrsRho[prefix:])
+	rotPrefixEq := sumcheck.PrefixEq(api, vrsChi, vrsRho, prefix)
 	for i := 0; i < 25; i++ {
-		eRot[i] = sumcheck.Rot(api, i, vrsChi, vrsRho, eq_vrsChi_prefix, eq_vrsRhoPrefix)
+		eRot[i] = sumcheck.Rot(api, i, eq_vrsChi_suffix, eq_vrsRhoSuffix, rotPrefixEq)
 	}
 
 	// Compute checksum for rho verification
@@ -224,10 +225,11 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 	}
 
 	prefix = len(vrsD) - 6
-	eq_vrsD_prefix := sumcheck.EvalEq(api, vrsD[prefix:])
-	eq_vrsCPrefix := sumcheck.EvalEq(api, vrsC[prefix:])
+	eq_vrsD_suffix := sumcheck.EvalEq(api, vrsD[prefix:])
+	eq_vrsCsuffix := sumcheck.EvalEq(api, vrsC[prefix:])
+	thetaCPrefixEq := sumcheck.PrefixEq(api, vrsD, vrsC, prefix)
 	eEq = sumcheck.Eq(api, vrsD, vrsC)
-	eRot_1 := sumcheck.Rot(api, 1, vrsD, vrsC, eq_vrsD_prefix, eq_vrsCPrefix)
+	eRot_1 := sumcheck.Rot(api, 1, eq_vrsD_suffix, eq_vrsCsuffix, thetaCPrefixEq)
 
 	checksum = frontend.Variable(0)
 	for j := 0; j < 5; j++ {
