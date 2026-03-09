@@ -45,7 +45,9 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u8>, Vec<u64>
     }
     span.exit();
 
+    let span = tracing::span!(tracing::Level::INFO, "Committing to whir").entered();
     let whir_commitment = commit_whir(num_vars, &state[0].a);
+    span.exit();
 
     let mut prover = Prover::new();
 
