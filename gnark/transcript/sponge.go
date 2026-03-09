@@ -37,8 +37,8 @@ const (
 
 type Sponge struct {
 	State [StateSize]frontend.Variable
-	idx   int // Tracks how many rate elements have been filled
-
+	idx   int
+	dirty bool // requires permutation before next squeeze
 }
 
 func NewSponge() *Sponge {
@@ -54,6 +54,7 @@ func NewSponge() *Sponge {
 	return &Sponge{
 		State: state,
 		idx:   0,
+		dirty: true,
 	}
 }
 
@@ -62,17 +63,18 @@ func (s *Sponge) absorb(api frontend.API, value frontend.Variable) {
 		s.State[s.idx] = api.Add(value, s.State[s.idx])
 		s.idx++
 	} else {
-		// Permute and reset absorb index
 		poseidon2.Permute16(api, &s.State)
 		s.State[0] = api.Add(value, s.State[0])
 		s.idx = 1
 	}
+	s.dirty = true
 }
 
 func (s *Sponge) Squeeze(api frontend.API) frontend.Variable {
-	if s.idx >= Rate {
+	if s.dirty || s.idx >= Rate {
 		poseidon2.Permute16(api, &s.State)
 		s.idx = 0
+		s.dirty = false
 	}
 	out := s.State[s.idx]
 	s.idx++
