@@ -62,7 +62,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	whirParams := whir.NewParams(whir.NewProtocolConfig(
 		25, NUM_VARS,
 		whir.ConstantFromSecondRoundFoldingFactor(2, 4),
-		whir.UniqueDecoding, 20,
+		whir.ProvableList, 20,
 	))
 
 	// Must be set before any hint calls, since the test engine executes hints
