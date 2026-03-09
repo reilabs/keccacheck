@@ -17,11 +17,9 @@ func EvalMle(api frontend.API, mle []frontend.Variable, r []frontend.Variable) f
 	for i := 0; i < n; i++ {
 		newSize := len(coeffs) / 2
 		next := make([]frontend.Variable, newSize)
-		oneMinusRi := api.Sub(1, r[i])
 		for j := 0; j < newSize; j++ {
-			left := api.Mul(oneMinusRi, coeffs[j])
-			right := api.Mul(r[i], coeffs[newSize+j])
-			next[j] = api.Add(left, right)
+			diff := api.Sub(coeffs[newSize+j], coeffs[j])
+			next[j] = api.Add(coeffs[j], api.Mul(r[i], diff))
 		}
 		coeffs = next
 	}
@@ -49,9 +47,10 @@ func Eq(api frontend.API, a, b []frontend.Variable) frontend.Variable {
 	res := frontend.Variable(1)
 
 	for i := range a {
-		term1 := api.Mul(a[i], b[i])
-		term2 := api.Mul(api.Sub(1, a[i]), api.Sub(1, b[i]))
-		res = api.Mul(res, api.Add(term1, term2))
+		// a*b + (1-a)(1-b) = 2ab - a - b + 1
+		ab := api.Mul(a[i], b[i])
+		term := api.Add(api.Add(ab, ab), api.Sub(api.Sub(1, a[i]), b[i]))
+		res = api.Mul(res, term)
 	}
 	return res
 }
@@ -66,31 +65,28 @@ func ToPoly(api frontend.API, x []frontend.Variable) []frontend.Variable {
 	return res
 }
 
-func Rot(api frontend.API, n int, a, b, eq_a_prefix, eq_b_prefix []frontend.Variable) frontend.Variable {
-	lenA := len(a)
-	prefix := lenA - 6
-
+func Rot(api frontend.API, n int, eq_a_suffix, eq_b_suffix []frontend.Variable, prefixEq frontend.Variable) frontend.Variable {
 	// r = calculate_evaluations_over_boolean_hypercube_for_rot(&a[prefix..], n)
-	r := CalculateEvaluationsOverBooleanHypercubeForRot(api, eq_a_prefix, n)
+	r := CalculateEvaluationsOverBooleanHypercubeForRot(api, eq_a_suffix, n)
 
 	// result = eval_mle(&r, &b[prefix..])
-	result := EvalMleWithEq(api, r, eq_b_prefix)
+	result := EvalMleWithEq(api, r, eq_b_suffix)
 
-	// Compute the product term
+	// Return result * precomputed prefix eq product
+	return api.Mul(result, prefixEq)
+}
+
+// PrefixEq computes eq(a[0:prefix], b[0:prefix]) as a single scalar.
+// This is factored out so callers can compute it once and reuse across
+// multiple Rot calls with the same prefix vectors.
+func PrefixEq(api frontend.API, a, b []frontend.Variable, prefix int) frontend.Variable {
 	prod := frontend.Variable(1)
 	for i := 0; i < prefix; i++ {
-		x := a[i]
-		y := b[i]
-		xy := api.Mul(x, y)
-		oneMinusX := api.Sub(1, x)
-		oneMinusY := api.Sub(1, y)
-		oneMinusXoneMinusY := api.Mul(oneMinusX, oneMinusY)
-		sum := api.Add(xy, oneMinusXoneMinusY)
-		prod = api.Mul(prod, sum)
+		ab := api.Mul(a[i], b[i])
+		term := api.Add(api.Add(ab, ab), api.Sub(api.Sub(1, a[i]), b[i]))
+		prod = api.Mul(prod, term)
 	}
-
-	// Return result * prod
-	return api.Mul(result, prod)
+	return prod
 }
 
 func EvalEq(api frontend.API, r []frontend.Variable) []frontend.Variable {
@@ -104,13 +100,14 @@ func EvalEq(api frontend.API, r []frontend.Variable) []frontend.Variable {
 		r[0],
 	}
 	for i := 1; i < n; i++ {
-		ri := r[i]
-		oneMinusRi := api.Sub(1, ri)
+		oneMinusRi := api.Sub(1, r[i])
 
 		newEq := make([]frontend.Variable, 0, len(eq)*2)
 		for _, v := range eq {
-			newEq = append(newEq, api.Mul(v, oneMinusRi)) // x_i = 0
-			newEq = append(newEq, api.Mul(v, ri))         // x_i = 1
+			lo := api.Mul(v, oneMinusRi)
+			hi := api.Sub(v, lo) // v*r = v - v*(1-r), free linear combination
+			newEq = append(newEq, lo)
+			newEq = append(newEq, hi)
 		}
 		eq = newEq
 	}

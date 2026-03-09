@@ -97,7 +97,10 @@ func UnivarPoly(api frontend.API, coefficients []frontend.Variable, points []fro
 func EqPolyOutside(api frontend.API, coords []frontend.Variable, point []frontend.Variable) frontend.Variable {
 	acc := frontend.Variable(1)
 	for i := range coords {
-		acc = api.Mul(acc, api.Add(api.Mul(coords[i], point[i]), api.Mul(api.Sub(frontend.Variable(1), coords[i]), api.Sub(frontend.Variable(1), point[i]))))
+		// a*b + (1-a)(1-b) = 2ab - a - b + 1
+		ab := api.Mul(coords[i], point[i])
+		term := api.Add(api.Add(ab, ab), api.Sub(api.Sub(1, coords[i]), point[i]))
+		acc = api.Mul(acc, term)
 	}
 	return acc
 }
@@ -131,8 +134,10 @@ func computeEqWeights(api frontend.API, point []frontend.Variable) []frontend.Va
 	cur := 1
 	for i := 0; i < n; i++ {
 		for j := cur - 1; j >= 0; j-- {
-			result[2*j+1] = api.Mul(result[j], point[i])
-			result[2*j] = api.Mul(result[j], api.Sub(frontend.Variable(1), point[i]))
+			lo := api.Mul(result[j], api.Sub(frontend.Variable(1), point[i]))
+			hi := api.Sub(result[j], lo) // result[j]*point[i] = result[j] - lo
+			result[2*j] = lo
+			result[2*j+1] = hi
 		}
 		cur *= 2
 	}
