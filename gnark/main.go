@@ -13,7 +13,7 @@ import (
 
 const NUM_VARS = Log_N + 6
 const N = 1 << Log_N
-const Log_N = 0
+const Log_N = 1
 
 func main() {
 
@@ -47,6 +47,7 @@ func main() {
 	// Prove
 	fmt.Printf("Proving starts\n")
 	for i := 1; i <= 10; i++ {
+		ResetProveCache()
 		start := time.Now()
 		proof, err := groth16.Prove(ccs, pk, witness)
 		if err != nil {
