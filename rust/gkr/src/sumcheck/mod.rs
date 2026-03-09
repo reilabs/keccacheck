@@ -1,5 +1,6 @@
 pub mod chi;
 pub mod iota;
+pub mod outputs;
 pub mod rho;
 pub mod theta;
 pub mod theta_a;

@@ -81,7 +81,7 @@ func initCircuitFields(input []*big.Int, output []uint64) (
 
 	inputSized := make([]frontend.Variable, inSize)
 	inputDSized := make([]frontend.Variable, bitSize)
-	outputSized := make([]frontend.Variable, bitSize)
+	outputSized := make([]frontend.Variable, inSize)
 
 	for i := 0; i < 25; i++ {
 		for instance := 0; instance < N; instance++ {
@@ -98,11 +98,7 @@ func initCircuitFields(input []*big.Int, output []uint64) (
 
 	for i := 0; i < 25; i++ {
 		for instance := 0; instance < N; instance++ {
-			w := output[575*N+i*N+instance]
-			base := 64 * (i*N + instance)
-			for j := 0; j < 64; j++ {
-				outputSized[base+j] = (w >> j) & 1
-			}
+			outputSized[i*N+instance] = output[575*N+i*N+instance]
 		}
 	}
 

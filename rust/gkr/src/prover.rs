@@ -1,19 +1,20 @@
 use crate::reference::{KeccakRoundState, ROUND_CONSTANTS, strip_pi};
 use crate::sumcheck::chi::prove_chi;
 use crate::sumcheck::iota::prove_iota;
+use crate::sumcheck::outputs::{prove_bits, prove_outputs};
 use crate::sumcheck::rho::prove_rho;
 use crate::sumcheck::theta::prove_theta;
 use crate::sumcheck::theta_a::{ThetaAProof, prove_theta_a};
 use crate::sumcheck::theta_c::prove_theta_c;
 use crate::sumcheck::theta_d::prove_theta_d;
-use crate::sumcheck::util::{HALF, eval_mle, to_poly};
+use crate::sumcheck::util::{HALF, eval_mle, to_field_vec, to_poly};
 use crate::transcript::Prover;
 use ark_bn254::Fr;
 use ark_ff::{One, Zero};
 use tracing::instrument;
 
 #[instrument(skip_all, fields(num_vars=(6 + (data.len() / 25).ilog2())))]
-pub fn prove(data: &[u64], mut r: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
+pub fn prove(data: &[u64], r: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     let instances = data.len() / 25;
 
     let num_vars = 6 + instances.ilog2() as usize;
@@ -31,22 +32,52 @@ pub fn prove(data: &[u64], mut r: Vec<Fr>) -> (Vec<Fr>, Vec<u64>, Vec<u64>) {
     let mut prover = Prover::new();
     r.iter().for_each(|challenge| prover.absorb(*challenge));
     let span = tracing::span!(tracing::Level::INFO, "prove all rounds").entered();
-
+    let instances = 1 << (num_vars - 6);
     // TODO: feed output to the prover before obtaining alpha
     let mut beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
 
-    // write final output sum
-    let mut sum: Fr = state[23]
-        .iota
-        .chunks_exact(instances)
+    // Write final output sum
+    // Over here we will instead make a claim about the words
+    // to obtain the sum
+    let output_words = to_field_vec(&state[23].iota);
+    let c: Fr = output_words
+        .chunks(instances)
         .enumerate()
-        .map(|(i, x)| {
-            let poly = to_poly(x);
-            beta[i] * eval_mle(&poly, &r)
-        })
+        .map(|(i, word_poly)| beta[i] * eval_mle(word_poly, &r))
         .sum();
+    prover.write(c);
 
-    prover.write(sum);
+    // We will run one round of reduction to reduce to a claim on the output bits
+    let eq_proof = prove_outputs(&mut prover, num_vars - 6, &r, &output_words, &beta, c);
+    let mut bits = to_poly(&state[23].iota);
+
+    let bit_proof = prove_bits(
+        &mut prover,
+        &eq_proof.r_x,
+        &mut bits,
+        &beta,
+        eq_proof.word_rlc_eval,
+    );
+
+    let mut r = Vec::with_capacity(num_vars);
+    r.extend(eq_proof.r_x);
+    r.extend(bit_proof.r_y);
+    #[cfg(debug_assertions)]
+    {
+        let sum: Fr = state[23]
+            .iota
+            .chunks_exact(instances)
+            .enumerate()
+            .map(|(i, x)| {
+                let poly = to_poly(x);
+                beta[i] * eval_mle(&poly, &r)
+            })
+            .sum();
+        assert_eq!(bit_proof.sum, bit_proof.bit_rlc_eval * bit_proof.pow_r_y);
+        assert_eq!(sum, bit_proof.bit_rlc_eval)
+    }
+
+    let mut sum = bit_proof.bit_rlc_eval;
     for round in (0..24).rev() {
         let previous_proof = prove_round(
             &mut prover,

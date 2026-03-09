@@ -21,14 +21,42 @@ func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable
 		beta[i] = verifier.Generate(api)
 	}
 
+	// Compute expected sum over output words
 	expected_sum := frontend.Variable(0)
 	eval_eq_r := sumcheck.EvalEq(api, r)
 	for i := range 25 {
-		summand := sumcheck.EvalMleWithEq(api, output[(64*(i*N)):64*(i*N+N)], eval_eq_r)
+		summand := sumcheck.EvalMleWithEq(api, output[i*N:(i+1)*N], eval_eq_r)
 		expected_sum = api.Add(expected_sum, api.Mul(summand, beta[i]))
 	}
 	sum := verifier.Read(api)
 	api.AssertIsEqual(sum, expected_sum)
+
+	// Verify the bitwise decomposition of the output words
+	// First sumcheck: reduce over instance dimension (Log_N variables)
+	c1, r_x := sumcheck.VerifySumcheck(api, verifier, Log_N, 2, sum)
+	words_r_x := verifier.Read(api)
+	eq_alpha_rx := sumcheck.Eq(api, r, r_x)
+	api.AssertIsEqual(c1, api.Mul(words_r_x, eq_alpha_rx))
+
+	// Second sumcheck: reduce over bit index dimension (6 variables)
+	c2, r_y := sumcheck.VerifySumcheck(api, verifier, 6, 2, words_r_x)
+	b_r_x_r_y := verifier.Read(api)
+
+	// Compute power polynomial evaluation: powers[i] = 2^i
+	powers := make([]frontend.Variable, 1<<6)
+	for i := range powers {
+		powers[i] = new(big.Int).SetUint64(1 << uint(i))
+	}
+	powers_eval := sumcheck.EvalMle(api, powers, r_y)
+	api.AssertIsEqual(c2, api.Mul(powers_eval, b_r_x_r_y))
+
+	sum = b_r_x_r_y
+
+	// Reconstruct r from r_x (instance) and r_y (bit index)
+	r = make([]frontend.Variable, Log_N+6)
+	copy(r, r_x)
+	copy(r[Log_N:], r_y)
+
 	iota := make([]frontend.Variable, 25)
 
 	for i := 23; i >= 0; i-- {

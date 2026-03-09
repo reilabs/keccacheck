@@ -19,7 +19,7 @@ func NewKeccakfCircuit() *KeccakfCircuit {
 	return &KeccakfCircuit{
 		Input:  make([]frontend.Variable, 25*N),
 		InputD: make([]frontend.Variable, 64*25*N),
-		Output: make([]frontend.Variable, 64*25*N),
+		Output: make([]frontend.Variable, 25*N),
 	}
 }
 
@@ -32,16 +32,18 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 		panic("unable to initialise committer")
 	}
 
-	r := make([]frontend.Variable, 6+Log_N)
+	r := make([]frontend.Variable, Log_N)
 
 	// First commitment: commit to circuit.Output
 	var err error
-	r[0], err = committer.Commit(circuit.Output[:]...)
+	if Log_N > 0 {
+		r[0], err = committer.Commit(circuit.Output[:]...)
+	}
 	if err != nil {
 		return err
 	}
 
-	for i := 1; i < 6+Log_N; i++ {
+	for i := 1; i < Log_N; i++ {
 		r[i], err = committer.Commit(r[i-1])
 		if err != nil {
 			return err
@@ -52,7 +54,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	}
 
 	hintInputs := append(r, circuit.Input[:]...)
-	proof, err := api.Compiler().NewHint(KeccacheckProveHint, 552*(6+Log_N)+2929, hintInputs...)
+	proof, err := api.Compiler().NewHint(KeccacheckProveHint, PROOF_LEN, hintInputs...)
 	if err != nil {
 		panic("failed to generate proof hint")
 	}
