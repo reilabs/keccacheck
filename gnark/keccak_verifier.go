@@ -1,7 +1,6 @@
 package main
 
 import (
-	"C"
 	"log"
 	"math/big"
 	"reilabs/keccacheck/sumcheck"

@@ -60,80 +60,6 @@ func ReceiveCommitment(v *transcript.Verifier, api frontend.API, outDomainSample
 	}
 }
 
-// generateFinalCoefficientsAndRandomnessPoints handles the final phase of the protocol.
-// Generates STIR challenge indices and computes the corresponding domain points.
-func generateFinalCoefficientsAndRandomnessPoints(
-	api frontend.API,
-	v *transcript.Verifier,
-	params WHIRParams,
-	domainSize int,
-	expDomainGenerator frontend.Variable,
-) ([]frontend.Variable, []frontend.Variable, []frontend.Variable, error) {
-	// 1. Read the final coefficients sent by the prover.
-	// Mirrors Rust: let final_vector = verifier_state.prover_messages_vec(self.final_sumcheck.initial_size)?;
-	finalCoefficients := v.ReadVector(api, uint(1<<params.FinalSumcheckRounds))
-
-	// 2. Generate the final STIR challenge indices.
-	foldingFactor := params.FoldingFactorArray[len(params.FoldingFactorArray)-1]
-	finalIndexes, err := getStirChallenges(api, v, params.FinalQueries, domainSize, 1<<foldingFactor)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	// 3. Compute domain evaluation points from indices.
-	numBits := bits.Len(uint(domainSize - 1))
-	finalRandomnessPoints := make([]frontend.Variable, len(finalIndexes))
-	for i, idx := range finalIndexes {
-		finalRandomnessPoints[i] = ExponentVar(api, expDomainGenerator, idx, numBits)
-	}
-
-	return finalCoefficients, finalRandomnessPoints, finalIndexes, nil
-}
-
-// rlcBatchedLeaves collapses a wide leaf structure (representing multiple batched polynomials)
-// into a smaller size using Random Linear Combination.
-//
-// Input:
-//   - leaves: A 2D array where each row represents a path or group of leaves.
-//   - foldSize: The target size of the folded leaf (e.g., folding factor of the Merkle tree).
-//   - batchSize: The number of polynomials being batched together.
-//   - B: The folding randomness (scalar).
-//
-// Operation:
-//
-//	out[j] = sum_{b=0..batchSize-1} (B^b * leaf[b*foldSize + j])
-//
-// This effectively compresses the batch dimension, allowing the verifier to check
-// a single folded Merkle path instead of 'batchSize' distinct paths.
-func rlcBatchedLeaves(api frontend.API, leaves [][]frontend.Variable, foldSize int, batchSize int, B frontend.Variable) [][]frontend.Variable {
-	collapsed := make([][]frontend.Variable, len(leaves))
-	for i := range leaves {
-		collapsed[i] = make([]frontend.Variable, foldSize)
-		for j := 0; j < foldSize; j++ {
-			sum := frontend.Variable(0)
-			pow := frontend.Variable(1)
-
-			// Iterate through the batch, accumulating the weighted sum
-			for b := 0; b < batchSize; b++ {
-				idx := b*foldSize + j
-				sum = api.Add(sum, api.Mul(pow, leaves[i][idx]))
-				pow = api.Mul(pow, B) // Scale power: B^0, B^1, B^2...
-			}
-			collapsed[i][j] = sum
-		}
-	}
-	return collapsed
-}
-
-// GenerateCombinationRandomness generates the combination randomness for the given parameters.
-// It generates a random scalar and expands it to the required length.
-func GenerateCombinationRandomness(api frontend.API, v *transcript.Verifier, randomnessLength int) ([]frontend.Variable, error) {
-	combRandomness := v.Generate(api)
-	combinationRandomness := ExpandRandomness(api, combRandomness, randomnessLength)
-	return combinationRandomness, nil
-
-}
-
 // runWhirSumcheckRounds mirrors the Rust WHIR quadratic sumcheck verifier
 // (whir/src/protocols/sumcheck.rs Config::verify).
 //
@@ -196,14 +122,6 @@ func generateEmptyMainRoundData(circuit WHIRParams) MainRoundData {
 		StirChallengesPoints:  make([][]frontend.Variable, len(circuit.RoundParametersOODSamples)),
 		CombinationRandomness: make([][]frontend.Variable, len(circuit.RoundParametersOODSamples)),
 	}
-}
-
-func computeFold(leaves [][]frontend.Variable, foldingRandomness []frontend.Variable, api frontend.API) []frontend.Variable {
-	computedFold := make([]frontend.Variable, len(leaves))
-	for j := range leaves {
-		computedFold[j] = MultivarPoly(leaves[j], foldingRandomness, api)
-	}
-	return computedFold
 }
 
 // readLeavesFromHints reads leaf values from the hint stream.
