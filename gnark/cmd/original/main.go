@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"reilabs/keccacheck/keccacheck"
 	"time"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -10,10 +11,6 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 )
-
-const NUM_VARS = Log_N + 6
-const N = 1 << Log_N
-const Log_N = 1
 
 func main() {
 
@@ -33,21 +30,17 @@ func main() {
 	}
 
 	assignment := KeccakfCircuit{}
-	solver.RegisterHint(GKRProofHint)
-	solver.RegisterHint(WhirProofHint)
-	solver.RegisterHint(ReadVecHint)
-	solver.RegisterHint(ReadHashHint)
+	solver.RegisterHint(KeccacheckProveHint)
 
-	inputs, outputs := PrepareTestIO()
+	inputs, outputs := keccacheck.PrepareTestIO()
 
-	assignment.Input, assignment.Output = initCircuitFields(inputs, outputs)
+	assignment.Input, assignment.InputD, assignment.Output = keccacheck.InitCircuitFields(inputs, outputs)
 
 	witness, _ := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
 
 	// Prove
 	fmt.Printf("Proving starts\n")
 	for i := 1; i <= 10; i++ {
-		ResetProveCache()
 		start := time.Now()
 		proof, err := groth16.Prove(ccs, pk, witness)
 		if err != nil {
