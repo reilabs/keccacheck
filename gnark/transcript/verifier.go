@@ -1,8 +1,6 @@
 package transcript
 
-import (
-	"github.com/consensys/gnark/frontend"
-)
+import "github.com/consensys/gnark/frontend"
 
 type Verifier struct {
 	sponge Sponge
