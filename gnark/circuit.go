@@ -68,6 +68,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	// Must be set before any hint calls, since the test engine executes hints
 	// inline during Define() and getOrComputeProof needs the block types.
 	SetHintBlockTypes(whir.ComputeHintBlockTypes(whirParams))
+	SetProofByteLen(MaxGKRProofLen*32 + whir.ComputeWhirBytes(whirParams, 1))
 
 	// Three separate hints, each producing exactly one proof component.
 	// They share a cached FFI result internally to avoid redundant computation.

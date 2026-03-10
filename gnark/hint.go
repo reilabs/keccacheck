@@ -32,7 +32,7 @@ func KeccacheckFree(ptr unsafe.Pointer, len int) {
 
 func KeccacheckProve(inputs []*big.Int) unsafe.Pointer {
 	r := inputs[0:Log_N]
-	r_bytes := make([]byte, 32*(Log_N))
+	r_bytes := make([]byte, 32*Log_N)
 	for i, r_i := range r {
 		r_i.FillBytes(r_bytes[i*32 : (i+1)*32])
 	}
@@ -73,11 +73,15 @@ func getOrComputeProof(inputs []*big.Int) *parsedProof {
 	ptr := KeccacheckProve(inputs)
 	result := (*KeccacheckResult)(ptr)
 
+	// The combined proof buffer contains GKR proof bytes followed by WHIR proof bytes.
+	allBytes := unsafe.Slice((*byte)(result.ProofPtr), proofByteLen)
+	gkrByteLen := MaxGKRProofLen * 32
+
 	// GKR proof elements
-	gkrElements := getBigInt4Slice(result.ProofPtr, MaxGKRProofLen)
+	gkrElements := getBigInt4FromBytes(allBytes[:gkrByteLen])
 
 	// Parse raw WHIR byte stream: [narg_len:8 LE][narg bytes][hints_len:8 LE][hints bytes]
-	whirBytes := unsafe.Slice((*byte)(result.WhirProofPtr), int(result.WhirProofLen))
+	whirBytes := allBytes[gkrByteLen:]
 
 	nargByteLen := int(binary.LittleEndian.Uint64(whirBytes[0:8]))
 
@@ -141,10 +145,19 @@ func WhirProofHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 // derived from WHIRParams. Must be set before solving via SetHintBlockTypes.
 var hintBlockTypes []int
 
+// proofByteLen holds the total byte length of the combined proof buffer
+// (GKR proof bytes + WHIR proof bytes). Set at compile time from params.
+var proofByteLen int
+
 // SetHintBlockTypes computes and stores the block type sequence from WHIRParams.
 // Called before proof solving so the offset table can be built.
 func SetHintBlockTypes(blockTypes []int) {
 	hintBlockTypes = blockTypes
+}
+
+// SetProofByteLen stores the total combined proof buffer byte length.
+func SetProofByteLen(n int) {
+	proofByteLen = n
 }
 
 // ReadVecHint returns the pre-parsed Vec block at callIndex.
@@ -165,20 +178,18 @@ func ReadHashHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
 	return nil
 }
 
-func KeccacheckProofFree(proof, whirProof, input, output unsafe.Pointer, whirProofLen, instances, proofLen uint) {
-	C.keccacheck_proof_free(proof, whirProof, C.size_t(whirProofLen), input, output, C.size_t(instances), C.size_t(proofLen))
+func KeccacheckProofFree(proof, input, output unsafe.Pointer, proofLen, instances uint) {
+	C.keccacheck_proof_free(proof, C.uintptr_t(proofLen), input, output, C.uintptr_t(instances))
 }
 
 func FreeProofHint(_ *big.Int, inputs []*big.Int, results []*big.Int) error {
 	proof := unsafe.Pointer(uintptr(inputs[0].Uint64()))
-	whirProof := unsafe.Pointer(uintptr(inputs[1].Uint64()))
-	whirProofLen := uint(inputs[2].Uint64())
-	in := unsafe.Pointer(uintptr(inputs[3].Uint64()))
-	out := unsafe.Pointer(uintptr(inputs[4].Uint64()))
-	instances := uint(inputs[5].Uint64())
-	proofLen := uint(inputs[6].Uint64())
+	inp := unsafe.Pointer(uintptr(inputs[1].Uint64()))
+	out := unsafe.Pointer(uintptr(inputs[2].Uint64()))
+	proofLen := uint(inputs[3].Uint64())
+	instances := uint(inputs[4].Uint64())
 
-	KeccacheckProofFree(proof, whirProof, in, out, whirProofLen, instances, proofLen)
+	KeccacheckProofFree(proof, inp, out, proofLen, instances)
 
 	return nil
 }

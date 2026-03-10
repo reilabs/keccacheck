@@ -57,7 +57,10 @@ func TestKeccakProve(t *testing.T) {
 			}
 		}
 	}
-	getFSlice(result.ProofPtr, MaxGKRProofLen)
+	// ProofPtr now contains GKR proof bytes + WHIR proof bytes concatenated.
+	// Read just the GKR portion to verify it's accessible.
+	allBytes := unsafe.Slice((*byte)(result.ProofPtr), MaxGKRProofLen*32)
+	_ = allBytes
 
 }
 

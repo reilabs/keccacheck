@@ -21,7 +21,7 @@ func TestKeccakVerify(t *testing.T) {
 	inputs, outputs := PrepareTestIO()
 
 	witness := KeccakfCircuit{}
-	witness.Input, witness.Output = initCircuitFields(inputs, outputs)
+	witness.Input, witness.Output = initCircuitFieldsWHIR(inputs, outputs)
 
 	var circuit = *NewKeccakfCircuit()
 
@@ -49,7 +49,7 @@ func TestKeccakVerifyFailing(t *testing.T) {
 	outputs[flip_idx] = rand.Uint64()
 
 	witness := KeccakfCircuit{}
-	witness.Input, witness.Output = initCircuitFields(inputs, outputs)
+	witness.Input, witness.Output = initCircuitFieldsWHIR(inputs, outputs)
 
 	var circuit = *NewKeccakfCircuit()
 

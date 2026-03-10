@@ -8,11 +8,9 @@ import (
 )
 
 type KeccacheckResult struct {
-	ProofPtr     unsafe.Pointer
-	WhirProofPtr unsafe.Pointer
-	WhirProofLen uintptr
-	InputPtr     unsafe.Pointer
-	OutputPtr    unsafe.Pointer
+	ProofPtr  unsafe.Pointer
+	InputPtr  unsafe.Pointer
+	OutputPtr unsafe.Pointer
 }
 
 func getBigIntSlice(ptr unsafe.Pointer, length int) []*big.Int {
@@ -76,7 +74,42 @@ func PrepareTestIO() ([]*big.Int, []uint64) {
 	return inputs, outputs
 }
 
+// Calculate circuit fields when we need access to the input bits directly
 func initCircuitFields(input []*big.Int, output []uint64) (
+	[]frontend.Variable, []frontend.Variable, []frontend.Variable) {
+
+	inSize := 25 * N
+	bitSize := 64 * 25 * N
+
+	inputSized := make([]frontend.Variable, inSize)
+	inputDSized := make([]frontend.Variable, bitSize)
+	outputSized := make([]frontend.Variable, inSize)
+
+	for i := 0; i < 25; i++ {
+		for instance := 0; instance < N; instance++ {
+			idx := instance*25 + i
+			w := input[idx]
+			inputSized[idx] = w
+
+			base := 64 * (i*N + instance)
+			for j := 0; j < 64; j++ {
+				inputDSized[base+j] = w.Bit(j)
+			}
+		}
+	}
+
+	for i := 0; i < 25; i++ {
+		for instance := 0; instance < N; instance++ {
+			outputSized[i*N+instance] = output[575*N+i*N+instance]
+		}
+	}
+
+	return inputSized, inputDSized, outputSized
+}
+
+// Calculate circuit fields when we need verify the
+// claims on input bits via WHIR
+func initCircuitFieldsWHIR(input []*big.Int, output []uint64) (
 	[]frontend.Variable, []frontend.Variable) {
 
 	inSize := 25 * N

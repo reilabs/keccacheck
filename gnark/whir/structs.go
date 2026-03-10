@@ -144,6 +144,58 @@ func ComputeWhirProofFrs(params WHIRParams) int {
 	return count
 }
 
+// ComputeWhirHintBytes returns the total byte length of the WHIR hint stream,
+// computed deterministically from params. Each Vec block is 8 (count prefix) + count*32,
+// each Hash block is 32 bytes.
+func ComputeWhirHintBytes(params WHIRParams, numStatements int) int {
+	bytes := 0
+	domainSize := params.DomainSize
+
+	// 1. Initial leaves Vec: numQueries[0] * batchSize * (1 << ff[0])
+	initialVecCount := params.RoundParametersNumOfQueries[0] * params.BatchSize * (1 << params.FoldingFactorArray[0])
+	bytes += 8 + initialVecCount*32
+
+	for r := range params.ParamNRounds {
+		if r == 0 {
+			// Round 0: Merkle paths on initial leaves (no new Vec)
+			treeHeight := bits.Len(uint(domainSize/(1<<params.FoldingFactorArray[0]))) - 1
+			bytes += params.RoundParametersNumOfQueries[0] * treeHeight * 32
+		} else {
+			// Round r>0: leaves Vec + Merkle paths
+			vecCount := params.RoundParametersNumOfQueries[r] * (1 << params.FoldingFactorArray[r])
+			bytes += 8 + vecCount*32
+			treeHeight := bits.Len(uint(domainSize/(1<<params.FoldingFactorArray[r]))) - 1
+			bytes += params.RoundParametersNumOfQueries[r] * treeHeight * 32
+		}
+		domainSize /= 2
+	}
+
+	// Final leaves Vec + Merkle paths
+	lastFoldingFactor := params.FoldingFactorArray[len(params.FoldingFactorArray)-1]
+	if params.ParamNRounds > 0 {
+		finalVecCount := params.FinalQueries * (1 << lastFoldingFactor)
+		bytes += 8 + finalVecCount*32
+	} else {
+		finalVecCount := params.FinalQueries * params.BatchSize * (1 << lastFoldingFactor)
+		bytes += 8 + finalVecCount*32
+	}
+	finalTreeHeight := bits.Len(uint(domainSize/(1<<lastFoldingFactor))) - 1
+	bytes += params.FinalQueries * finalTreeHeight * 32
+
+	// Deferred evals Vec
+	bytes += 8 + numStatements*32
+
+	return bytes
+}
+
+// ComputeWhirBytes returns the total byte length of the WHIR proof portion
+// (narg string + hints), computed deterministically from params.
+func ComputeWhirBytes(params WHIRParams, numStatements int) int {
+	nargBytes := 8 + ComputeWhirProofFrs(params)*32
+	hintBytes := 8 + ComputeWhirHintBytes(params, numStatements)
+	return nargBytes + hintBytes
+}
+
 // ComputeHintBlockTypes returns the block type sequence (0=Vec, 1=Hash)
 // for all HintReader calls in VerifyWhir, derived deterministically from params.
 // This allows pre-computing byte offsets into the hint stream.
