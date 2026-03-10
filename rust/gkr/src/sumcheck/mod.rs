@@ -1,3 +1,4 @@
+#[cfg(feature = "whir")]
 pub mod binary;
 pub mod chi;
 pub mod iota;

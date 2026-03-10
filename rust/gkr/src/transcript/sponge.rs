@@ -1,10 +1,10 @@
 use {
     crate::poseidon,
     ark_bn254::Fr,
-    ark_ec::AdditiveGroup,
-    ark_ff::{BigInteger, MontFp, PrimeField},
-    whir::transcript::DuplexSpongeInterface,
+    ark_ff::MontFp,
 };
+#[cfg(feature = "whir")]
+use {ark_ec::AdditiveGroup, ark_ff::{BigInteger, PrimeField}, whir::transcript::DuplexSpongeInterface};
 
 // Random initial state (nothing up my sleeve: digits of 2 * pi in groups of 77
 // digits)
@@ -77,6 +77,7 @@ impl Default for Sponge {
     }
 }
 
+#[cfg(feature = "whir")]
 impl DuplexSpongeInterface for Sponge {
     type U = u8;
 

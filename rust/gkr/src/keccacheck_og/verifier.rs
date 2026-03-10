@@ -1,44 +1,16 @@
-use crate::poseidon::COUNT_16;
-#[cfg(debug_assertions)]
-use crate::protocol_utils::deserialize_whir_proof;
-#[cfg(not(debug_assertions))]
-use crate::protocol_utils::deserialize_whir_proof_flat;
-use crate::protocol_utils::fr_to_usize;
-use crate::protocol_utils::{change_type, change_type_vec, whir_config};
 use crate::reference::{ROUND_CONSTANTS, strip_pi};
-use crate::sumcheck::binary::verify_binary;
 use crate::sumcheck::util::{self, eq, to_field_vec};
-use crate::sumcheck::util::{
-    HALF, add_col, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_poly,
-    verify_sumcheck, xor,
-};
-
-use crate::transcript::{Sponge, Verifier};
+use crate::sumcheck::util::{HALF, add_col, eval_mle, to_poly, verify_sumcheck, xor};
+use crate::transcript::Verifier;
 use ark_bn254::Fr;
-use ark_ff::{One, PrimeField, Zero};
+use ark_ff::{One, Zero};
 use tracing::{Level, instrument};
-use whir::algebra::fields::Field256;
-use whir::algebra::linear_form::{Covector, LinearForm};
-use whir::transcript::VerifierState;
 
 #[instrument(skip_all)]
-pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], whir_proof: Vec<u8>, r: Vec<Fr>) {
-    COUNT_16.store(0, std::sync::atomic::Ordering::SeqCst);
+pub fn verify(num_vars: usize, output: &[u64], input: &[u64], proof: &[Fr], r: Vec<Fr>) {
     let instances = 1usize << (num_vars - 6);
 
-    // Extract and verify WHIR proof
-    #[cfg(debug_assertions)]
-    let deser_whir_proof = deserialize_whir_proof(&whir_proof);
-    #[cfg(not(debug_assertions))]
-    let deser_whir_proof = deserialize_whir_proof_flat(&whir_proof);
-    let (config, ds) = whir_config(num_vars);
-    let mut verifier_state = VerifierState::new(&ds, &deser_whir_proof, Sponge::new());
-    let whir_commitment = config.receive_commitment(&mut verifier_state).unwrap();
-
-    let main_proof_len = fr_to_usize(proof[0]);
-    let mut verifier = Verifier::new(&proof[1..1 + main_proof_len]);
-    let root = whir_commitment.root();
-    verifier.absorb(Fr::from_le_bytes_mod_order(&root.0));
+    let mut verifier = Verifier::new(proof);
     let span = tracing::span!(Level::INFO, "calculate output sum").entered();
     r.iter().for_each(|challenge| verifier.absorb(*challenge));
     let mut beta = (0..25).map(|_| verifier.generate()).collect::<Vec<_>>();
@@ -75,14 +47,14 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], whir_proof: Vec<u8>
     span.exit();
 
     sum = b_r_x_r_y;
-    let span = tracing::span!(Level::INFO, "verify all rounds").entered();
-    let mut iota = Vec::new();
 
     // create the main keccacheck round challenge
     let mut r = Vec::with_capacity(num_vars);
     r.extend(r_x);
     r.extend(r_y);
 
+    let span = tracing::span!(Level::INFO, "verify all rounds").entered();
+    let mut iota = Vec::new();
     for round in (0..24).rev() {
         (r, iota) = verify_round(
             &mut verifier,
@@ -102,89 +74,17 @@ pub fn verify(num_vars: usize, output: &[u64], proof: &[Fr], whir_proof: Vec<u8>
     }
     span.exit();
 
-    // Verify input bits via commitment
-
-    let output_beta = beta;
-    let output_r = r;
-
-    // Binary claim verification
-    let binary_beta: Vec<Fr> = (0..25).map(|_| verifier.generate()).collect();
-    let binary_alpha: Vec<Fr> = (0..num_vars).map(|_| verifier.generate()).collect();
-    let binary_proof = verify_binary(&mut verifier, num_vars, &binary_alpha, &binary_beta, 25);
-    let binary_r = binary_proof.r_x;
-
-    // Input word reduction (fresh betas)
-    let input_beta: Vec<Fr> = (0..25).map(|_| verifier.generate()).collect();
-    let input_alpha: Vec<Fr> = (0..num_vars - 6).map(|_| verifier.generate()).collect();
-
-    let input_c = verifier.read();
-
-    // Verify word-level sumcheck
-    let (ic_1, input_r_x) = verify_sumcheck::<2>(&mut verifier, num_vars - 6, input_c);
-    let input_words_rx = verifier.read();
-    let input_eq = eq(&input_alpha, &input_r_x);
-    assert_eq!(ic_1, input_words_rx * input_eq);
-
-    // Verify bit-level sumcheck
-    let (ic_2, input_r_y) = verify_sumcheck::<2>(&mut verifier, 6, input_words_rx);
-    let input_b_rx_ry = verifier.read();
-    let input_powers_eval = eval_mle(&powers, &input_r_y);
-    assert_eq!(ic_2, input_powers_eval * input_b_rx_ry);
-
-    let mut input_r = Vec::with_capacity(num_vars);
-    input_r.extend_from_slice(&input_r_x);
-    input_r.extend_from_slice(&input_r_y);
-
-    // Read 75 individual lane evaluations (25 lanes × 3 claim points)
-    let lane_evals: Vec<[Fr; 3]> = (0..25)
-        .map(|_| [verifier.read(), verifier.read(), verifier.read()])
-        .collect();
-
-    // Check round claim: sum_k output_beta[k] * lane_k(output_r) == sum_k output_beta[k] * iota[k]
-    let round_claim: Fr = (0..25).map(|k| output_beta[k] * lane_evals[k][0]).sum();
-    let expected_round: Fr = (0..25).map(|k| output_beta[k] * iota[k]).sum();
-    assert_eq!(round_claim, expected_round);
-
-    // Check binary claim: sum_k binary_beta[k] * lane_k(binary_r) matches binary sumcheck
-    let binary_claim: Fr = (0..25).map(|k| binary_beta[k] * lane_evals[k][1]).sum();
-    assert_eq!(binary_claim, binary_proof.batched_eval);
-
-    // Check input claim: sum_k input_beta[k] * lane_k(input_r) == input_b_rx_ry
-    let input_claim: Fr = (0..25).map(|k| input_beta[k] * lane_evals[k][2]).sum();
-    assert_eq!(input_claim, input_b_rx_ry);
-
-    // Sample gamma and build combined linear form
-    let gamma = verifier.generate();
-    let gamma2 = gamma * gamma;
-
-    let eq1 = calculate_evaluations_over_boolean_hypercube_for_eq(&output_r);
-    let eq2 = calculate_evaluations_over_boolean_hypercube_for_eq(&binary_r);
-    let eq3 = calculate_evaluations_over_boolean_hypercube_for_eq(&input_r);
-
-    let combined_eq: Vec<Fr> = eq1
-        .iter()
-        .zip(eq2.iter())
-        .zip(eq3.iter())
-        .map(|((e1, e2), e3)| *e1 + gamma * *e2 + gamma2 * *e3)
-        .collect();
-    let combined_cov = Covector::new(change_type_vec(&combined_eq));
-
-    // 25 combined evaluations: lane_k(r1) + γ·lane_k(r2) + γ²·lane_k(r3)
-    let evaluations: Vec<Field256> = lane_evals
-        .iter()
-        .map(|[e1, e2, e3]| change_type(*e1 + gamma * *e2 + gamma2 * *e3))
-        .collect();
-
-    let span = tracing::span!(Level::INFO, "verify whir").entered();
-    config
-        .verify(
-            &mut verifier_state,
-            &[&whir_commitment],
-            &[&combined_cov as &dyn LinearForm<Field256>],
-            &evaluations,
-        )
-        .unwrap();
-    println!("verifier permutations {:?}", COUNT_16);
+    // verify input
+    let span = tracing::span!(Level::INFO, "evaluate input at random point").entered();
+    for i in 0..25 {
+        assert_eq!(
+            eval_mle(
+                &to_poly(&input[(i * instances)..(i * instances + instances)]),
+                &r
+            ),
+            iota[i]
+        );
+    }
     span.exit();
 }
 

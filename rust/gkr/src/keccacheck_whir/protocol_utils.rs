@@ -1,7 +1,6 @@
 use std::sync::Once;
 
 use ark_bn254::Fr;
-use ark_ff::{BigInteger, PrimeField};
 use whir::algebra::fields::Field256;
 use whir::parameters::{FoldingFactor, MultivariateParameters, ProtocolParameters, SoundnessType};
 use whir::protocols::whir::Config;
@@ -82,11 +81,6 @@ pub(crate) fn whir_config(num_vars: usize) -> (Config<Field256>, DomainSeparator
         .session(&"keccacheck-input-coxmmitment")
         .instance(&Empty);
     (config, ds)
-}
-
-pub(crate) fn fr_to_usize(f: Fr) -> usize {
-    let bytes = f.into_bigint().to_bytes_le();
-    u64::from_le_bytes(bytes[..8].try_into().unwrap()) as usize
 }
 
 #[cfg(test)]

@@ -74,7 +74,7 @@ func getOrComputeProof(inputs []*big.Int) *parsedProof {
 	result := (*KeccacheckResult)(ptr)
 
 	// GKR proof elements
-	gkrElements := getBigInt4Slice(result.ProofPtr, int(result.ProofLen))
+	gkrElements := getBigInt4Slice(result.ProofPtr, MaxGKRProofLen)
 
 	// Parse raw WHIR byte stream: [narg_len:8 LE][narg bytes][hints_len:8 LE][hints bytes]
 	whirBytes := unsafe.Slice((*byte)(result.WhirProofPtr), int(result.WhirProofLen))
@@ -103,7 +103,7 @@ func getOrComputeProof(inputs []*big.Int) *parsedProof {
 	}
 
 	proveCache = &parsedProof{
-		gkrElements: gkrElements[1:result.ProofLen],
+		gkrElements: gkrElements,
 		whirNargFrs: nargFrs,
 		hintBlocks:  blocks,
 	}

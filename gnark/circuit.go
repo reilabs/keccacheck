@@ -23,7 +23,7 @@ func NewKeccakfCircuit() *KeccakfCircuit {
 }
 
 // Maximum output sizes for each proof component hint.
-const MaxGKRProofLen = 3035 + 559*NUM_VARS
+const MaxGKRProofLen = 3034 + 559*NUM_VARS
 
 // Main Verifier circuit definition
 func (circuit *KeccakfCircuit) Define(api frontend.API) error {

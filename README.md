@@ -26,6 +26,12 @@ To compile the Rust portion of the project and generate the static library:
 RUSTFLAGS='-C target-cpu=native' cargo build --profile=optimized
 ```
 
+By default this builds with the WHIR polynomial commitment scheme. To build without WHIR (using direct bit verification instead):
+
+```bash
+RUSTFLAGS='-C target-cpu=native' cargo build --profile=optimized --no-default-features
+```
+
 ### Go (gnark)
 
 When making changes to the Rust static library, it's important to ensure Go does not serve outdated, cached versions of the compiled code. To avoid this issue, use the MakeFile Script:
@@ -47,6 +53,12 @@ This will compile the main circuit, yield the number of constraints and give the
 ### Non-recursive proof
 
 Run `RUSTFLAGS='-C target-cpu=native' cargo run --profile=optimized -- {num_variables}`.
+
+To benchmark without WHIR (direct bit verification):
+
+```bash
+RUSTFLAGS='-C target-cpu=native' cargo run --profile=optimized --no-default-features -- {num_variables}
+```
 
 `num_variables` must be greater than 6 (a single keccak instance). This will prove $2^{numVariables - 6}$ instances of keccak.
 

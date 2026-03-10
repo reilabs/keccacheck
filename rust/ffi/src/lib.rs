@@ -2,7 +2,11 @@ use ark_bn254::Fr;
 use std::ffi::c_void;
 
 use ark_ff::{BigInteger, PrimeField};
-use gkr::{prover::prove, reference::KeccakRoundState};
+#[cfg(not(feature = "whir"))]
+use gkr::keccacheck_og::prover::prove;
+#[cfg(feature = "whir")]
+use gkr::keccacheck_whir::prover::prove;
+use gkr::reference::KeccakRoundState;
 #[repr(C)]
 /// Represents the internal Keccak state
 pub struct KeccakInstance {
@@ -77,12 +81,20 @@ pub unsafe extern "C" fn keccacheck_free(ptr: *mut c_void, len: usize) {
     }
 }
 
+#[cfg(feature = "whir")]
 #[repr(C)]
 pub struct KeccacheckResult {
     pub proof_ptr: *mut c_void,
-    pub proof_len: usize,
     pub whir_proof_ptr: *mut c_void,
     pub whir_proof_len: usize,
+    pub input_ptr: *mut c_void,
+    pub output_ptr: *mut c_void,
+}
+
+#[cfg(not(feature = "whir"))]
+#[repr(C)]
+pub struct KeccacheckResult {
+    pub proof_ptr: *mut c_void,
     pub input_ptr: *mut c_void,
     pub output_ptr: *mut c_void,
 }
@@ -126,36 +138,48 @@ pub unsafe extern "C" fn keccacheck_prove(
             })
             .collect();
 
-        let r_bytes: &[u8] = std::slice::from_raw_parts(r_ptr, 32 * (log_n));
+        let r_bytes: &[u8] = std::slice::from_raw_parts(r_ptr, 32 * log_n);
         let mut r = Vec::with_capacity(log_n);
-        for i in 0..(log_n) {
+        for i in 0..log_n {
             let chunk = &r_bytes[i * 32..(i + 1) * 32];
             r.push(Fr::from_be_bytes_mod_order(chunk));
         }
+        #[cfg(feature = "whir")]
         let (proof, mut whir_proof, mut input, mut output) = prove(&data, r);
+        #[cfg(not(feature = "whir"))]
+        let (proof, mut input, mut output) = prove(&data, r);
         let mut proof: Vec<u8> = proof
             .iter()
             .flat_map(|el| el.into_bigint().to_bytes_le())
             .collect();
 
-        let proof_len = proof.len() / 32; // number of Fr elements
         let proof_ptr = proof.as_mut_ptr() as *mut c_void;
-        let whir_proof_len = whir_proof.len();
-        let whir_proof_ptr = whir_proof.as_mut_ptr() as *mut c_void;
+        #[cfg(feature = "whir")]
+        let (whir_proof_len, whir_proof_ptr) = {
+            let len = whir_proof.len();
+            let ptr = whir_proof.as_mut_ptr() as *mut c_void;
+            std::mem::forget(whir_proof);
+            (len, ptr)
+        };
         let input_ptr = input.as_mut_ptr() as *mut c_void;
         let output_ptr = output.as_mut_ptr() as *mut c_void;
 
         // Prevent Rust from freeing the memory so it can be used by caller
         std::mem::forget(proof);
-        std::mem::forget(whir_proof);
         std::mem::forget(input);
         std::mem::forget(output);
-
+        #[cfg(feature = "whir")]
         let result = Box::new(KeccacheckResult {
             proof_ptr,
-            proof_len,
             whir_proof_ptr,
             whir_proof_len,
+            input_ptr,
+            output_ptr,
+        });
+
+        #[cfg(not(feature = "whir"))]
+        let result = Box::new(KeccacheckResult {
+            proof_ptr,
             input_ptr,
             output_ptr,
         });

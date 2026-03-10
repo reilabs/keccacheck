@@ -57,7 +57,7 @@ func TestKeccakProve(t *testing.T) {
 			}
 		}
 	}
-	getFSlice(result.ProofPtr, int(result.ProofLen))
+	getFSlice(result.ProofPtr, MaxGKRProofLen)
 
 }
 

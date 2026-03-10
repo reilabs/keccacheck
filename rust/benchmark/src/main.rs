@@ -1,7 +1,12 @@
 use ark_bn254::Fr;
 use ark_ff::PrimeField;
-use gkr::{prover::prove, reference::STATE, verifier::verify};
+use gkr::reference::STATE;
 use std::env;
+
+#[cfg(feature = "whir")]
+use gkr::{keccacheck_whir::prover::prove, keccacheck_whir::verifier::verify};
+#[cfg(not(feature = "whir"))]
+use gkr::{keccacheck_og::prover::prove, keccacheck_og::verifier::verify};
 
 fn main() {
     tracing_forest::init();
@@ -20,8 +25,16 @@ fn main() {
         .collect::<Vec<_>>();
 
     let r = generate_r(&data, num_vars - 6);
+
+    #[cfg(feature = "whir")]
     let (proof, whir_proof, input, output) = prove(&data, r.clone());
+    #[cfg(feature = "whir")]
     verify(num_vars, &output, &proof, whir_proof, r);
+
+    #[cfg(not(feature = "whir"))]
+    let (proof, input, output) = prove(&data, r.clone());
+    #[cfg(not(feature = "whir"))]
+    verify(num_vars, &output, &input, &proof, r);
 
     let mut reference_input: [u64; 25] = [0; 25];
     let mut reference_output: [u64; 25] = [0; 25];

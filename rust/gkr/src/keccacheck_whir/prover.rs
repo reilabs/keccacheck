@@ -1,8 +1,8 @@
 #[cfg(debug_assertions)]
-use crate::protocol_utils::serialize_whir_proof;
+use super::protocol_utils::serialize_whir_proof;
 #[cfg(not(debug_assertions))]
-use crate::protocol_utils::serialize_whir_proof_flat;
-use crate::protocol_utils::{change_type, change_type_vec, whir_config};
+use super::protocol_utils::serialize_whir_proof_flat;
+use super::protocol_utils::{change_type, change_type_vec, whir_config};
 use crate::reference::{KeccakRoundState, ROUND_CONSTANTS, strip_pi};
 use crate::sumcheck::binary::prove_binary;
 use crate::sumcheck::chi::prove_chi;
@@ -87,10 +87,7 @@ pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u8>, Vec<u64>
         &input_r,
     );
 
-    let main_proof = prover.finish();
-    let mut proof = Vec::with_capacity(1 + main_proof.len() + whir_proof.len());
-    proof.push(Fr::from(main_proof.len() as u64));
-    proof.extend(main_proof);
+    let proof = prover.finish();
     span.exit();
     println!(
         "finished proving on rust side in {:?}",
