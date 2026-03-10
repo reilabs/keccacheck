@@ -3,10 +3,10 @@ use ark_ff::PrimeField;
 use gkr::reference::STATE;
 use std::env;
 
-#[cfg(feature = "whir")]
-use gkr::{keccacheck_whir::prover::prove, keccacheck_whir::verifier::verify};
 #[cfg(not(feature = "whir"))]
 use gkr::{keccacheck_og::prover::prove, keccacheck_og::verifier::verify};
+#[cfg(feature = "whir")]
+use gkr::{keccacheck_whir::prover::prove, keccacheck_whir::verifier::verify};
 
 fn main() {
     tracing_forest::init();

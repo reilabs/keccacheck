@@ -1,10 +1,10 @@
-use {
-    crate::poseidon,
-    ark_bn254::Fr,
-    ark_ff::MontFp,
-};
+use {crate::poseidon, ark_bn254::Fr, ark_ff::MontFp};
 #[cfg(feature = "whir")]
-use {ark_ec::AdditiveGroup, ark_ff::{BigInteger, PrimeField}, whir::transcript::DuplexSpongeInterface};
+use {
+    ark_ec::AdditiveGroup,
+    ark_ff::{BigInteger, PrimeField},
+    whir::transcript::DuplexSpongeInterface,
+};
 
 // Random initial state (nothing up my sleeve: digits of 2 * pi in groups of 77
 // digits)

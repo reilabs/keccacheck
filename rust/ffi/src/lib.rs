@@ -199,8 +199,7 @@ pub unsafe extern "C" fn keccacheck_proof_free(
             let _ = Vec::from_raw_parts(output_ptr as *mut u64, len, len);
         }
         if !proof_ptr.is_null() {
-            let _ =
-                Vec::<u8>::from_raw_parts(proof_ptr as *mut u8, proof_byte_len, proof_byte_len);
+            let _ = Vec::<u8>::from_raw_parts(proof_ptr as *mut u8, proof_byte_len, proof_byte_len);
         }
     }
 }
