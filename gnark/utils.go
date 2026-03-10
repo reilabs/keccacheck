@@ -94,9 +94,7 @@ func initCircuitFields(input []*big.Int, output []uint64) (
 
 	for i := 0; i < 25; i++ {
 		for instance := 0; instance < N; instance++ {
-			w := output[575*N+i*N+instance]
-			index := (i*N + instance)
-			outputSized[index] = w
+			outputSized[i*N+instance] = output[575*N+i*N+instance]
 		}
 	}
 
