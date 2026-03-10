@@ -1,13 +1,17 @@
 package main
 
 import (
+	"reilabs/keccacheck/sumcheck"
 	"reilabs/keccacheck/transcript"
 	"reilabs/keccacheck/whir"
 
 	"github.com/consensys/gnark/frontend"
 )
 
-func VerifyKeccakF(
+// VerifyKeccakFWHIR verifies a keccak-f permutation using GKR with a WHIR
+// polynomial commitment. It reduces the GKR output, binary, and input claims
+// into polynomial constraints that are then verified via WHIR.
+func VerifyKeccakFWHIR(
 	api frontend.API,
 	output, proof, alpha []frontend.Variable,
 	whirProof []frontend.Variable,
@@ -45,6 +49,22 @@ func VerifyKeccakF(
 	}}
 	hr := whir.NewHintReader(api, hintInputs, ReadVecHint, ReadHashHint)
 	whir.VerifyWhir(api, whirVerifier, whirCommitment, hr, statements, whirParams)
+}
+
+// VerifyKeccakF verifies a keccak-f permutation using GKR without a polynomial
+// commitment scheme. Directly evaluates the input MLEs against the GKR output
+// and checks equality in-circuit.
+func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable) {
+	verifier := transcript.NewVerifier(proof)
+	_, r, iota := VerifyGKR(api, verifier, r, output)
+	eval_eq_r := sumcheck.EvalEq(api, r)
+	for i := 0; i < 25; i++ {
+		start := i * N
+		end := start + N
+		poly := input[64*start : 64*end]
+		eval := sumcheck.EvalMleWithEq(api, poly, eval_eq_r)
+		api.AssertIsEqual(eval, iota[i])
+	}
 }
 
 var COLUMNS = 5

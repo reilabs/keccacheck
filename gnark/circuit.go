@@ -81,7 +81,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 		return fmt.Errorf("failed to generate WHIR proof hint: %w", err)
 	}
 
-	VerifyKeccakF(api, circuit.Output[:], gkrProof, r, whirProof, hintInputs, whirParams)
+	VerifyKeccakFWHIR(api, circuit.Output[:], gkrProof, r, whirProof, hintInputs, whirParams)
 	// Needed for the test engine, which executes hints inline during Define().
 	ResetProveCache()
 	return nil
