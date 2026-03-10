@@ -1,8 +1,6 @@
 package transcript
 
 import (
-	"reilabs/keccacheck/poseidon2"
-
 	"github.com/consensys/gnark/frontend"
 )
 
@@ -65,11 +63,4 @@ func (v *Verifier) Reveal() frontend.Variable {
 	value := v.Proof[v.index]
 	v.index++
 	return value
-}
-
-// HashNode calculates the hash of a slice of children nodes (N-ary).
-// It creates a fresh sponge instance to ensure the operation is stateless
-// and isolated, which is required for Merkle tree logic.
-func HashNode(api frontend.API, children []frontend.Variable) frontend.Variable {
-	return poseidon2.Compress(api, children)
 }

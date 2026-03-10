@@ -114,6 +114,7 @@ func EvalEq(api frontend.API, r []frontend.Variable) []frontend.Variable {
 
 	return eq
 }
+
 func CalculateEvaluationsOverBooleanHypercubeForRot(api frontend.API, r []frontend.Variable, i int) []frontend.Variable {
 	return DeriveRotEvaluationsFromEq(api, &r, RHO_OFFSETS[i])
 }

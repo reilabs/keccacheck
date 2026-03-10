@@ -3,6 +3,7 @@ package whir
 import (
 	"math/big"
 	"math/bits"
+	"reilabs/keccacheck/poseidon2"
 	"reilabs/keccacheck/transcript"
 
 	"github.com/consensys/gnark/frontend"
@@ -159,7 +160,7 @@ func verifyMerklePaths(
 		// Hash all leaf elements at once to get the leaf hash.
 		// Matches Rust matrix_commit::verify which calls hash_rows on the
 		// full row, then passes the result to merkle_tree::verify_naive.
-		claimedLeafHash := transcript.HashNode(api, leaves[i])
+		claimedLeafHash := poseidon2.Compress(api, leaves[i])
 		// Walk up the tree, reading one sibling hash from hints per level
 		currentHash := claimedLeafHash
 		for level := 0; level < treeHeight; level++ {
@@ -169,7 +170,7 @@ func verifyMerklePaths(
 			left := api.Select(indexBit, siblingHash, currentHash)
 			right := api.Select(indexBit, currentHash, siblingHash)
 
-			currentHash = transcript.HashNode(api, []frontend.Variable{left, right})
+			currentHash = poseidon2.Compress(api, []frontend.Variable{left, right})
 		}
 
 		api.AssertIsEqual(currentHash, rootHash)
@@ -204,7 +205,7 @@ func CheckPoW(api frontend.API, challenge frontend.Variable, nonce frontend.Vari
 	maxUint64, _ := new(big.Int).SetString("18446744073709551615", 10) // 2^64 - 1
 	api.AssertIsLessOrEqual(nonce, maxUint64)
 
-	hash := transcript.HashNode(api, []frontend.Variable{challenge, nonce})
+	hash := poseidon2.Compress(api, []frontend.Variable{challenge, nonce})
 
 	d0, _ := new(big.Int).SetString("21888242871839275222246405745257275088548364400416034343698204186575808495617", 10)
 	d1, _ := new(big.Int).SetString("10944121435919637611123202872628637544274182200208017171849102093287904247808", 10)
