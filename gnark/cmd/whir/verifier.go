@@ -27,7 +27,6 @@ func VerifyKeccakFWHIR(
 	whirCommitment := whir.ReceiveCommitment(whirVerifier, api, whirParams.CommittmentOODSamples, whirParams.BatchSize)
 
 	// Absorb the WHIR commitment root hash into the keccak verifier transcript
-	// (mirrors Rust: verifier.absorb(Fr::from_le_bytes_mod_order(&root.0)))
 	verifier := transcript.NewVerifier(proof)
 	verifier.Absorb(api, whirCommitment.Root)
 

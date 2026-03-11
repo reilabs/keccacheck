@@ -1,57 +1,28 @@
 package main
 
 import (
-	"math/rand"
+	"math/big"
 	"reilabs/keccacheck/keccacheck"
 	"testing"
 
-	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/constraint/solver"
-	"github.com/consensys/gnark/test"
+	"github.com/consensys/gnark/frontend"
 )
 
-func TestKeccakVerify(t *testing.T) {
-	assert := test.NewAssert(t)
-
+func setupOriginal(inputs []*big.Int, outputs []uint64) (frontend.Circuit, frontend.Circuit) {
 	solver.RegisterHint(KeccacheckProveHint)
 
-	inputs, outputs := keccacheck.PrepareTestIO()
-
-	witness := KeccakfCircuit{}
+	witness := &KeccakfCircuit{}
 	witness.Input, witness.InputD, witness.Output = keccacheck.InitCircuitFields(inputs, outputs)
 
-	var circuit = *NewKeccakfCircuit()
+	circuit := NewKeccakfCircuit()
+	return circuit, witness
+}
 
-	assert.ProverSucceeded(
-		&circuit,
-		&witness,
-		test.WithCurves(ecc.BN254),
-		test.WithBackends(backend.GROTH16),
-	)
+func TestKeccakVerify(t *testing.T) {
+	keccacheck.AssertVerifySucceeds(t, setupOriginal)
 }
 
 func TestKeccakVerifyFailing(t *testing.T) {
-	assert := test.NewAssert(t)
-
-	solver.RegisterHint(KeccacheckProveHint)
-
-	inputs, outputs := keccacheck.PrepareTestIO()
-
-	// Make sure that if keccak(inputs) != outputs
-	// Then the prover fails
-	flip_idx := rand.Intn(600*keccacheck.N-575*keccacheck.N) + 575*keccacheck.N
-	outputs[flip_idx] = rand.Uint64()
-
-	witness := KeccakfCircuit{}
-	witness.Input, witness.InputD, witness.Output = keccacheck.InitCircuitFields(inputs, outputs)
-
-	var circuit = *NewKeccakfCircuit()
-
-	assert.ProverFailed(
-		&circuit,
-		&witness,
-		test.WithCurves(ecc.BN254),
-		test.WithBackends(backend.GROTH16),
-	)
+	keccacheck.AssertVerifyFails(t, setupOriginal)
 }
