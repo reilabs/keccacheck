@@ -10,7 +10,11 @@ ark-ff.workspace = true
 blake3.workspace = true
 hex.workspace = true
 keccak.workspace = true
-gkr = { path = "../gkr" }
+gkr = { path = "../gkr", default-features = false }
 rayon.workspace = true
 tracing.workspace = true
 tracing-forest.workspace = true
+
+[features]
+default = ["whir"]
+whir = ["gkr/whir"]

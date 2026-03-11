@@ -6,14 +6,20 @@ import (
 	"github.com/consensys/gnark/frontend"
 )
 
+// Parsed round constants, cached as package-level vars to avoid re-parsing on every permutation call.
+var cachedRC3_0 = parseTwoDimensionArray(first_full_rc3)
+var cachedRC3_1 = parseOneDimensionArray(partial_rc3)
+var cachedRC3_2 = parseTwoDimensionArray(second_full_rc3)
+var cachedRC16_0 = parseTwoDimensionArray(first_full_rc16)
+var cachedRC16_1 = parseOneDimensionArray(partial_rc16)
+var cachedRC16_2 = parseTwoDimensionArray(second_full_rc16)
+
 func Compress(api frontend.API, input []frontend.Variable) frontend.Variable {
 
 	if len(input) <= 16 {
 		var state [16]frontend.Variable
 		// Fill with input, zero-pad the rest
-		for i := 0; i < len(input); i++ {
-			state[i] = input[i]
-		}
+		copy(state[:], input)
 
 		for i := len(input); i < 16; i++ {
 			state[i] = frontend.Variable(0)
@@ -50,13 +56,10 @@ func Compress(api frontend.API, input []frontend.Variable) frontend.Variable {
 }
 
 func Permute3(api frontend.API, state *[3]frontend.Variable) {
-	RC30 := parseTwoDimensionArray(first_full_rc3)
-	RC32 := parseTwoDimensionArray(second_full_rc3)
-	RC31 := parseOneDimensionArray(partial_rc3)
 	MatFull3(api, state)
 
 	// RC3.0 rounds
-	for _, rc := range RC30 {
+	for _, rc := range cachedRC3_0 {
 		for i := 0; i < 3; i++ {
 			state[i] = api.Add(state[i], rc[i])
 		}
@@ -67,7 +70,7 @@ func Permute3(api frontend.API, state *[3]frontend.Variable) {
 	}
 
 	// RC3.1 rounds
-	for _, rc := range RC31 {
+	for _, rc := range cachedRC3_1 {
 		state[0] = api.Add(state[0], rc)
 		state[0] = Sbox(api, state[0])
 
@@ -87,7 +90,7 @@ func Permute3(api frontend.API, state *[3]frontend.Variable) {
 	}
 
 	// RC3.2 rounds
-	for _, rc := range RC32 {
+	for _, rc := range cachedRC3_2 {
 		for i := 0; i < 3; i++ {
 			state[i] = api.Add(state[i], rc[i])
 		}
@@ -101,14 +104,11 @@ func Permute3(api frontend.API, state *[3]frontend.Variable) {
 func Permute16(api frontend.API, state *[16]frontend.Variable,
 ) {
 
-	RC16_0 := parseTwoDimensionArray(first_full_rc16)
-	RC16_2 := parseTwoDimensionArray(second_full_rc16)
-	RC16_1 := parseOneDimensionArray(partial_rc16)
 	// Full round
 	MatFull16(api, state)
 
 	// First set of full rounds
-	for _, rc := range RC16_0 {
+	for _, rc := range cachedRC16_0 {
 		// Add round constants
 		for i := 0; i < 16; i++ {
 			state[i] = api.Add(state[i], rc[i])
@@ -124,7 +124,7 @@ func Permute16(api frontend.API, state *[16]frontend.Variable,
 	}
 
 	// Partial rounds
-	for _, rc := range RC16_1 {
+	for _, rc := range cachedRC16_1 {
 		// Add rc to state[0]
 		state[0] = api.Add(state[0], rc)
 
@@ -136,7 +136,7 @@ func Permute16(api frontend.API, state *[16]frontend.Variable,
 	}
 
 	// Final set of full rounds
-	for _, rc := range RC16_2 {
+	for _, rc := range cachedRC16_2 {
 		// Add round constants
 		for i := 0; i < 16; i++ {
 			state[i] = api.Add(state[i], rc[i])

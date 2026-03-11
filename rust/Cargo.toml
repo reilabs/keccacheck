@@ -17,6 +17,8 @@ tracing = "0.1.41"
 tracing-forest = "0.1.6"
 blake3 = "1.8.2"
 cbindgen = "0.29"
+const-oid = "0.9.6"
+hex-literal = "0.4.1"
 
 [profile.release]
 opt-level = 3

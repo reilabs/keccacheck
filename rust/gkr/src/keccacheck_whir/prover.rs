@@ -1,0 +1,487 @@
+#[cfg(debug_assertions)]
+use super::protocol_utils::serialize_whir_proof;
+#[cfg(not(debug_assertions))]
+use super::protocol_utils::serialize_whir_proof_flat;
+use super::protocol_utils::{change_type, change_type_vec, whir_config};
+use crate::reference::{KeccakRoundState, ROUND_CONSTANTS, strip_pi};
+use crate::sumcheck::binary::prove_binary;
+use crate::sumcheck::chi::prove_chi;
+use crate::sumcheck::iota::prove_iota;
+use crate::sumcheck::outputs::{prove_bits, prove_outputs};
+use crate::sumcheck::rho::prove_rho;
+use crate::sumcheck::theta::prove_theta;
+use crate::sumcheck::theta_a::{ThetaAProof, prove_theta_a};
+use crate::sumcheck::theta_c::prove_theta_c;
+use crate::sumcheck::theta_d::prove_theta_d;
+use crate::sumcheck::util::{
+    HALF, calculate_evaluations_over_boolean_hypercube_for_eq, eval_mle, to_field_vec, to_poly,
+};
+use crate::transcript::{Prover, Sponge};
+use std::borrow::Cow;
+
+use ark_bn254::Fr;
+use ark_ff::{One, PrimeField, Zero};
+use tracing::instrument;
+use whir::algebra::embedding::Basefield;
+use whir::algebra::fields::Field256;
+use whir::algebra::linear_form::{Covector, LinearForm};
+use whir::protocols::whir::{Config, Witness};
+use whir::transcript::ProverState;
+
+#[instrument(skip_all, fields(num_vars=(6 + (data.len() / 25).ilog2())))]
+pub fn prove(data: &[u64], output_alpha: Vec<Fr>) -> (Vec<Fr>, Vec<u8>, Vec<u64>, Vec<u64>) {
+    let proving_start = std::time::Instant::now();
+    let instances = data.len() / 25;
+
+    let num_vars = 6 + instances.ilog2() as usize;
+
+    let data = data.to_vec();
+
+    let span = tracing::span!(tracing::Level::INFO, "calculate_states").entered();
+    let mut state = Vec::with_capacity(24);
+    state.push(KeccakRoundState::at_round(&data, 0));
+    for i in 1..24 {
+        state.push(state[i - 1].next());
+    }
+    span.exit();
+
+    let span = tracing::span!(tracing::Level::INFO, "Committing to whir").entered();
+    let whir_commitment = commit_whir(num_vars, &state[0].a);
+    span.exit();
+
+    let mut prover = Prover::new();
+
+    let root = whir_commitment.whir_witness.root();
+    prover.absorb(Fr::from_le_bytes_mod_order(&root.0));
+    let span = tracing::span!(tracing::Level::INFO, "Reducing output").entered();
+    output_alpha
+        .iter()
+        .for_each(|challenge| prover.absorb(*challenge));
+
+    let (_output_beta, output_r, _output_c) =
+        reduce_output_words(&mut prover, &output_alpha, &state, num_vars);
+
+    span.exit();
+    let span = tracing::span!(tracing::Level::INFO, "Proving binariness").entered();
+    let mut input_bits = to_poly(&state[0].a);
+
+    // Prove that the input bits are all boolean in value
+    let (_binary_beta, binary_r, _binary_c) =
+        reduce_binary_claim(&mut prover, num_vars, &input_bits);
+    span.exit();
+
+    let span = tracing::span!(tracing::Level::INFO, "Reducing input").entered();
+    // Reduce claim on input words to claim on input bits
+    let (_input_beta, input_r, _input_c) =
+        reduce_input_words(&mut prover, num_vars, &state, &mut input_bits);
+
+    span.exit();
+    let span = tracing::span!(tracing::Level::INFO, "Proving WHIR").entered();
+    let whir_proof = prove_whir(
+        &mut prover,
+        num_vars,
+        &state[0].a,
+        whir_commitment,
+        &output_r,
+        &binary_r,
+        &input_r,
+    );
+
+    let proof = prover.finish();
+    span.exit();
+    println!(
+        "finished proving on rust side in {:?}",
+        proving_start.elapsed()
+    );
+    (
+        proof,
+        whir_proof,
+        state[0].a.clone(),
+        state[23].iota.clone(),
+    )
+}
+
+struct WhirCommitment {
+    config: Config<Field256>,
+    prover_state: ProverState<Sponge>,
+    whir_witness: Witness<Field256, Basefield<Field256>>,
+    lane_coefficients: Vec<Vec<Field256>>,
+}
+
+fn commit_whir(num_vars: usize, a: &[u64]) -> WhirCommitment {
+    let instances = 1 << (num_vars - 6);
+
+    let (config, ds) = whir_config(num_vars);
+    let mut prover_state = ProverState::new(&ds, Sponge::new());
+
+    let lane_coefficients: Vec<Vec<Field256>> = a
+        .chunks(instances)
+        .map(|lane| change_type_vec(&to_poly(lane)))
+        .collect();
+
+    let lane_slices: Vec<&[Field256]> = lane_coefficients.iter().map(|v| v.as_slice()).collect();
+    let whir_witness = config.commit(&mut prover_state, &lane_slices);
+
+    WhirCommitment {
+        config,
+        prover_state,
+        whir_witness,
+        lane_coefficients,
+    }
+}
+
+fn prove_whir(
+    prover: &mut Prover,
+    num_vars: usize,
+    a: &[u64],
+    commitment: WhirCommitment,
+    output_r: &[Fr],
+    binary_r: &[Fr],
+    input_r: &[Fr],
+) -> Vec<u8> {
+    let instances = 1 << (num_vars - 6);
+
+    let WhirCommitment {
+        config,
+        mut prover_state,
+        whir_witness,
+        lane_coefficients,
+    } = commitment;
+
+    let ((eq1, eq2), eq3) = rayon::join(
+        || {
+            rayon::join(
+                || calculate_evaluations_over_boolean_hypercube_for_eq(output_r),
+                || calculate_evaluations_over_boolean_hypercube_for_eq(binary_r),
+            )
+        },
+        || calculate_evaluations_over_boolean_hypercube_for_eq(input_r),
+    );
+
+    // Compute per-lane evaluations at each claim point
+    let lane_bits: Vec<Vec<Fr>> = a.chunks(instances).map(to_poly).collect();
+
+    let lane_evals: Vec<[Fr; 3]> = lane_bits
+        .iter()
+        .map(|bits| {
+            [&eq1, &eq2, &eq3].map(|eq| bits.iter().zip(eq.iter()).map(|(a, b)| *a * *b).sum())
+        })
+        .collect();
+
+    // Write 75 individual evaluations to transcript so verifier can check
+    // sum_k beta[k] * eval[k] == claimed_sum for each of the 3 claims
+    for evals in &lane_evals {
+        for &eval in evals {
+            prover.write(eval);
+        }
+    }
+
+    // Sample gamma to combine the 3 evaluation points into 1 linear form
+    let gamma: Fr = prover.read();
+    let gamma2 = gamma * gamma;
+
+    // Combined linear form: eq(·, output_r) + γ·eq(·, binary_r) + γ²·eq(·, input_r)
+    let combined_eq: Vec<Fr> = eq1
+        .iter()
+        .zip(eq2.iter())
+        .zip(eq3.iter())
+        .map(|((e1, e2), e3)| *e1 + gamma * *e2 + gamma2 * *e3)
+        .collect();
+    let combined_cov = Covector::new(change_type_vec(&combined_eq));
+
+    // 25 combined evaluations: lane_k(r1) + γ·lane_k(r2) + γ²·lane_k(r3)
+    let evaluations: Vec<Field256> = lane_evals
+        .iter()
+        .map(|[e1, e2, e3]| change_type(*e1 + gamma * *e2 + gamma2 * *e3))
+        .collect();
+
+    let vectors: Vec<Cow<[Field256]>> = lane_coefficients
+        .iter()
+        .map(|v| Cow::Borrowed(v.as_slice()))
+        .collect();
+
+    config.prove(
+        &mut prover_state,
+        vectors,
+        vec![Cow::Borrowed(&whir_witness)],
+        &[Box::new(combined_cov) as Box<dyn LinearForm<Field256>>],
+        Cow::Borrowed(&evaluations),
+    );
+
+    let whir_proof = prover_state.proof();
+
+    #[cfg(debug_assertions)]
+    {
+        // CBOR path: used by the Rust-only verifier in debug/test builds.
+        serialize_whir_proof(&whir_proof)
+    }
+
+    #[cfg(not(debug_assertions))]
+    serialize_whir_proof_flat(&whir_proof)
+}
+
+#[instrument(skip_all)]
+pub fn prove_round(
+    prover: &mut Prover,
+    num_vars: usize,
+    layers: &KeccakRoundState,
+    alpha: &[Fr],
+    beta: &mut [Fr],
+    sum: Fr,
+    rc: u64,
+) -> ThetaAProof {
+    // prove iota
+    let iota_proof = prove_iota(prover, num_vars, alpha, beta, &layers.pi_chi, sum, rc);
+
+    // combine subclaims chi_00 and chi_rlc
+    let x = prover.read();
+    let y = prover.read();
+    beta[0] *= x;
+    beta.iter_mut().skip(1).for_each(|b| *b *= y);
+    let sum = beta[0] * iota_proof.chi_00 + y * iota_proof.chi_rlc;
+
+    // prove chi
+    let pi_chi_proof = prove_chi(prover, num_vars, &iota_proof.r, beta, &layers.rho, sum);
+
+    // strip pi to get rho
+    let mut rho = pi_chi_proof.pi.clone();
+    strip_pi(&pi_chi_proof.pi, &mut rho);
+
+    // combine subclaims on rho
+    let mut sum = Fr::zero();
+    beta.iter_mut().enumerate().for_each(|(i, b)| {
+        *b = prover.read();
+        sum += *b * rho[i];
+    });
+
+    // prove rho
+    let rho_proof = prove_rho(prover, num_vars, &pi_chi_proof.r, beta, &layers.theta, sum);
+
+    // combine subclaims on theta, change base
+    let theta_xor_base = rho_proof
+        .theta
+        .iter()
+        .map(|x| Fr::one() - x - x)
+        .collect::<Vec<_>>();
+    let mut sum = Fr::zero();
+    // we need that beta to combine with the last theta sumcheck!
+    beta.iter_mut().enumerate().for_each(|(i, b)| {
+        *b = prover.read();
+        sum += *b * theta_xor_base[i];
+    });
+
+    // prove theta
+    let theta_proof = prove_theta(
+        prover,
+        num_vars,
+        &rho_proof.r,
+        beta,
+        &layers.d,
+        &layers.a,
+        sum,
+    );
+
+    // combine subclaims on theta d
+    let mut sum = Fr::zero();
+    let mut beta_d = vec![Fr::zero(); theta_proof.d.len()];
+    beta_d.iter_mut().enumerate().for_each(|(i, b)| {
+        *b = prover.read();
+        sum += *b * theta_proof.d[i];
+    });
+
+    // prove theta d
+    let theta_d_proof = prove_theta_d(prover, num_vars, &theta_proof.r, &beta_d, &layers.c, sum);
+
+    // combine claims on theta c and rot_c
+    let mut sum = Fr::zero();
+    let mut beta_c = vec![Fr::zero(); theta_d_proof.c.len()];
+    let mut beta_rot_c = vec![Fr::zero(); theta_d_proof.rot_c.len()];
+    beta_c.iter_mut().enumerate().for_each(|(i, b)| {
+        *b = prover.read();
+        sum += *b * theta_d_proof.c[i];
+    });
+    beta_rot_c.iter_mut().enumerate().for_each(|(i, b)| {
+        *b = prover.read();
+        sum += *b * theta_d_proof.rot_c[i];
+    });
+
+    // prove theta c
+    let theta_c_proof = prove_theta_c(
+        prover,
+        num_vars,
+        &theta_d_proof.r,
+        &beta_c,
+        &beta_rot_c,
+        &layers.a,
+        sum,
+    );
+
+    // combine claims on a from theta and theta c
+    let mut sum = Fr::zero();
+    let mut beta_a = vec![Fr::zero(); theta_c_proof.a.len()];
+
+    theta_proof.ai.iter().enumerate().for_each(|(i, ai)| {
+        let b = prover.read();
+        for j in 0..5 {
+            beta[j * 5 + i] *= b;
+        }
+        sum += b * *ai;
+    });
+    beta_a.iter_mut().enumerate().for_each(|(i, b)| {
+        *b = prover.read();
+        sum += *b * theta_c_proof.a[i];
+    });
+
+    // prove theta a
+    prove_theta_a(
+        prover,
+        num_vars,
+        &theta_proof.r,
+        &theta_c_proof.r,
+        beta,
+        &beta_a,
+        &layers.a,
+        sum,
+    )
+}
+
+fn reduce_output_words(
+    prover: &mut Prover,
+    alpha: &[Fr],
+    state: &[KeccakRoundState],
+    num_vars: usize,
+) -> (Vec<Fr>, Vec<Fr>, Fr) {
+    let instances = 1 << (num_vars - 6);
+    // TODO: feed output to the prover before obtaining alpha
+    let mut beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+
+    // Write final output sum
+    // Over here we will instead make a claim about the words
+    // to obtain the sum
+
+    let output_words = to_field_vec(&state[23].iota);
+    let c: Fr = output_words
+        .chunks(instances)
+        .enumerate()
+        .map(|(i, word_poly)| beta[i] * eval_mle(word_poly, alpha))
+        .sum();
+    prover.write(c);
+
+    // We will run one round of reduction to reduce to a claim on the output bits
+    let eq_proof = prove_outputs(prover, num_vars - 6, alpha, &output_words, &beta, c);
+    let mut bits = to_poly(&state[23].iota);
+
+    let bit_proof = prove_bits(
+        prover,
+        &eq_proof.r_x,
+        &mut bits,
+        &beta,
+        eq_proof.word_rlc_eval,
+    );
+
+    let mut r = Vec::with_capacity(num_vars);
+    r.extend(eq_proof.r_x);
+    r.extend(bit_proof.r_y);
+    #[cfg(debug_assertions)]
+    {
+        let sum: Fr = state[23]
+            .iota
+            .chunks_exact(instances)
+            .enumerate()
+            .map(|(i, x)| {
+                let poly = to_poly(x);
+                beta[i] * eval_mle(&poly, &r)
+            })
+            .sum();
+        assert_eq!(bit_proof.sum, bit_proof.bit_rlc_eval * bit_proof.pow_r_y);
+        assert_eq!(sum, bit_proof.bit_rlc_eval)
+    }
+
+    let mut sum = bit_proof.bit_rlc_eval;
+    for round in (0..24).rev() {
+        let previous_proof = prove_round(
+            prover,
+            num_vars,
+            &state[round],
+            &r,
+            &mut beta,
+            sum,
+            ROUND_CONSTANTS[round],
+        );
+        r = previous_proof.r;
+        if round != 0 {
+            sum = Fr::zero();
+            beta.iter_mut().enumerate().for_each(|(i, b)| {
+                *b = prover.read();
+                let v = HALF * (Fr::one() - previous_proof.iota_hat[i]);
+                sum += *b * v;
+            });
+        }
+    }
+    (beta, r, c)
+}
+
+fn reduce_input_words(
+    prover: &mut Prover,
+    num_vars: usize,
+    state: &[KeccakRoundState],
+    input_bits: &mut [Fr],
+) -> (Vec<Fr>, Vec<Fr>, Fr) {
+    let input_words = to_field_vec(&state[0].a);
+    let input_beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+    let input_alpha = (0..num_vars - 6).map(|_| prover.read()).collect::<Vec<_>>();
+
+    let instances = 1 << (num_vars - 6);
+    let input_c: Fr = input_words
+        .chunks(instances)
+        .enumerate()
+        .map(|(i, word_poly)| input_beta[i] * eval_mle(word_poly, &input_alpha))
+        .sum();
+    prover.write(input_c);
+
+    // Reduce to a claim on the input bits
+    let input_eq_proof = prove_outputs(
+        prover,
+        num_vars - 6,
+        &input_alpha,
+        &input_words,
+        &input_beta,
+        input_c,
+    );
+
+    let input_bit_proof = prove_bits(
+        prover,
+        &input_eq_proof.r_x,
+        input_bits,
+        &input_beta,
+        input_eq_proof.word_rlc_eval,
+    );
+
+    let mut input_eval_point = Vec::with_capacity(num_vars);
+
+    input_eval_point.extend_from_slice(&input_eq_proof.r_x);
+    input_eval_point.extend_from_slice(&input_bit_proof.r_y);
+    (input_beta, input_eval_point, input_bit_proof.bit_rlc_eval)
+}
+
+fn reduce_binary_claim(
+    prover: &mut Prover,
+    num_vars: usize,
+    input_bits: &[Fr],
+) -> (Vec<Fr>, Vec<Fr>, Fr) {
+    let lane_size = 1 << num_vars;
+    let binary_beta = (0..25).map(|_| prover.read()).collect::<Vec<_>>();
+    let binary_alpha = (0..num_vars).map(|_| prover.read()).collect::<Vec<_>>();
+    let mut binary_lanes: Vec<Vec<Fr>> = (0..25)
+        .map(|i| input_bits[i * lane_size..(i + 1) * lane_size].to_vec())
+        .collect();
+    let binary_proof = prove_binary(
+        prover,
+        num_vars,
+        &binary_alpha,
+        &mut binary_lanes,
+        &binary_beta,
+    );
+
+    (binary_beta, binary_proof.r_x, binary_proof.batched_eval)
+}

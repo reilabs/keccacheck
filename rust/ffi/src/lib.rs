@@ -2,7 +2,11 @@ use ark_bn254::Fr;
 use std::ffi::c_void;
 
 use ark_ff::{BigInteger, PrimeField};
-use gkr::{prover::prove, reference::KeccakRoundState};
+#[cfg(not(feature = "whir"))]
+use gkr::keccacheck_og::prover::prove;
+#[cfg(feature = "whir")]
+use gkr::keccacheck_whir::prover::prove;
+use gkr::reference::KeccakRoundState;
 #[repr(C)]
 /// Represents the internal Keccak state
 pub struct KeccakInstance {
@@ -129,12 +133,17 @@ pub unsafe extern "C" fn keccacheck_prove(
             let chunk = &r_bytes[i * 32..(i + 1) * 32];
             r.push(Fr::from_be_bytes_mod_order(chunk));
         }
+        #[cfg(feature = "whir")]
+        let (proof, whir_proof, mut input, mut output) = prove(&data, r);
+        #[cfg(not(feature = "whir"))]
         let (proof, mut input, mut output) = prove(&data, r);
         let mut proof: Vec<u8> = proof
             .iter()
             .flat_map(|el| el.into_bigint().to_bytes_le())
             .collect();
 
+        #[cfg(feature = "whir")]
+        proof.extend(whir_proof);
         let proof_ptr = proof.as_mut_ptr() as *mut c_void;
         let input_ptr = input.as_mut_ptr() as *mut c_void;
         let output_ptr = output.as_mut_ptr() as *mut c_void;
@@ -143,13 +152,11 @@ pub unsafe extern "C" fn keccacheck_prove(
         std::mem::forget(proof);
         std::mem::forget(input);
         std::mem::forget(output);
-
         let result = Box::new(KeccacheckResult {
             proof_ptr,
             input_ptr,
             output_ptr,
         });
-        // TODO Consider limiting the output of this function to just the Proof
         Box::into_raw(result) as *mut c_void
     }
 }
@@ -176,6 +183,7 @@ pub unsafe extern "C" fn keccacheck_prove(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn keccacheck_proof_free(
     proof_ptr: *mut c_void,
+    proof_byte_len: usize,
     input_ptr: *mut c_void,
     output_ptr: *mut c_void,
     instances: usize,
@@ -190,10 +198,9 @@ pub unsafe extern "C" fn keccacheck_proof_free(
             let len = 25 * instances;
             let _ = Vec::from_raw_parts(output_ptr as *mut u64, len, len);
         }
-        //See proof size table in README
-        let log_n = instances.ilog2() as usize;
-        let f_elts: usize = 554 * log_n + 6255;
-        let _ = Vec::<Fr>::from_raw_parts(proof_ptr as *mut Fr, f_elts, f_elts);
+        if !proof_ptr.is_null() {
+            let _ = Vec::<u8>::from_raw_parts(proof_ptr as *mut u8, proof_byte_len, proof_byte_len);
+        }
     }
 }
 

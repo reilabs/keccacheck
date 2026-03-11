@@ -21,9 +21,11 @@ pub const fn workload_size<T: Sized>() -> usize {
 }
 
 /// List of evaluations for eq(r, x) over the boolean hypercube
-pub fn calculate_evaluations_over_boolean_hypercube_for_eq(r: &[Fr]) -> Vec<Fr> {
-    let mut result = vec![Fr::zero(); 1 << r.len()];
-    eval_eq(r, &mut result, Fr::one());
+pub fn calculate_evaluations_over_boolean_hypercube_for_eq<F: Field + Send + Sync>(
+    r: &[F],
+) -> Vec<F> {
+    let mut result = vec![F::zero(); 1 << r.len()];
+    eval_eq(r, &mut result, F::one());
     result
 }
 
@@ -47,14 +49,14 @@ pub fn derive_rot_evaluations_from_eq(eq: &[Fr], size: usize) -> Vec<Fr> {
 }
 
 /// Evaluates the equality polynomial recursively.
-fn eval_eq(eval: &[Fr], out: &mut [Fr], scalar: Fr) {
+fn eval_eq<F: Field + Send + Sync>(eval: &[F], out: &mut [F], scalar: F) {
     debug_assert_eq!(out.len(), 1 << eval.len());
     let size = out.len();
     if let Some((&x, tail)) = eval.split_first() {
         let (o0, o1) = out.split_at_mut(out.len() / 2);
         let s1 = scalar * x;
         let s0 = scalar - s1;
-        if size > workload_size::<Fr>() {
+        if size > workload_size::<F>() {
             rayon::join(|| eval_eq(tail, o0, s0), || eval_eq(tail, o1, s1));
         } else {
             eval_eq(tail, o0, s0);
@@ -65,6 +67,7 @@ fn eval_eq(eval: &[Fr], out: &mut [Fr], scalar: Fr) {
     }
 }
 
+// Aimply takes slice of u64 and converts to field elements
 pub fn to_field_vec(x: &[u64]) -> Vec<Fr> {
     let mut res = Vec::with_capacity(x.len());
     for el in x {
@@ -174,11 +177,11 @@ pub fn verify_sumcheck<const N: usize>(
 
 /// Evaluates a multilinear extension at a point.
 /// Uses a cache-oblivious recursive algorithm.
-pub fn eval_mle(coefficients: &[Fr], eval: &[Fr]) -> Fr {
+pub fn eval_mle<F: Field>(coefficients: &[F], eval: &[F]) -> F {
     debug_assert_eq!(coefficients.len(), 1 << eval.len());
     if let Some((&x, tail)) = eval.split_first() {
         let (c0, c1) = coefficients.split_at(coefficients.len() / 2);
-        (Fr::one() - x) * eval_mle(c0, tail) + x * eval_mle(c1, tail)
+        (F::one() - x) * eval_mle(c0, tail) + x * eval_mle(c1, tail)
     } else {
         coefficients[0]
     }

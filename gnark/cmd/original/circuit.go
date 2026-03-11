@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"reilabs/keccacheck/keccacheck"
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
@@ -17,9 +18,9 @@ type KeccakfCircuit struct {
 
 func NewKeccakfCircuit() *KeccakfCircuit {
 	return &KeccakfCircuit{
-		Input:  make([]frontend.Variable, 25*N),
-		InputD: make([]frontend.Variable, 64*25*N),
-		Output: make([]frontend.Variable, 25*N),
+		Input:  make([]frontend.Variable, 25*keccacheck.N),
+		InputD: make([]frontend.Variable, 64*25*keccacheck.N),
+		Output: make([]frontend.Variable, 25*keccacheck.N),
 	}
 }
 
@@ -32,18 +33,18 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 		panic("unable to initialise committer")
 	}
 
-	r := make([]frontend.Variable, Log_N)
+	r := make([]frontend.Variable, keccacheck.Log_N)
 
 	// First commitment: commit to circuit.Output
 	var err error
-	if Log_N > 0 {
+	if keccacheck.Log_N > 0 {
 		r[0], err = committer.Commit(circuit.Output[:]...)
 	}
 	if err != nil {
 		return err
 	}
 
-	for i := 1; i < Log_N; i++ {
+	for i := 1; i < keccacheck.Log_N; i++ {
 		r[i], err = committer.Commit(r[i-1])
 		if err != nil {
 			return err
@@ -54,7 +55,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	}
 
 	hintInputs := append(r, circuit.Input[:]...)
-	proof, err := api.Compiler().NewHint(KeccacheckProveHint, PROOF_LEN, hintInputs...)
+	proof, err := api.Compiler().NewHint(KeccacheckProveHint, keccacheck.GKR_PROOF_LEN, hintInputs...)
 	if err != nil {
 		panic("failed to generate proof hint")
 	}
@@ -63,7 +64,7 @@ func (circuit *KeccakfCircuit) Define(api frontend.API) error {
 	return nil
 }
 
-func Profile() {
+func ProfileKeccacheck() {
 	// default options generate gnark.pprof in current dir
 	// use pprof as usual (go tool pprof -http=:8080 gnark.pprof) to read the profile file
 	// overlapping profiles are allowed (define profiles inside Define or subfunction to profile

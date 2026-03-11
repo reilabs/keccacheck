@@ -1,4 +1,10 @@
 use {crate::poseidon, ark_bn254::Fr, ark_ff::MontFp};
+#[cfg(feature = "whir")]
+use {
+    ark_ec::AdditiveGroup,
+    ark_ff::{BigInteger, PrimeField},
+    whir::transcript::DuplexSpongeInterface,
+};
 
 // Random initial state (nothing up my sleeve: digits of 2 * pi in groups of 77
 // digits)
@@ -68,5 +74,39 @@ impl Sponge {
 impl Default for Sponge {
     fn default() -> Self {
         Sponge::new()
+    }
+}
+
+#[cfg(feature = "whir")]
+impl DuplexSpongeInterface for Sponge {
+    type U = u8;
+
+    fn absorb(&mut self, input: &[u8]) -> &mut Self {
+        for chunk in input.chunks(32) {
+            Sponge::absorb(self, Fr::from_le_bytes_mod_order(chunk));
+        }
+        self
+    }
+
+    // Squeeze exactly 1 field element and zero-pad. Spongefish's Decoding<[u8]>
+    // requests 64 bytes per field element (32 + 32 for bias correction), which
+    // would squeeze 2 Poseidon2 elements — wrong for a field-native sponge.
+    // Zero-padding is safe: value < p < 2^254, so from_le_bytes_mod_order is a no-op.
+    // TODO: properly fix by changing type U from u8 to Fr (requires Encoding<[Fr]>
+    // and Decoding<[Fr]> impls, blocked by orphan rules without forking spongefish).
+    fn squeeze(&mut self, output: &mut [u8]) -> &mut Self {
+        let bytes = Sponge::squeeze(self).into_bigint().to_bytes_le();
+        let copy_len = output.len().min(bytes.len());
+        output[..copy_len].copy_from_slice(&bytes[..copy_len]);
+        output[copy_len..].fill(0);
+        self
+    }
+
+    fn ratchet(&mut self) -> &mut Self {
+        self.state[..RATE].fill(Fr::ZERO);
+        poseidon::permute_16(&mut self.state);
+        self.idx = 0;
+        self.dirty = false;
+        self
     }
 }

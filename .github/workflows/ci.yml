@@ -42,9 +42,10 @@ jobs:
         working-directory: rust
         run: cargo test --all
       
-      - name: Rust Build
+      - name: Rust Build (whir)
         working-directory: rust
         run: cargo build --profile=optimized
+
       # -----------------------------
       # Go Setup and Checks
       # -----------------------------
@@ -71,6 +72,26 @@ jobs:
         working-directory: gnark
         run: go vet -unsafeptr=false ./...
 
-      - name: Go Tests
+      - name: Go Tests (shared)
         working-directory: gnark
-        run: go test ./...
+        run: go test ./keccacheck/
+
+      - name: Go Tests (poseidon)
+        working-directory: gnark
+        run: go test ./poseidon2/
+
+      - name: Go Tests (whir)
+        working-directory: gnark
+        run: go test ./cmd/whir/
+
+      - name: Rust Build (original)
+        working-directory: rust
+        run: cargo build --profile=optimized --no-default-features
+
+      - name: Copy libkeccak artifacts (original)
+        working-directory: gnark
+        run: make
+
+      - name: Go Tests (original)
+        working-directory: gnark
+        run: go test ./cmd/original/

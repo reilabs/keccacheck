@@ -1,4 +1,4 @@
-package main
+package keccacheck
 
 import (
 	"math/big"
@@ -38,7 +38,7 @@ func TestKeccakProve(t *testing.T) {
 	ptr := KeccacheckProve(inputs)
 	result := (*KeccacheckResult)(ptr)
 
-	input := getU64Slice(result.InputPtr, 25*N)
+	input := GetU64Slice(result.InputPtr, 25*N)
 
 	for i := range 25 * N {
 		if input[i] != 0 {
@@ -46,7 +46,7 @@ func TestKeccakProve(t *testing.T) {
 		}
 	}
 
-	output := getU64Slice(result.OutputPtr, 25*N)
+	output := GetU64Slice(result.OutputPtr, 25*N)
 
 	for j := range 25 {
 		for i := range N {
@@ -57,7 +57,10 @@ func TestKeccakProve(t *testing.T) {
 			}
 		}
 	}
-	getFSlice(result.ProofPtr, (552*(Log_N+6) + 2929))
+	// ProofPtr now contains GKR proof bytes + WHIR proof bytes concatenated.
+	// Read just the GKR portion to verify it's accessible.
+	allBytes := unsafe.Slice((*byte)(result.ProofPtr), WHIRGKRProofLen*32)
+	_ = allBytes
 
 }
 

@@ -26,6 +26,12 @@ To compile the Rust portion of the project and generate the static library:
 RUSTFLAGS='-C target-cpu=native' cargo build --profile=optimized
 ```
 
+By default this builds with the WHIR polynomial commitment scheme. To build without WHIR (using direct bit verification instead):
+
+```bash
+RUSTFLAGS='-C target-cpu=native' cargo build --profile=optimized --no-default-features
+```
+
 ### Go (gnark)
 
 When making changes to the Rust static library, it's important to ensure Go does not serve outdated, cached versions of the compiled code. To avoid this issue, use the MakeFile Script:
@@ -48,6 +54,12 @@ This will compile the main circuit, yield the number of constraints and give the
 
 Run `RUSTFLAGS='-C target-cpu=native' cargo run --profile=optimized -- {num_variables}`.
 
+To benchmark without WHIR (direct bit verification):
+
+```bash
+RUSTFLAGS='-C target-cpu=native' cargo run --profile=optimized --no-default-features -- {num_variables}
+```
+
 `num_variables` must be greater than 6 (a single keccak instance). This will prove $2^{numVariables - 6}$ instances of keccak.
 
 **On an M3 Max laptop, the current prove time is 5.3s for 1024 instances of Keccak.** This can probably be further improved to about 4 seconds by smarter parallelizm (not all cores are properly utilized in simpler keccak stages).
@@ -65,7 +77,7 @@ INFO.       ...
 | keccak instances | 1    | 2    | 128   | 1024  | n                  |
 |------------------|------|------|-------|-------|--------------------|
 | num variables    | 6    | 7    | 13    | 16    | 6 + log₂(n)        |
-| proof size (felts) | 6241 | 6793 | 10105 | 11761 | 552 * vars + 2929 |
+| proof size (felts) | 6241 | 6793 | 10105 | 11761 | 554 * vars + 2931|
 | proof size (bn254, KiB)	| 195	| 212	| 316	| 368 | ((552 * vars + 2929) *32)/1024 |
 |recursive proof size (bn254, groth16, bytes)|356|388|580|676|
 

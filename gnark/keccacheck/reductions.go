@@ -1,7 +1,6 @@
-package main
+package keccacheck
 
 import (
-	"C"
 	"log"
 	"math/big"
 	"reilabs/keccacheck/sumcheck"
@@ -10,9 +9,16 @@ import (
 	"github.com/consensys/gnark/frontend"
 )
 
-func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable) {
-	verifier := transcript.NewVerifier(proof)
-	for _, challenge := range r {
+// VerifyGKR absorbs challenges, computes the expected output sum, reduces output
+// words to input bits, and verifies all 24 rounds. Returns the final beta,
+// alpha, and iota from round verification.
+func VerifyGKR(
+	api frontend.API,
+	verifier *transcript.Verifier,
+	alpha []frontend.Variable,
+	output []frontend.Variable,
+) ([]frontend.Variable, []frontend.Variable, []frontend.Variable) {
+	for _, challenge := range alpha {
 		verifier.Absorb(api, challenge)
 	}
 	beta := make([]frontend.Variable, 25)
@@ -21,46 +27,23 @@ func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable
 		beta[i] = verifier.Generate(api)
 	}
 
-	// Compute expected sum over output words
 	expected_sum := frontend.Variable(0)
-	eval_eq_r := sumcheck.EvalEq(api, r)
+	eval_eq_r := sumcheck.EvalEq(api, alpha)
 	for i := range 25 {
-		summand := sumcheck.EvalMleWithEq(api, output[i*N:(i+1)*N], eval_eq_r)
+		summand := sumcheck.EvalMleWithEq(api, output[(i*N):(i*N+N)], eval_eq_r)
 		expected_sum = api.Add(expected_sum, api.Mul(summand, beta[i]))
 	}
+
 	sum := verifier.Read(api)
 	api.AssertIsEqual(sum, expected_sum)
 
-	// Verify the bitwise decomposition of the output words
-	// First sumcheck: reduce over instance dimension (Log_N variables)
-	c1, r_x := sumcheck.VerifySumcheck(api, verifier, Log_N, 2, sum)
-	words_r_x := verifier.Read(api)
-	eq_alpha_rx := sumcheck.Eq(api, r, r_x)
-	api.AssertIsEqual(c1, api.Mul(words_r_x, eq_alpha_rx))
-
-	// Second sumcheck: reduce over bit index dimension (6 variables)
-	c2, r_y := sumcheck.VerifySumcheck(api, verifier, 6, 2, words_r_x)
-	b_r_x_r_y := verifier.Read(api)
-
-	// Compute power polynomial evaluation: powers[i] = 2^i
-	powers := make([]frontend.Variable, 1<<6)
-	for i := range powers {
-		powers[i] = new(big.Int).SetUint64(1 << uint(i))
-	}
-	powers_eval := sumcheck.EvalMle(api, powers, r_y)
-	api.AssertIsEqual(c2, api.Mul(powers_eval, b_r_x_r_y))
-
-	sum = b_r_x_r_y
-
-	// Reconstruct r from r_x (instance) and r_y (bit index)
-	r = make([]frontend.Variable, Log_N+6)
-	copy(r, r_x)
-	copy(r[Log_N:], r_y)
+	// Reduce claims on output words to claims on input bits
+	alpha, sum = ReduceOutputWords(api, verifier, alpha, sum)
 
 	iota := make([]frontend.Variable, 25)
 
 	for i := 23; i >= 0; i-- {
-		r, iota = VerifyRound(api, verifier, 6+Log_N, &r, &beta, sum, ROUND_CONSTANTS[i])
+		alpha, iota = VerifyRound(api, verifier, NUM_VARS, &alpha, &beta, sum, ROUND_CONSTANTS[i])
 		if i != 0 {
 			sum = frontend.Variable(0)
 			for j := range beta {
@@ -69,15 +52,41 @@ func VerifyKeccakF(api frontend.API, input, output, proof, r []frontend.Variable
 			}
 		}
 	}
-	eval_eq_r = sumcheck.EvalEq(api, r)
-	for i := 0; i < 25; i++ {
-		start := i * N
-		end := start + N
-		poly := input[64*start : 64*end]
-		eval := sumcheck.EvalMleWithEq(api, poly, eval_eq_r)
-		api.AssertIsEqual(eval, iota[i])
-	}
 
+	return beta, alpha, iota
+}
+
+// ReduceOutputWords reduces claims on output words to a claim on input bits.
+// Returns the updated alpha and sum for the round loop.
+func ReduceOutputWords(
+	api frontend.API,
+	verifier *transcript.Verifier,
+	alpha []frontend.Variable,
+	sum frontend.Variable,
+) ([]frontend.Variable, frontend.Variable) {
+	c_1, r_x := sumcheck.VerifySumcheck(api, verifier, Log_N, 2, sum)
+	words_r_x := verifier.Read(api)
+	eq_r_alpha_x := sumcheck.Eq(api, r_x, alpha)
+	api.AssertIsEqual(c_1, api.Mul(words_r_x, eq_r_alpha_x))
+
+	c_2, r_y := sumcheck.VerifySumcheck(api, verifier, 6, 2, words_r_x)
+	b_r_x_r_y := verifier.Read(api)
+
+	powers := PowersOfTwo()
+	powers_eval := sumcheck.EvalMle(api, powers, r_y)
+	api.AssertIsEqual(c_2, api.Mul(powers_eval, b_r_x_r_y))
+
+	newAlpha := append(r_x, r_y...)
+	return newAlpha, b_r_x_r_y
+}
+
+// PowersOfTwo returns a slice of 2^i for i in 0..63.
+func PowersOfTwo() []frontend.Variable {
+	powers := make([]frontend.Variable, 1<<6)
+	for i := 0; i < 1<<6; i++ {
+		powers[i] = frontend.Variable(uint64(1) << uint(i))
+	}
+	return powers
 }
 
 func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, alpha *[]frontend.Variable, beta *[]frontend.Variable, sum frontend.Variable, rc uint64) ([]frontend.Variable, []frontend.Variable) {
@@ -163,8 +172,6 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 	// --- combine subclaims on theta, change base ---
 	thetaXorBase := make([]frontend.Variable, len(theta))
 	for i := range theta {
-		// theta_xor_base[i] = 1 - theta[i] - theta[i]
-		// equivalent to 1 - 2*theta[i]
 		doubleTheta := api.Add(theta[i], theta[i])
 		thetaXorBase[i] = api.Sub(frontend.Variable(1), doubleTheta)
 	}
@@ -190,7 +197,6 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 
 	eEq = sumcheck.Eq(api, vrsRho, vrsTheta)
 
-	// checksum = sum_{j=0}^4 eEq * d[j] * ai[j]
 	checksum = frontend.Variable(0)
 	for j := 0; j < 5; j++ {
 		term := api.Mul(eEq, d[j], ai[j])
@@ -265,8 +271,8 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 		for i := 0; i < 5; i++ {
 			product = api.Mul(product, a[i*5+j])
 		}
-		checksum = api.Add(checksum, api.Mul(betaC[j], eEq, product))
-		checksum = api.Add(checksum, api.Mul(betaRotC[j], eRot_1, product))
+		combined := api.Add(api.Mul(betaC[j], eEq), api.Mul(betaRotC[j], eRot_1))
+		checksum = api.Add(checksum, api.Mul(combined, product))
 	}
 	api.AssertIsEqual(ve, checksum)
 
@@ -311,7 +317,7 @@ func VerifyRound(api frontend.API, verifier *transcript.Verifier, numVars int, a
 	api.AssertIsEqual(ve, checksum)
 
 	// --- change iota base ---
-	half, ok := new(big.Int).SetString(halfString, 10)
+	half, ok := new(big.Int).SetString(HalfString, 10)
 	if !ok {
 		panic("Could not parse the half string")
 	}
@@ -346,40 +352,3 @@ func stripPi[T any](pi []T, rho []T) {
 		lastEnd = targetEnd
 	}
 }
-
-var COLUMNS = 5
-var ROWS = 5
-var STATE = COLUMNS * ROWS
-
-var ROUND_CONSTANTS = [24]uint64{
-	0x0000000000000001,
-	0x0000000000008082,
-	0x800000000000808A,
-	0x8000000080008000,
-	0x000000000000808B,
-	0x0000000080000001,
-	0x8000000080008081,
-	0x8000000000008009,
-	0x000000000000008A,
-	0x0000000000000088,
-	0x0000000080008009,
-	0x000000008000000A,
-	0x000000008000808B,
-	0x800000000000008B,
-	0x8000000000008089,
-	0x8000000000008003,
-	0x8000000000008002,
-	0x8000000000000080,
-	0x000000000000800A,
-	0x800000008000000A,
-	0x8000000080008081,
-	0x8000000000008080,
-	0x0000000080000001,
-	0x8000000080008008,
-}
-
-var PI = [24]int{
-	10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1,
-}
-
-var halfString = "10944121435919637611123202872628637544274182200208017171849102093287904247809"
