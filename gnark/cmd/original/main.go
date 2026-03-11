@@ -1,56 +1,21 @@
 package main
 
 import (
-	"fmt"
+	"math/big"
 	"reilabs/keccacheck/keccacheck"
-	"time"
 
-	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/constraint/solver"
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/frontend/cs/r1cs"
 )
 
 func main() {
-
-	var circuit = *NewKeccakfCircuit()
-
-	// Compile the circuit
-	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
-	if err != nil {
-		panic(err)
-	}
-
-	// Setup
-	fmt.Println("Running setup...")
-	pk, vk, err := groth16.Setup(ccs)
-	if err != nil {
-		panic(err)
-	}
-
-	assignment := KeccakfCircuit{}
-	solver.RegisterHint(KeccacheckProveHint)
-
-	inputs, outputs := keccacheck.PrepareTestIO()
-
-	assignment.Input, assignment.InputD, assignment.Output = keccacheck.InitCircuitFields(inputs, outputs)
-
-	witness, _ := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
-
-	// Prove
-	fmt.Printf("Proving starts\n")
-	for i := 1; i <= 10; i++ {
-		start := time.Now()
-		proof, err := groth16.Prove(ccs, pk, witness)
-		if err != nil {
-			panic(err)
-		}
-		duration := time.Since(start)
-		fmt.Printf("Proving time: %s\n", duration)
-		start = time.Now()
-		_ = groth16.Verify(proof, vk, witness)
-		duration = time.Since(start)
-		fmt.Printf("Verifying time: %s\n", duration)
-	}
+	keccacheck.RunBenchmark(keccacheck.BenchmarkConfig{
+		Circuit: NewKeccakfCircuit(),
+		Hints:   []solver.Hint{KeccacheckProveHint},
+		SetupWitness: func(inputs []*big.Int, outputs []uint64) frontend.Circuit {
+			a := &KeccakfCircuit{}
+			a.Input, a.InputD, a.Output = keccacheck.InitCircuitFields(inputs, outputs)
+			return a
+		},
+	})
 }
