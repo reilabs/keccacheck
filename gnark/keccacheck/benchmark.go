@@ -27,6 +27,8 @@ func RunBenchmark(cfg BenchmarkConfig) {
 		panic(err)
 	}
 
+	fmt.Printf("Constraints: %d\n", ccs.GetNbConstraints())
+
 	fmt.Println("Running setup...")
 	pk, vk, err := groth16.Setup(ccs)
 	if err != nil {
