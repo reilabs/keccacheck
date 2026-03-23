@@ -32,8 +32,8 @@ type ProtocolConfig struct {
 func NewProtocolConfig(batchSize, numVariables int, ff FoldingFactor, st SoundnessType, powBits int) ProtocolConfig {
 	return ProtocolConfig{
 		InitialStatement:   true,
-		StartingLogInvRate: 2,
-		SecurityLevel:      128,
+		StartingLogInvRate: 1,
+		SecurityLevel:      100,
 		HashID:             engineIDCBOR(poseidon2EngineID),
 		BatchSize:          uint64(batchSize),
 		NumVariables:       numVariables,

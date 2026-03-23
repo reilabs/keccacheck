@@ -68,11 +68,11 @@ pub(crate) fn whir_config(num_vars: usize) -> (Config<Field256>, DomainSeparator
     let mv_parameters = MultivariateParameters::new(num_vars);
     let whir_params = ProtocolParameters {
         initial_statement: true,
-        security_level: 128,
+        security_level: 100,
         pow_bits: 20,
         folding_factor: FoldingFactor::ConstantFromSecondRound(2, 4),
         soundness_type: SoundnessType::ProvableList,
-        starting_log_inv_rate: 2,
+        starting_log_inv_rate: 1,
         batch_size: 25,
         hash_id: POSEIDON2,
     };
