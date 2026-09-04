@@ -128,7 +128,7 @@ func generateEmptyMainRoundData(circuit WHIRParams) MainRoundData {
 // readLeavesFromHints reads leaf values from the hint stream.
 // Corresponds to a single Rust prover_hint_ark(Vec<F>) call that writes
 // all leaves (numLeaves × numCols elements) as one length-prefixed block.
-func readLeavesFromHints(hr *PrecomputedHints, numLeaves, numCols int) [][]frontend.Variable {
+func readLeavesFromHints(hr *HintReader, numLeaves, numCols int) [][]frontend.Variable {
 	flat := hr.ReadVec(numLeaves * numCols)
 	leaves := make([][]frontend.Variable, numLeaves)
 	for i := range leaves {
@@ -148,7 +148,7 @@ func readLeavesFromHints(hr *PrecomputedHints, numLeaves, numCols int) [][]front
 //  4. Asserts the computed root equals rootHash
 func verifyMerklePaths(
 	api frontend.API,
-	hr *PrecomputedHints,
+	hr *HintReader,
 	leaves [][]frontend.Variable,
 	leafIndexes []frontend.Variable,
 	rootHash frontend.Variable,

@@ -11,7 +11,7 @@ import (
 func main() {
 	keccacheck.RunBenchmark(keccacheck.BenchmarkConfig{
 		Circuit: NewKeccacheckWhirCircuit(),
-		Hints:   []solver.Hint{GKRProofHint, WhirProofHint, AllWhirHintsHint},
+		Hints:   []solver.Hint{GKRProofHint, WhirProofHint, ReadVecHint, ReadHashHint},
 		SetupWitness: func(inputs []*big.Int, outputs []uint64) frontend.Circuit {
 			a := &KeccacheckWhirCircuit{}
 			a.Input, a.Output = keccacheck.InitCircuitFieldsWHIR(inputs, outputs)
