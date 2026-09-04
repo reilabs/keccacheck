@@ -12,8 +12,7 @@ import (
 func setupWhir(inputs []*big.Int, outputs []uint64) (frontend.Circuit, frontend.Circuit) {
 	solver.RegisterHint(GKRProofHint)
 	solver.RegisterHint(WhirProofHint)
-	solver.RegisterHint(ReadVecHint)
-	solver.RegisterHint(ReadHashHint)
+	solver.RegisterHint(AllWhirHintsHint)
 
 	witness := &KeccacheckWhirCircuit{}
 	witness.Input, witness.Output = keccacheck.InitCircuitFieldsWHIR(inputs, outputs)

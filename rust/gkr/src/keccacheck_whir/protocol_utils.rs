@@ -69,7 +69,7 @@ pub(crate) fn whir_config(num_vars: usize) -> (Config<Field256>, DomainSeparator
     let whir_params = ProtocolParameters {
         initial_statement: true,
         security_level: 100,
-        pow_bits: 20,
+        pow_bits: 10,
         folding_factor: FoldingFactor::ConstantFromSecondRound(2, 4),
         soundness_type: SoundnessType::ProvableList,
         starting_log_inv_rate: 1,

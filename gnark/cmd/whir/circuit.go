@@ -60,7 +60,7 @@ func (circuit *KeccacheckWhirCircuit) Define(api frontend.API) error {
 	whirParams := whir.NewParams(whir.NewProtocolConfig(
 		25, keccacheck.NUM_VARS,
 		whir.ConstantFromSecondRoundFoldingFactor(2, 4),
-		whir.ProvableList, 20,
+		whir.ProvableList, 10,
 	))
 
 	// Must be set before any hint calls, since the test engine executes hints
@@ -68,8 +68,8 @@ func (circuit *KeccacheckWhirCircuit) Define(api frontend.API) error {
 	SetHintBlockTypes(whir.ComputeHintBlockTypes(whirParams))
 	SetProofByteLen(keccacheck.WHIRGKRProofLen*32 + whir.ComputeWhirBytes(whirParams, 1))
 
-	// Three separate hints, each producing exactly one proof component.
-	// They share a cached FFI result internally to avoid redundant computation.
+	// Three hints sharing a cached FFI result: GKR proof, WHIR transcript, and
+	// all WHIR hint data (Merkle siblings + leaves) in a single call.
 	gkrProof, err := api.Compiler().NewHint(GKRProofHint, keccacheck.WHIRGKRProofLen, hintInputs...)
 	if err != nil {
 		return fmt.Errorf("failed to generate GKR proof hint: %w", err)
@@ -79,8 +79,12 @@ func (circuit *KeccacheckWhirCircuit) Define(api frontend.API) error {
 	if err != nil {
 		return fmt.Errorf("failed to generate WHIR proof hint: %w", err)
 	}
+	whirHints, err := api.Compiler().NewHint(AllWhirHintsHint, whir.ComputeWhirHintFrs(whirParams, 1), hintInputs...)
+	if err != nil {
+		return fmt.Errorf("failed to generate WHIR hints: %w", err)
+	}
 
-	VerifyKeccakFWHIR(api, circuit.Output[:], gkrProof, r, whirProof, hintInputs, whirParams)
+	VerifyKeccakFWHIR(api, circuit.Output[:], gkrProof, r, whirProof, whirHints, whirParams)
 	// Needed for the test engine, which executes hints inline during Define().
 	ResetProveCache()
 	return nil

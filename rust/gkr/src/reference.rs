@@ -150,9 +150,7 @@ pub fn keccak_round(a_t: &[u64], round: usize) -> KeccakRoundState {
     // Pi
     // Permute the positions of lanes
     let mut pi = result.rho.clone();
-    for _ in 0..instances {
-        apply_pi(&result.rho, &mut pi);
-    }
+    apply_pi(&result.rho, &mut pi);
     // println!("pi {:?}", pi);
 
     // Chi

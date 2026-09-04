@@ -116,20 +116,17 @@ func SetProofByteLen(n int) {
 	proofByteLen = n
 }
 
-// ReadVecHint returns the pre-parsed Vec block at callIndex.
-func ReadVecHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
-	callIndex := int(inputs[len(inputs)-2].Int64())
-	p := getOrComputeProof(inputs[:len(inputs)-2])
-	for i, v := range p.hintBlocks[callIndex] {
-		outputs[i].Set(v)
+// AllWhirHintsHint returns all hint block data flattened into a single output vector.
+// This replaces the previous per-block ReadVecHint/ReadHashHint calls, reducing
+// ~7000 hint calls (each marshaling the full input array) to a single call.
+func AllWhirHintsHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
+	p := getOrComputeProof(inputs)
+	idx := 0
+	for _, block := range p.hintBlocks {
+		for _, v := range block {
+			outputs[idx].Set(v)
+			idx++
+		}
 	}
-	return nil
-}
-
-// ReadHashHint returns the pre-parsed Hash block at callIndex.
-func ReadHashHint(_ *big.Int, inputs []*big.Int, outputs []*big.Int) error {
-	callIndex := int(inputs[len(inputs)-2].Int64())
-	p := getOrComputeProof(inputs[:len(inputs)-2])
-	outputs[0].Set(p.hintBlocks[callIndex][0])
 	return nil
 }
