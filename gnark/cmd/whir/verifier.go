@@ -15,7 +15,7 @@ func VerifyKeccakFWHIR(
 	api frontend.API,
 	output, proof, alpha []frontend.Variable,
 	whirProof []frontend.Variable,
-	allWhirHints []frontend.Variable,
+	hintInputs []frontend.Variable,
 	whirParams whir.WHIRParams,
 ) {
 	// Initialize WHIR transcript and receive commitment (mirrors Rust: config.receive_commitment)
@@ -46,6 +46,6 @@ func VerifyKeccakFWHIR(
 		Constraints: constraints,
 		NVars:       keccacheck.NUM_VARS,
 	}}
-	hr := whir.NewPrecomputedHints(allWhirHints)
+	hr := whir.NewHintReader(api, hintInputs, ReadVecHint, ReadHashHint)
 	whir.VerifyWhir(api, whirVerifier, whirCommitment, hr, statements, whirParams)
 }

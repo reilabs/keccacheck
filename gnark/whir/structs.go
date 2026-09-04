@@ -144,39 +144,28 @@ func ComputeWhirProofFrs(params WHIRParams) int {
 	return count
 }
 
-// HintBlock describes a single block in the WHIR hint stream.
-// Type 0 = Vec (variable-length field element array), Type 1 = Hash (single field element).
-type HintBlock struct {
-	Type  int // 0=Vec, 1=Hash
-	Count int // number of field elements (always 1 for Hash)
-}
-
-// ComputeHintBlocks returns the ordered sequence of hint blocks produced during
-// VerifyWhir. All other hint-related computations (block types, byte lengths,
-// field element counts) are derived from this single traversal.
-func ComputeHintBlocks(params WHIRParams, numStatements int) []HintBlock {
-	var blocks []HintBlock
+// ComputeWhirHintBytes returns the total byte length of the WHIR hint stream,
+// computed deterministically from params. Each Vec block is 8 (count prefix) + count*32,
+// each Hash block is 32 bytes.
+func ComputeWhirHintBytes(params WHIRParams, numStatements int) int {
+	bytes := 0
 	domainSize := params.DomainSize
 
-	// Initial leaves Vec
-	initialCount := params.RoundParametersNumOfQueries[0] * params.BatchSize * (1 << params.FoldingFactorArray[0])
-	blocks = append(blocks, HintBlock{Type: 0, Count: initialCount})
+	// 1. Initial leaves Vec: numQueries[0] * batchSize * (1 << ff[0])
+	initialVecCount := params.RoundParametersNumOfQueries[0] * params.BatchSize * (1 << params.FoldingFactorArray[0])
+	bytes += 8 + initialVecCount*32
 
 	for r := range params.ParamNRounds {
 		if r == 0 {
 			// Round 0: Merkle paths on initial leaves (no new Vec)
 			treeHeight := bits.Len(uint(domainSize/(1<<params.FoldingFactorArray[0]))) - 1
-			for range params.RoundParametersNumOfQueries[0] * treeHeight {
-				blocks = append(blocks, HintBlock{Type: 1, Count: 1})
-			}
+			bytes += params.RoundParametersNumOfQueries[0] * treeHeight * 32
 		} else {
 			// Round r>0: leaves Vec + Merkle paths
 			vecCount := params.RoundParametersNumOfQueries[r] * (1 << params.FoldingFactorArray[r])
-			blocks = append(blocks, HintBlock{Type: 0, Count: vecCount})
+			bytes += 8 + vecCount*32
 			treeHeight := bits.Len(uint(domainSize/(1<<params.FoldingFactorArray[r]))) - 1
-			for range params.RoundParametersNumOfQueries[r] * treeHeight {
-				blocks = append(blocks, HintBlock{Type: 1, Count: 1})
-			}
+			bytes += params.RoundParametersNumOfQueries[r] * treeHeight * 32
 		}
 		domainSize /= 2
 	}
@@ -184,53 +173,18 @@ func ComputeHintBlocks(params WHIRParams, numStatements int) []HintBlock {
 	// Final leaves Vec + Merkle paths
 	lastFoldingFactor := params.FoldingFactorArray[len(params.FoldingFactorArray)-1]
 	if params.ParamNRounds > 0 {
-		blocks = append(blocks, HintBlock{Type: 0, Count: params.FinalQueries * (1 << lastFoldingFactor)})
+		finalVecCount := params.FinalQueries * (1 << lastFoldingFactor)
+		bytes += 8 + finalVecCount*32
 	} else {
-		blocks = append(blocks, HintBlock{Type: 0, Count: params.FinalQueries * params.BatchSize * (1 << lastFoldingFactor)})
+		finalVecCount := params.FinalQueries * params.BatchSize * (1 << lastFoldingFactor)
+		bytes += 8 + finalVecCount*32
 	}
 	finalTreeHeight := bits.Len(uint(domainSize/(1<<lastFoldingFactor))) - 1
-	for range params.FinalQueries * finalTreeHeight {
-		blocks = append(blocks, HintBlock{Type: 1, Count: 1})
-	}
+	bytes += params.FinalQueries * finalTreeHeight * 32
 
 	// Deferred evals Vec
-	blocks = append(blocks, HintBlock{Type: 0, Count: numStatements})
+	bytes += 8 + numStatements*32
 
-	return blocks
-}
-
-// ComputeHintBlockTypes returns the block type sequence (0=Vec, 1=Hash)
-// for parsing the raw hint byte stream.
-func ComputeHintBlockTypes(params WHIRParams) []int {
-	blocks := ComputeHintBlocks(params, 1)
-	types := make([]int, len(blocks))
-	for i, b := range blocks {
-		types[i] = b.Type
-	}
-	return types
-}
-
-// ComputeWhirHintFrs returns the total number of field elements across all hint
-// blocks. This is the output size for a single bulk hint call.
-func ComputeWhirHintFrs(params WHIRParams, numStatements int) int {
-	total := 0
-	for _, b := range ComputeHintBlocks(params, numStatements) {
-		total += b.Count
-	}
-	return total
-}
-
-// ComputeWhirHintBytes returns the total byte length of the WHIR hint stream.
-// Vec blocks are 8 (length prefix) + count*32 bytes; Hash blocks are 32 bytes.
-func ComputeWhirHintBytes(params WHIRParams, numStatements int) int {
-	bytes := 0
-	for _, b := range ComputeHintBlocks(params, numStatements) {
-		if b.Type == 0 {
-			bytes += 8 + b.Count*32
-		} else {
-			bytes += 32
-		}
-	}
 	return bytes
 }
 
@@ -240,4 +194,49 @@ func ComputeWhirBytes(params WHIRParams, numStatements int) int {
 	nargBytes := 8 + ComputeWhirProofFrs(params)*32
 	hintBytes := 8 + ComputeWhirHintBytes(params, numStatements)
 	return nargBytes + hintBytes
+}
+
+// ComputeHintBlockTypes returns the block type sequence (0=Vec, 1=Hash)
+// for all HintReader calls in VerifyWhir, derived deterministically from params.
+// This allows pre-computing byte offsets into the hint stream.
+func ComputeHintBlockTypes(params WHIRParams) []int {
+	var types []int
+	domainSize := params.DomainSize
+
+	// 1. Initial leaves: readLeavesFromHints → 1 Vec
+	types = append(types, 0)
+
+	for r := range params.ParamNRounds {
+		if r == 0 {
+			// Round 0: verifyMerklePaths on initialLeaves (no new ReadVec)
+			numQueries := params.RoundParametersNumOfQueries[0]
+			treeHeight := bits.Len(uint(domainSize/(1<<params.FoldingFactorArray[0]))) - 1
+			for range numQueries * treeHeight {
+				types = append(types, 1)
+			}
+		} else {
+			// Round r>0: readLeavesFromHints → 1 Vec
+			types = append(types, 0)
+			// verifyMerklePaths on roundLeaves
+			numQueries := params.RoundParametersNumOfQueries[r]
+			treeHeight := bits.Len(uint(domainSize/(1<<params.FoldingFactorArray[r]))) - 1
+			for range numQueries * treeHeight {
+				types = append(types, 1)
+			}
+		}
+		domainSize /= 2
+	}
+
+	// Final leaves + Merkle paths
+	lastFoldingFactor := params.FoldingFactorArray[len(params.FoldingFactorArray)-1]
+	types = append(types, 0) // readLeavesFromHints → 1 Vec
+	finalTreeHeight := bits.Len(uint(domainSize/(1<<lastFoldingFactor))) - 1
+	for range params.FinalQueries * finalTreeHeight {
+		types = append(types, 1)
+	}
+
+	// Deferred evals: hr.ReadVec → 1 Vec
+	types = append(types, 0)
+
+	return types
 }

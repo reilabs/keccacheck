@@ -11,7 +11,7 @@ func VerifyWhir(
 	api frontend.API,
 	v *transcript.Verifier,
 	commitment ParsedCommitment,
-	hr *PrecomputedHints,
+	hr *HintReader,
 	statements []Statement,
 	params WHIRParams,
 ) (totalFoldingRandomness []frontend.Variable, err error) {
